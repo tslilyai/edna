@@ -1,4 +1,11 @@
-# Edna: Data Disguising and Revealing for Web Applications
+# Edna: Data Disguising and Revealing for User Data in Web Applications
+
+Edna[^*] is a library for web developers to add support for data disguising and
+revealing of user data to their applications. For example, Edna can help users
+protect inactive accounts, selectively dissociate personal data from public
+profiles, and remove service access to their data without permanently losing
+their accounts.
+
 
 ## Repository organization:
 * `deps/`: third-party libraries that Edna uses for e.g., MySQL parsing
@@ -21,13 +28,14 @@
 The requisite scripts to run benchmarks are all contained in the root directory!
 
 ## Running Benchmarks
-1. Run `./initialize.sh` in `/data`
-2. Instantiate the profile in Cloudlab: [profile link here](https://www.cloudlab.us/p/b76044dd7715375f24a70b3be8f48a694c7a934b).
-3. Go to `/data/repository`
-4. To produce all results, run `./run_all.sh` (you might want to run this in a separate terminal session using `tmux`); this will execute per-application benchmark scripts, as well as run a graph-plotting script to produce all the
+1. Instantiate the profile in CloudLab: [profile link here](https://www.cloudlab.us/p/b76044dd7715375f24a70b3be8f48a694c7a934b).
+2. ssh into the CloudLab instance
+3. Run `./initialize.sh` in `/data`
+4. Go to `/data/repository` 
+5. To produce all results, run `./run_all.sh` (you might want to run this in a separate terminal session using `tmux`); this will execute per-application benchmark scripts, as well as run a graph-plotting script to produce all the
 graphs from the paper in `results/result_graphs`.
 
-All benchmarks should take under 15 minutes to run, with the exception of
+All benchmarks should individually take under 15 minutes to run, with the exception of
 Lobsters (which registers and iterates through disguising and revealing all 16k users); this will take 
 several hours to complete all trials.
 
@@ -68,22 +76,8 @@ The benchmark scripts relies on the following files (paths can be changed in the
 * `/data/lobsters_edna_messages_and_tags.sql`: contains the 
     database with generated Lobsters data for the Lobsters benchmark. Used in
     `applications/lobsters/run_benchmarks.sh`
+* Note: `grep -r "data\/repository"` will find all hardcoded paths for running in the given CloudLab profile; change these if running elsewhere.
 
-Setup Script:
-```
-sudo apt update
-sudo apt install libboost-all-dev libantlr3c-dev build-essential libglib2.0-dev cargo docker.io python3-pip
-pip install matplotlib
-sudo chmod ugo+rwx -R /data
-cd /data
-git clone https://github.com/tslilyai/edna.git repository
-cd repository
-./config_mysql.sh
-cd related_systems/qapla
-make; cd examples; make
-cd /data/repository
 
-# done with setup, run everything!
-./run_all.sh
-```
-   
+ [^*]: Edna's name originates from Edna of the Incredibles, who designs custom
+ costumes (disguises) that enable superheros to use their abilities to the fullest, while also keeping their normal identity private!
