@@ -1,0 +1,32 @@
+[workspace]
+members = []
+
+[package]
+name = "qapla-server"
+version = "0.1.0"
+authors = ["Lily Tsai <tslilyai@mit.edu>", "Malte Schwarzkopf <malte@cs.brown.edu>"]
+edition = "2018"
+
+[dependencies]
+chrono = { version = "0.4.0", features = ["serde"] }
+clap = "2.33.0"
+libc = "0.2"
+lettre = "0.9.2"
+lettre_email = "0.9.2"
+mysql = "23.0.1"
+mysql_common = "0.22"
+sql-parser = { path= "../../../deps/sql-parser" }
+rand = "0.8.4"
+rocket = "0.5.0-rc.1"
+rust-crypto = "0.2.36"
+slog = { version = "2.4.0", features = ["max_level_trace", "release_max_level_warn"] }
+slog-term = "2.4.0"
+toml = "0.2.1"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+
+[dependencies.rocket_dyn_templates]
+version = "0.1.0-rc.1"
+features = ["handlebars", "tera"]

@@ -1,0 +1,31 @@
+[package]
+name = "edna-srv"
+version = "0.0.1"
+authors = ["Malte Schwarzkopf <malte@cs.brown.edu>"]
+edition = "2018"
+
+[dependencies]
+base64 = "0.13.0"
+chrono = { version = "0.4.0", features = ["serde"] }
+clap = "2.33.0"
+edna = {path = "../edna"}
+log = "0.4.0"
+env_logger = "0.8.4"
+rand = "0.8.4"
+rocket = { version = "0.5.0-rc.1", features = ["json"] }
+slog = "2.4.0"
+slog-term = "2.4.0"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+sql-parser = { path= "../deps/sql-parser" }
+schemars = "0.8"
+okapi = { version = "0.6.0-alpha-1" }
+rocket_okapi = { version = "0.8.0-alpha-1", features = ["swagger"] }
+mysql = "23.0.1"
+mysql_common = "0.22"
+
+[[bin]]
+name = "edna-server"
+path = "src/main.rs"

@@ -1,0 +1,80 @@
+{
+    "ContactInfo": {
+        "name": "ContactInfo",
+        "id_cols": ["contactId"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["contactId"]
+    },
+    "PaperWatch": {
+        "name": "PaperWatch",
+        "id_cols": ["paperWatchId"],
+        "other_fk_cols": [["Paper", "paperId", "paperId"]],
+        "owner_fk_cols": ["contactId"]
+    },
+    "PaperReviewPreference": {
+        "name": "PaperReviewPreference",
+        "id_cols": ["paperRevPrefId"],
+        "other_fk_cols": [["Paper", "paperId", "paperId"]],
+        "owner_fk_cols": ["contactId"]
+    },
+    "Capability": {
+        "name": "Capability",
+        "id_cols": ["salt"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["contactId"]
+    },
+    "PaperConflict": {
+        "name": "PaperConflict",
+        "id_cols": ["paperConflictId"],
+        "other_fk_cols": [["Paper", "paperId", "paperId"]],
+        "owner_fk_cols": ["contactId"]
+    },
+    "TopicInterest": {
+        "name": "TopicInterest",
+        "id_cols": ["topicInterestId"],
+        "other_fk_cols": [["Topic", "topicId", "topicId"]],
+        "owner_fk_cols": ["contactId"]
+    },
+    "PaperReviewRefused": {
+        "name": "PaperReviewRefused",
+        "id_cols": ["paperId", "email"],
+        "other_fk_cols": [["Paper", "paperId", "paperId"]],
+        "owner_fk_cols": ["requestedBy", "refusedBy"]
+    },
+    "ActionLog": {
+        "name": "ActionLog",
+        "id_cols": ["logId"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["contactId", "destContactId", "trueContactId"]
+    },
+    "ReviewRating": {
+        "name": "ReviewRating",
+        "id_cols": ["paperId", "reviewId", "contactId"],
+        "other_fk_cols": [["Paper", "paperId", "paperId"], ["PaperReview", "reviewId", "reviewId"]],
+        "owner_fk_cols": ["contactId"]
+    },
+    "ReviewRequest": {
+        "name": "ReviewRequest",
+        "id_cols": ["paperId", "email"],
+        "other_fk_cols": [["Paper", "paperId", "paperId"]],
+        "owner_fk_cols": ["requestedBy"]
+    },
+    "PaperComment": {
+        "name": "PaperComment",
+        "id_cols": ["commentId"],
+        "other_fk_cols": [["Paper", "paperId", "paperId"]],
+        "owner_fk_cols": ["contactId"]
+    },
+    "PaperReview": {
+        "name": "PaperReview",
+        "id_cols": ["reviewId"],
+        "other_fk_cols": [["Paper", "paperId", "paperId"]],
+        "owner_fk_cols": ["contactId", "requestedBy"]
+    },
+    "Paper": {
+        "name": "Paper",
+        "id_cols": ["paperId"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["leadContactId", "managerContactId", "shepherdContactId"]
+    }
+}

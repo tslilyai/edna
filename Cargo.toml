@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "deps/ore",
+    "deps/repr",
+    "deps/sql-parser",
+    "edna",
+    "edna_cryptdb",
+    "edna_srv",
+    "applications/hotcrp",
+    "applications/lobsters",
+    "applications/websubmit-rs",
+    "applications/proxy",
+]

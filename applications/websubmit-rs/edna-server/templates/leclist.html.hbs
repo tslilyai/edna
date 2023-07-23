@@ -1,0 +1,31 @@
+{{#*inline "page"}}
+  <h1>List of lectures</h1>
+
+  <ol>
+  {{#each lectures}}
+    <li>
+      <a href="/questions/{{{ this.id }}}">{{{ this.label }}}</a> ({{{ this.num_answered }}}/{{{ this.num_qs }}})
+      {{#if ../admin}}
+      &ndash; <small><a href="/answers/{{{ this.id }}}">answers</a> <a href="/admin/lec/{{{ this.id }}}">admin</a></small>
+      {{/if}}
+    </li>
+  {{/each}}
+  </ol>
+
+  {{#if ../admin}}
+  <hr />
+  Admin:
+  <ul>
+    <li>
+      <a href="/admin/lec/add">add lecture</a>
+    </li>
+    <li>
+      <a href="admin/users">see users</a>
+    </li>
+    <li>
+      <a href="admin/anonymize">anonymize answers</a>
+    </li>
+  </ul>
+  {{/if}}
+{{/inline}}
+{{~> layout ~}}

@@ -1,0 +1,57 @@
+{
+    "name": "ContactInfo",
+    "id_col": "contactId",
+    "cols": [
+        "contactId", 
+        "firstname",
+        "lastName",
+        "unaccentedName",
+         "email",
+         "preferredEmail",
+         "affiliation",
+         "phone",
+         "country",
+         "password",
+         "passwordTime",
+         "passwordUseTime",
+         "collaborators",
+         "updateTime",
+         "lastLogin",
+         "defaultWatch",
+         "roles",
+         "disabled",
+         "contactTags",
+         "data"
+    ],
+    "val_generation": [
+        {
+            "RandNum": { 
+                "lb": 1000,
+                "ub": 2147483648 
+            }
+        },
+        {"ConstStr": ""},
+        {"ConstStr": ""},
+        {"ConstStr": ""},
+        "RandEmail",
+        "Null",
+        {"ConstStr": ""},
+        "Null",
+        "Null",
+        {
+            "RandStr": { 
+                "len": 30
+            }
+        },
+        {"ConstNum": 0},
+        {"ConstNum": 0},
+        "Null",
+        {"ConstNum": 0},
+        {"ConstNum": 0},
+        {"ConstNum": 2},
+        {"ConstNum": 0},
+        {"ConstNum": 0},
+        "Null",
+        "Null"
+    ]
+}

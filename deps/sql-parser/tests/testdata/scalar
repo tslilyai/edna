@@ -1,0 +1,404 @@
+# Copyright 2020 sqlparser-rs contributors. All rights reserved.
+# Copyright Materialize, Inc. All rights reserved.
+#
+# This file is derived from the sqlparser-rs project, available at
+# https://github.com/andygrove/sqlparser-rs. It was incorporated
+# directly into Materialize on December 21, 2019.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License in the LICENSE file at the
+# root of this repository, or online at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Parameters
+
+parse-scalar
+$1
+----
+Parameter(1)
+
+parse-scalar
+$91 + $42
+----
+BinaryOp { left: Parameter(91), op: Plus, right: Parameter(42) }
+
+parse-scalar
+NOT salary = ''
+----
+UnaryOp { op: Not, expr: BinaryOp { left: Identifier([Ident("salary")]), op: Eq, right: Value(String("")) } }
+
+parse-scalar
+salary <> 'Not Provided' AND salary <> ''
+----
+BinaryOp { left: BinaryOp { left: Identifier([Ident("salary")]), op: NotEq, right: Value(String("Not Provided")) }, op: And, right: BinaryOp { left: Identifier([Ident("salary")]), op: NotEq, right: Value(String("")) } }
+
+parse-scalar
+name LIKE '%a'
+----
+BinaryOp { left: Identifier([Ident("name")]), op: Like, right: Value(String("%a")) }
+
+parse-scalar
+name NOT LIKE '%a'
+----
+BinaryOp { left: Identifier([Ident("name")]), op: NotLike, right: Value(String("%a")) }
+
+parse-scalar
+name LIKE '%a' IS NULL
+----
+IsNull { expr: BinaryOp { left: Identifier([Ident("name")]), op: Like, right: Value(String("%a")) }, negated: false }
+
+parse-scalar
+name NOT LIKE '%a' IS NULL
+----
+IsNull { expr: BinaryOp { left: Identifier([Ident("name")]), op: NotLike, right: Value(String("%a")) }, negated: false }
+
+parse-scalar
+a ~ 'foo'
+----
+BinaryOp { left: Identifier([Ident("a")]), op: RegexMatch, right: Value(String("foo")) }
+
+parse-scalar
+a ~* 'foo'
+----
+BinaryOp { left: Identifier([Ident("a")]), op: RegexIMatch, right: Value(String("foo")) }
+
+parse-scalar
+a !~ 'foo'
+----
+BinaryOp { left: Identifier([Ident("a")]), op: RegexNotMatch, right: Value(String("foo")) }
+
+parse-scalar
+a !~* 'foo'
+----
+BinaryOp { left: Identifier([Ident("a")]), op: RegexNotIMatch, right: Value(String("foo")) }
+
+parse-scalar
+a !x 'foo'
+----
+error:
+Parse error:
+a !x 'foo'
+  ^
+Unrecognized token
+
+# Casts
+
+parse-scalar roundtrip
+id::bigint
+----
+id::bigint
+
+parse-scalar roundtrip
+CAST(id AS BIGINT)
+----
+id::bigint
+
+parse-scalar roundtrip
+id::double precision
+----
+id::double precision
+
+parse-scalar roundtrip
+id::timestamp with time zone
+----
+id::timestamp with time zone
+
+parse-scalar roundtrip
+(id::timestamp with time zone::timestamp without time zone  )  ::  double precision::text
+----
+(id::timestamp with time zone::timestamp)::double precision::text
+
+parse-scalar roundtrip
+CAST(c::jsonb->>'f' AS timestamptz)
+----
+(c::jsonb ->> 'f')::timestamp with time zone
+
+parse-scalar roundtrip
+id::numeric FROM customer
+----
+id::numeric
+
+parse-scalar roundtrip
+CAST(id AS dec)
+----
+id::numeric
+
+parse-scalar roundtrip
+CAST(id AS decimal)
+----
+id::numeric
+
+# Extract
+
+parse-scalar
+EXTRACT(YEAR FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("year")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(MILLENIUM FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("millenium")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(CENTURY FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("century")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(YEAR FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("year")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(ISOYEAR FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("isoyear")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(QUARTER FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("quarter")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(MONTH FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("month")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(DAY FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("day")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(HOUR FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("hour")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(MINUTE FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("minute")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(SECOND FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("second")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(MILLISECONDS FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("milliseconds")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(MICROSECONDS FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("microseconds")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(TIMEZONE FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("timezone")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(TIMEZONE_HOUR FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("timezone_hour")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(TIMEZONE_MINUTE FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("timezone_minute")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(WEEK FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("week")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(DOY FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("doy")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(DOW FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("dow")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(ISODOW FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("isodow")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+EXTRACT(EPOCH FROM d)
+----
+Function(Function { name: ObjectName([Ident("date_part")]), args: Args([Value(String("epoch")), Identifier([Ident("d")])]), filter: None, over: None, distinct: false })
+
+parse-scalar
+COALESCE(foo, bar)
+----
+Coalesce { exprs: [Identifier([Ident("foo")]), Identifier([Ident("bar")])] }
+
+parse-scalar
+COALESCE()
+----
+error:
+Parse error:
+COALESCE()
+         ^
+Expected an expression, found: )
+
+
+parse-scalar
+sqrt(id)
+----
+Function(Function { name: ObjectName([Ident("sqrt")]), args: Args([Identifier([Ident("id")])]), filter: None, over: None, distinct: false })
+
+parse-scalar roundtrip
+(a + b) - (c + d)
+----
+(a + b) - (c + d)
+
+parse-scalar roundtrip
+CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END
+----
+CASE WHEN bar IS NULL THEN 'null' WHEN bar = 0 THEN '=0' WHEN bar >= 0 THEN '>=0' ELSE '<0' END
+
+parse-scalar
+CASE foo WHEN 1 THEN 'Y' ELSE 'N' END
+----
+Case { operand: Some(Identifier([Ident("foo")])), conditions: [Value(Number("1"))], results: [Value(String("Y"))], else_result: Some(Value(String("N"))) }
+
+parse-scalar
+(SELECT 1) + (SELECT 2)
+----
+BinaryOp { left: Subquery(Query { ctes: [], body: Select(Select { distinct: false, projection: [Expr { expr: Value(Number("1")), alias: None }], from: [], selection: None, group_by: [], having: None }), order_by: [], limit: None, offset: None, fetch: None }), op: Plus, right: Subquery(Query { ctes: [], body: Select(Select { distinct: false, projection: [Expr { expr: Value(Number("2")), alias: None }], from: [], selection: None, group_by: [], having: None }), order_by: [], limit: None, offset: None, fetch: None }) }
+
+parse-scalar
+1 < ANY (SELECT 2)
+----
+Any { left: Value(Number("1")), op: Lt, right: Query { ctes: [], body: Select(Select { distinct: false, projection: [Expr { expr: Value(Number("2")), alias: None }], from: [], selection: None, group_by: [], having: None }), order_by: [], limit: None, offset: None, fetch: None } }
+
+parse-scalar
+LIST[]
+----
+List([])
+
+parse-scalar
+LIST[1, 'foo']
+----
+List([Value(Number("1")), Value(String("foo"))])
+
+parse-scalar
+LIST[LIST[1 + 1, 2], a || b]
+----
+List([List([BinaryOp { left: Value(Number("1")), op: Plus, right: Value(Number("1")) }, Value(Number("2"))]), BinaryOp { left: Identifier([Ident("a")]), op: Concat, right: Identifier([Ident("b")]) }])
+
+parse-scalar
+LIST[1,2,3][1]
+----
+SubscriptIndex { expr: List([Value(Number("1")), Value(Number("2")), Value(Number("3"))]), subscript: Value(Number("1")) }
+
+parse-scalar
+LIST[1,2,3][1:1]
+----
+SubscriptSlice { expr: List([Value(Number("1")), Value(Number("2")), Value(Number("3"))]), positions: [SubscriptPosition { start: Some(Value(Number("1"))), end: Some(Value(Number("1"))) }] }
+
+parse-scalar
+LIST[1,2,3][:1]
+----
+SubscriptSlice { expr: List([Value(Number("1")), Value(Number("2")), Value(Number("3"))]), positions: [SubscriptPosition { start: None, end: Some(Value(Number("1"))) }] }
+
+parse-scalar
+LIST[1,2,3][1:]
+----
+SubscriptSlice { expr: List([Value(Number("1")), Value(Number("2")), Value(Number("3"))]), positions: [SubscriptPosition { start: Some(Value(Number("1"))), end: None }] }
+
+parse-scalar
+LIST[[1],[2],[3]][1:1, 1:1]
+----
+SubscriptSlice { expr: List([List([Value(Number("1"))]), List([Value(Number("2"))]), List([Value(Number("3"))])]), positions: [SubscriptPosition { start: Some(Value(Number("1"))), end: Some(Value(Number("1"))) }, SubscriptPosition { start: Some(Value(Number("1"))), end: Some(Value(Number("1"))) }] }
+
+parse-scalar
+LIST[[1],[2],[3]][1:1, 1:1][1]
+----
+SubscriptIndex { expr: SubscriptSlice { expr: List([List([Value(Number("1"))]), List([Value(Number("2"))]), List([Value(Number("3"))])]), positions: [SubscriptPosition { start: Some(Value(Number("1"))), end: Some(Value(Number("1"))) }, SubscriptPosition { start: Some(Value(Number("1"))), end: Some(Value(Number("1"))) }] }, subscript: Value(Number("1")) }
+
+parse-scalar
+LIST[[1],[2],[3]][1:1, 1:1, 1:1]
+----
+SubscriptSlice { expr: List([List([Value(Number("1"))]), List([Value(Number("2"))]), List([Value(Number("3"))])]), positions: [SubscriptPosition { start: Some(Value(Number("1"))), end: Some(Value(Number("1"))) }, SubscriptPosition { start: Some(Value(Number("1"))), end: Some(Value(Number("1"))) }, SubscriptPosition { start: Some(Value(Number("1"))), end: Some(Value(Number("1"))) }] }
+
+parse-scalar
+a -> b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonGet, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a ->> b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonGetAsText, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a #> b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonGetPath, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a #>> b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonGetPathAsText, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a @> b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonContainsJson, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a <@ b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonContainedInJson, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a ? b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonContainsField, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a ?| b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonContainsAnyFields, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a ?& b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonContainsAllFields, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a || b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: Concat, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a #- b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonDeletePath, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a @? b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonContainsPath, right: Identifier([Ident("b")]) }
+
+parse-scalar
+a @@ b
+----
+BinaryOp { left: Identifier([Ident("a")]), op: JsonApplyPathPredicate, right: Identifier([Ident("b")]) }

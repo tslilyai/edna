@@ -1,0 +1,20 @@
+{
+    "users": {
+        "name": "users",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["id"]
+    },
+    "moderations": {
+        "name": "moderations",
+        "id_cols": ["id"],
+        "other_fk_cols": [["stories", "id", "story_id"]],
+        "owner_fk_cols": ["user_id", "moderator_user_id"]
+    },
+    "stories": {
+        "name": "stories",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["user_id"]
+    }
+}

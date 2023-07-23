@@ -1,0 +1,18 @@
+[package]
+name = "sql-parser"
+description = "The lexer and parser for Materialize's SQL dialect."
+version = "0.1.0"
+edition = "2018"
+publish = false
+exclude = ["tests/testdata"]
+
+[dependencies]
+lazy_static = "1.4.0"
+log = "0.4.11"
+ore = { path = "../ore" }
+repr = { path = "../repr" }
+stacker = "0.1.11"
+
+[dev-dependencies]
+datadriven = "0.1.0"
+matches = "0.1"

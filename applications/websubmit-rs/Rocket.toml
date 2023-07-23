@@ -1,0 +1,5 @@
+[default]
+address = "127.0.0.1"
+port = 8000
+workers = 40
+template_dir = "edna_server/templates"

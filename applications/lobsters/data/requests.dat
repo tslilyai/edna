@@ -1,0 +1,14 @@
+1615623  55.842%  GET   /stories/X
+ 870987  30.105%  GET   /
+ 193915   6.702%  GET   /u/X
+ 135227   4.674%  GET   /comments[/X]
+  27984   0.967%  GET   /recent[/X]
+  18235   0.630%  POST  /comments/X/upvote
+  13730   0.475%  POST  /stories/X/upvote
+   9141   0.316%  POST  /comments
+   2512   0.087%  POST  /login
+   2055   0.071%  POST  /comments/X
+   1550   0.054%  POST  /comments/X/downvote
+   1522   0.053%  POST  /stories
+    608   0.021%  POST  /stories/X/downvote
+     94   0.003%  POST  /logout

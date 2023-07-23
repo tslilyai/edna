@@ -1,0 +1,584 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "edna-srv",
+    "version": "0.0.1"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "index",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/register_principal": {
+      "post": {
+        "operationId": "apiproxy_register_principal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPrincipal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterPrincipalResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/start_disguise/{acting_uid}": {
+      "get": {
+        "operationId": "apiproxy_start_disguise",
+        "parameters": [
+          {
+            "name": "acting_uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartDisguiseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/end_disguise/{did}": {
+      "get": {
+        "operationId": "apiproxy_end_disguise",
+        "parameters": [
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/start_reveal/{did}": {
+      "get": {
+        "operationId": "apiproxy_start_reveal",
+        "parameters": [
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/end_reveal/{did}": {
+      "get": {
+        "operationId": "apiproxy_end_reveal",
+        "parameters": [
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/apply_disguise": {
+      "post": {
+        "operationId": "apiproxy_apply_disguise",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyDisguise"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyDisguiseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reveal_disguise/{uid}/{did}": {
+      "post": {
+        "operationId": "apiproxy_reveal_disguise",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevealDisguise"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/get_pps_of/{uid}": {
+      "post": {
+        "operationId": "apiproxy_get_pseudoprincipals_of",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetPseudoprincipals"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get_records_of_disguise": {
+      "post": {
+        "operationId": "apiproxy_get_records_of_disguise",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetRecordsOfDisguise"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetRecordsOfDisguiseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cleanup_records_of_disguise": {
+      "post": {
+        "operationId": "apiproxy_cleanup_records_of_disguise",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanupRecordsOfDisguise"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/save_diff_record": {
+      "post": {
+        "operationId": "apiproxy_save_diff_record",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveDiffRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/save_pp_record": {
+      "post": {
+        "operationId": "apiproxy_save_pseudoprincipal_record",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavePseudoprincipalRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RegisterPrincipalResponse": {
+        "type": "object",
+        "required": [
+          "share"
+        ],
+        "properties": {
+          "share": {
+            "type": "string"
+          }
+        }
+      },
+      "RegisterPrincipal": {
+        "type": "object",
+        "required": [
+          "pw",
+          "uid"
+        ],
+        "properties": {
+          "uid": {
+            "type": "string"
+          },
+          "pw": {
+            "type": "string"
+          }
+        }
+      },
+      "StartDisguiseResponse": {
+        "type": "object",
+        "required": [
+          "did"
+        ],
+        "properties": {
+          "did": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "ApplyDisguiseResponse": {
+        "type": "object",
+        "required": [
+          "did"
+        ],
+        "properties": {
+          "did": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "ApplyDisguise": {
+        "type": "object",
+        "required": [
+          "disguise_json",
+          "guisegen_json",
+          "password",
+          "tableinfo_json",
+          "user"
+        ],
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "disguise_json": {
+            "type": "string"
+          },
+          "tableinfo_json": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "guisegen_json": {
+            "type": "string"
+          }
+        }
+      },
+      "RevealDisguise": {
+        "type": "object",
+        "required": [
+          "guisegen_json",
+          "password",
+          "tableinfo_json"
+        ],
+        "properties": {
+          "tableinfo_json": {
+            "type": "string"
+          },
+          "guisegen_json": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "GetPseudoprincipals": {
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "GetRecordsOfDisguiseResponse": {
+        "type": "object",
+        "required": [
+          "diff_records",
+          "ownership_records"
+        ],
+        "properties": {
+          "diff_records": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            }
+          },
+          "ownership_records": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            }
+          }
+        }
+      },
+      "GetRecordsOfDisguise": {
+        "type": "object",
+        "required": [
+          "decrypt_cap",
+          "did"
+        ],
+        "properties": {
+          "did": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "decrypt_cap": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "CleanupRecordsOfDisguise": {
+        "type": "object",
+        "required": [
+          "decrypt_cap",
+          "did"
+        ],
+        "properties": {
+          "did": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "decrypt_cap": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "SaveDiffRecord": {
+        "type": "object",
+        "required": [
+          "data",
+          "did",
+          "uid"
+        ],
+        "properties": {
+          "uid": {
+            "type": "string"
+          },
+          "did": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "SavePseudoprincipalRecord": {
+        "type": "object",
+        "required": [
+          "did",
+          "new_uid",
+          "old_uid",
+          "record_bytes"
+        ],
+        "properties": {
+          "did": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "old_uid": {
+            "type": "string"
+          },
+          "new_uid": {
+            "type": "string"
+          },
+          "record_bytes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      }
+    }
+  }
+}

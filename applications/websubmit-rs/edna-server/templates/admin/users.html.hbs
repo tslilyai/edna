@@ -1,0 +1,27 @@
+{{#*inline "page"}}
+    <h1>Registered users:</h1>
+
+    <table>
+      <tr>
+        <th>Email</th>
+        <th>Admin?</th>
+        <th>API key</th>
+      </tr>
+      {{#each users}}
+      <tr>
+        <td>{{{ this.email }}}</td>
+        <td>
+        {{#if this.is_admin}}
+          yes
+        {{else}}
+          no
+        {{/if}}
+        </td>
+        <td>{{{ this.apikey }}}</td>
+
+
+      </tr>
+      {{/each}}
+    </table>
+{{/inline}}
+{{~> layout~}}

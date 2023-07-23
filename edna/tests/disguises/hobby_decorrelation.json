@@ -1,0 +1,12 @@
+{
+    "stories": [
+        {
+            "Decor" : {
+                "pred": "tags.tag = 'star wars'",
+                "from": "stories INNER JOIN taggings ON stories.id = taggings.story_id INNER JOIN tags ON taggings.tag_id = tags.id",
+                "group_by_cols": [],
+                "user_fk_cols" : ["user_id"]
+            }
+        }
+    ]
+ }

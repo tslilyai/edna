@@ -1,0 +1,108 @@
+{
+    "ContactInfo": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "PaperReviewPreference": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "PaperWatch": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "Capability": [
+         {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "PaperConflict": [
+         {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "ReviewRating": [
+          {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+   "TopicInterest": [
+           {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "PaperReviewRefused": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["refusedBy, requestedBy"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "ActionLog": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId", "destContactId", "trueContactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "PaperComment": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "PaperReview": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId", "requestedBy"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "Paper": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["managerContactId", "leadContactId", "shepherdContactId"],
+                "group_by_cols": []
+            }
+        }
+    ]
+}

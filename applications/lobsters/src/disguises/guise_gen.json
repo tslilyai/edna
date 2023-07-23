@@ -1,0 +1,35 @@
+{
+    "name": "users",
+    "id_col": "id",
+    "cols": [
+        "id", 
+        "username",
+        "karma",
+        "last_login",
+        "password_reset_token",
+        "rss_token",
+        "session_token",
+        "email",
+        "created_at"
+    ],
+    "val_generation": [
+        {
+            "RandNum": { 
+                "lb": 20000,
+		        "ub": 9223372036854775807
+            }
+        },
+        {
+            "RandStr": { 
+                "len": 30
+            }
+        },
+        {"ConstNum": 0},
+        "Timestamp",
+        "Timestamp",
+        "Timestamp",
+        "Timestamp",
+        "RandEmail",
+        "Timestamp"
+    ]
+}

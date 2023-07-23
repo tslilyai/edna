@@ -1,0 +1,19 @@
+{
+    "name": "users",
+    "id_col": "email",
+    "cols": ["email", "apikey", "is_admin", "is_anon"],
+    "val_generation": [
+        "RandEmail",
+        {
+            "RandStr": { 
+                "len": 30
+            }
+        },
+        {
+            "ConstNum": 0
+        },
+        {
+            "ConstNum": 1
+        }
+    ]
+}

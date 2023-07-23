@@ -1,0 +1,10 @@
+{
+    "moderations": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ]
+}

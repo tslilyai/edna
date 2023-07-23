@@ -1,0 +1,208 @@
+{
+    "hat_requests": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "hats": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "hidden_stories": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "invitations": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "read_ribbons": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "saved_stories": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "suggested_taggings": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "suggested_titles": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "tag_filters": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "users": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "comments": [
+        {
+            "Decor": {
+                "pred": "True",
+                "from": "",
+                "user_fk_cols": ["user_id"],
+                "group_by_cols": []
+            }
+        },
+        {
+            "Modify": {
+                "pred": "True",
+                "from": "",
+                "col": "comment",
+                "gen_value": {
+                    "RandStr": {
+                        "len": 30
+                    }
+                }
+            }
+        },
+        {
+            "Modify": {
+                "pred": "True",
+                "from": "",
+                "col": "markeddown_comment",
+                "gen_value": {
+                    "RandStr": {
+                        "len": 30
+                    }
+                }
+            }
+        }
+    ],
+    "stories": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["user_id"],
+                "group_by_cols": []
+            }
+        },
+        {
+            "Modify": {
+                "from": "",
+                "pred": "True",
+                "col": "title",
+                "gen_value": {
+                    "RandStr": {
+                        "len": 30
+                    }
+                }
+            }
+        },
+        {
+            "Modify": {
+                "from": "",
+                "pred": "True",
+                "col": "url",
+                "gen_value": {
+                    "RandStr": {
+                        "len": 30
+                    }
+                }
+            }
+        }
+    ],
+    "messages": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        },
+        {
+            "Modify": {
+                "from": "",
+                "pred": "True",
+                "col": "deleted_by_author",
+                "gen_value": {
+                    "ConstNum" : 1 
+                }
+            }
+        },
+        {
+            "Modify": {
+                "from": "",
+                "pred": "True",
+                "col": "deleted_by_recipient",
+                "gen_value": {
+                    "ConstNum" : 1 
+                }
+            }
+        }
+    ],
+    "mod_notes": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["moderator_user_id", "user_id"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "moderations": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["moderator_user_id", "user_id"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "votes": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["user_id"],
+                "group_by_cols": []
+            }
+        }
+    ]
+}

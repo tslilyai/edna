@@ -1,0 +1,28 @@
+{
+    "users": [
+        {
+            "Remove" : {
+                "pred": "True",
+                "from": ""
+            }
+        }
+    ],
+    "moderations": [
+        {
+            "Decor": {
+                "pred": "True",
+                "from": "",
+                "group_by_cols": [],
+                "user_fk_cols": ["user_id", "moderator_user_id"]
+            }
+        }
+    ],
+    "stories": [
+        {
+            "Remove" : {
+                "pred": "True",
+                "from": ""
+            }
+        }
+    ]
+}

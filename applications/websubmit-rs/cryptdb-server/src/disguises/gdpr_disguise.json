@@ -1,0 +1,18 @@
+{
+    "users": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "answers": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ]
+}

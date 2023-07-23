@@ -1,0 +1,112 @@
+{
+    "ContactInfo": [
+        {
+            "Modify": {
+                "from": "",
+                "pred": "roles & 1",
+                "col": "email",
+                "gen_value": "RandEmail"
+            }
+        }
+    ],
+    "PaperWatch": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "PaperReviewPreference": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "PaperConflict": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "TopicInterest": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "PaperReviewRefused": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["refusedBy, requestedBy"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "ActionLog": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId", "destContactId", "trueContactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "PaperComment": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "PaperReview": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId"],
+                "group_by_cols": []
+            }
+        }
+    ],
+    "Paper": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["managerContactId", "leadContactId", "shepherdContactId"],
+                "group_by_cols": []
+            }
+        }    
+    ],
+    "ReviewRating": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["contactId"],
+                "group_by_cols": []
+            }
+        }
+    ]
+}

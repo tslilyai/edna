@@ -1,0 +1,26 @@
+{
+    "users": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "moderations": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "stories": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ]
+}

@@ -1,0 +1,87 @@
+{
+    "invitations": [
+        {
+            "Remove": {
+                "from": "",
+                "pred": "True"
+            }
+        }
+    ],
+    "users": [
+        {
+            "Modify": {
+                "pred": "True",
+                "from": "",
+                "col": "deleted_at",
+                "gen_value": "Timestamp"
+            }
+        },
+        {
+            "Modify": {
+                "pred": "True",
+                "from": "",
+                "col": "session_token",
+                "gen_value": "Null"
+            }
+        }
+    ],
+    "comments": [
+        {
+            "Modify": {
+                "pred": {
+                    "ColValCmp": {
+                        "col": "score",
+                        "val": "0",
+                        "op": "Eq" 
+                    }
+                },
+                "from": "",
+                "col": "is_delete",
+                "gen_value": {
+                        "Bool" : true
+                }
+
+            }
+        }
+    ],
+    "stories": [
+        {
+            "Modify": {
+                "pred": "True",
+                "from": "",
+                "col": "user_id",
+                "gen_value": {
+                    "ConstNum" : 1 
+                }
+            }
+        }
+    ],
+    "messages": [
+        {
+            "Remove" : {
+                "from": "",
+                "pred": "True"
+            }
+        },
+        {
+            "Modify": {
+                "from": "",
+                "pred": "True",
+                "col": "deleted_by_author",
+                "gen_value": {
+                    "ConstNum" : 1 
+                }
+            }
+        },
+        {
+            "Modify": {
+                "from": "",
+                "pred": "True",
+                "col": "deleted_by_recipient",
+                "gen_value": {
+                    "ConstNum" : 1 
+                }
+            }
+        }
+    ]
+}

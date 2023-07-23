@@ -1,0 +1,12 @@
+{
+    "stories": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "group_by_cols": ["url"],
+                "user_fk_cols": ["user_id"]
+            }
+        }
+    ]
+}

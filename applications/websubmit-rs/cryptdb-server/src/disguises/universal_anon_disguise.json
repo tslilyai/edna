@@ -1,0 +1,12 @@
+{
+    "answers": [
+        {
+            "Decor" : {
+                "from": "",
+                "pred": "True",
+                "user_fk_cols": ["email"],
+                "group_by_cols": ["lec"]
+            }
+        }
+    ]
+}

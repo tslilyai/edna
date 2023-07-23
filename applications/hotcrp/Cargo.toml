@@ -1,0 +1,33 @@
+[package]
+name = "edna-hotcrp"
+authors = ["Lily Tsai<tslilyai@mit.edu>"]
+version = "0.1.0"
+edition = '2018'
+
+[dependencies]
+chrono = { version = "0.4.0", features = ["serde"] }
+clap = "2.25.0"
+edna = { path = "../../edna" }
+sql_parser = { path = "../../deps/sql-parser", package = "sql-parser" }
+env_logger = "0.7.1"
+futures-core = "0.3.0"
+futures-util = "0.3.0"
+glob = "0.3"
+mysql = "23.0.1"
+mysql_async = "0.23.0"
+mysql_common = "0.22"
+log = "0.4"
+rand = "0.8.4"
+rand_distr = "0.2"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+structopt = { version = "0.3", default-features=false }
+libc = "0.2"
+tower-service = "0.3.0"
+histogram-sampler = "0.4.0"
+rsa = "0.5.0"
+
+[[bin]]
+name = "hotcrp"
+path = "src/main.rs"
+doc = false

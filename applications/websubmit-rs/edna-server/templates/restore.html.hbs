@@ -1,0 +1,22 @@
+{{#*inline "page"}}
+  <h1>Restore Your Account</h1>
+  <form action="/restore" method="post" accept-charset="utf-8">
+    <label>Deletion ID:
+      <p>
+      <input name="did" />
+      </p>
+    </label>
+    <label>Email:
+      <p>
+      <input name="email" />
+      </p>
+    </label> 
+    <label>APIKey:
+      <p>
+      <input name="apikey" />
+      </p>
+    </label>
+    <input type="submit" value="Submit">
+  </form>
+{{/inline}}
+{{~> layout~}}

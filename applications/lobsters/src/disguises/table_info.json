@@ -1,0 +1,98 @@
+{
+    "comments": {
+        "name": "comments",
+        "id_cols": ["id"],
+        "other_fk_cols": [["stories", "id", "story_id"]],
+        "owner_fk_cols": ["user_id"]
+    },
+    "hat_requests": {
+        "name": "hat_requests",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["user_id"]
+    },
+    "hats": {
+        "name": "hats",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["granted_by_user_id", "user_id"]
+    },
+    "hidden_stories": {
+        "name": "hidden_stories",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["user_id"]
+    },
+    "invitations": {
+        "name": "invitations",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["user_id"]
+    },
+    "messages": {
+        "name": "messages",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["author_user_id", "recipient_user_id"]
+    },
+    "mod_notes": {
+        "name": "mod_notes",
+        "id_cols": ["id"],
+        "other_fk_cols": [["stories", "id", "story_id"], ["comments", "id", "comment_id"]],
+        "owner_fk_cols": ["moderator_user_id", "user_id"]
+    },
+    "moderations": {
+        "name": "moderations",
+        "id_cols": ["id"],
+        "other_fk_cols": [["stories", "id", "story_id"], ["comments", "id", "comment_id"]],
+        "owner_fk_cols": ["moderator_user_id", "user_id"]
+    },
+   "read_ribbons": {
+        "name": "read_ribbons",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["user_id"]
+    },
+    "saved_stories": {
+        "name": "saved_stories",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["user_id"]
+    },
+    "stories": {
+        "name": "stories",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["user_id"]
+    },
+    "suggested_taggings": {
+        "name": "suggested_taggings",
+        "id_cols": ["id"],
+        "other_fk_cols": [["stories", "id", "story_id"]],
+        "owner_fk_cols": ["user_id"]
+    },
+    "suggested_titles": {
+        "name": "suggested_titles",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["user_id"]
+    },
+    "tag_filters": {
+        "name": "tag_filters",
+        "id_cols": ["id"],
+        "other_fk_cols": [["stories", "id", "story_id"], ["comments", "id", "comment_id"]],
+        "owner_fk_cols": ["user_id"]
+    },
+    "users": {
+        "name": "users",
+        "id_cols": ["id"],
+        "other_fk_cols": [],
+        "owner_fk_cols": ["id"]
+    },
+    "votes": {
+        "name": "votes",
+        "id_cols": ["id"],
+        "other_fk_cols": [["stories", "id", "story_id"], ["comments", "id", "comment_id"]],
+        "owner_fk_cols": ["user_id"]
+    }
+}

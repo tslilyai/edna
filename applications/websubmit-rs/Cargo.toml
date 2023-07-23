@@ -1,0 +1,53 @@
+[package]
+name = "websubmit"
+version = "0.1.0"
+authors = ["Lillian Tsai <tslilyai@mit.edu", "Malte Schwarzkopf <malte@cs.brown.edu>"]
+edition = "2018"
+
+[dependencies]
+arccstr = "1.2.0"
+chrono = { version = "0.4.0", features = ["serde"] }
+clap = "2.33.0"
+edna = {path = "../../edna"}
+edna-cryptdb = {path = "../../edna_cryptdb"}
+lettre = "0.9.2"
+lettre_email = "0.9.2"
+mysql = "23.0.1"
+mysql_common = "0.22"
+rand = "0.8.4"
+rocket = "0.5.0-rc.1"
+#, features = ["secrets"]}
+rust-crypto = "0.2.36"
+slog = {version = "2.4.0", features = ["release_max_level_info"] }
+slog-term = "2.4.0"
+toml = "0.2.1"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+sql-parser = { path= "../../deps/sql-parser" }
+base64 = "0.13.0"
+serde_urlencoded = "0.7"
+log = "0.4.0"
+env_logger = "0.8.4"
+flame = { version = "0.2.2", optional=true }
+reqwest = { version = "0.11", features = ["json", "cookies", "blocking"] }
+tokio = { version = "1", features = ["full"] }
+
+[dependencies.rocket_dyn_templates]
+version = "0.1.0-rc.1"
+features = ["handlebars", "tera"]
+
+[dependencies.rocket_sync_db_pools]
+version = "0.1.0-rc.1"
+default-features = false
+features = ["diesel_mysql_pool"]
+
+[[bin]]
+name = "websubmit-srv"
+path = "edna-server/src/main.rs"
+doc = false
+
+[[bin]]
+name = "cryptdb-srv"
+path = "cryptdb-server/src/main.rs"
+doc = false

@@ -1,0 +1,22 @@
+{
+    "moderations": [
+        {
+            "Decor" : {
+                "pred": "True",
+                "from": "",
+                "group_by_cols": [],
+                "user_fk_cols": ["user_id", "moderator_user_id"]
+            }
+        }
+    ],
+    "stories": [
+        {
+            "Decor" : {
+                "pred": "True",
+                "from": "",
+                "group_by_cols": [],
+                "user_fk_cols": ["user_id"]
+            }
+        }
+    ]
+}
