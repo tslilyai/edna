@@ -6,8 +6,6 @@ import sys
 import numpy as np
 from textwrap import wrap
 
-results_file = sys.argv[1]
-
 plt.style.use('seaborn-deep')
 plt.figure(figsize = (3.33, 1.5))
 barwidth = 0.4
@@ -71,7 +69,7 @@ hobby_durs_baseline = []
 story_durs_baseline = []
 frontpage_durs_baseline = []
 
-with open("../results{}/lobsters_results/lobsters_disguise_stats_basic_dryrun.csv".format(results_file),'r') as csvfile:
+with open("../lobsters_results/lobsters_disguise_stats_basic_dryrun.csv",'r') as csvfile:
     rows = csvfile.readlines()[1:-1]
     for r in rows:
         vals = [int(x.strip()) for x in r.split(",")]
@@ -84,7 +82,7 @@ with open("../results{}/lobsters_results/lobsters_disguise_stats_basic_dryrun.cs
         story_durs_dryrun.append(story);
         frontpage_durs_dryrun.append(frontpage);
 
-with open("../results{}/lobsters_results/lobsters_disguise_stats_dryrun.csv".format(results_file),'r') as csvfile:
+with open("../lobsters_results/lobsters_disguise_stats_dryrun.csv",'r') as csvfile:
     rows = csvfile.readlines()[1:-1]
     for r in rows:
         vals = [int(x.strip()) for x in r.split(",")]
@@ -104,7 +102,7 @@ with open("../results{}/lobsters_results/lobsters_disguise_stats_dryrun.csv".for
         hobby_durs_dryrun.append(hobby)
         unhobby_durs_dryrun.append(unhobby)
 
-with open("../results{}/lobsters_results/lobsters_disguise_stats_basic.csv".format(results_file),'r') as csvfile:
+with open("../lobsters_results/lobsters_disguise_stats_basic.csv",'r') as csvfile:
     rows = csvfile.readlines()[1:-1]
     for r in rows:
         vals = [int(x.strip()) for x in r.split(",")]
@@ -117,7 +115,7 @@ with open("../results{}/lobsters_results/lobsters_disguise_stats_basic.csv".form
         story_durs.append(story);
         frontpage_durs.append(frontpage);
 
-with open("../results{}/lobsters_results/lobsters_disguise_stats.csv".format(results_file),'r') as csvfile:
+with open("../lobsters_results/lobsters_disguise_stats.csv", 'r') as csvfile:
     rows = csvfile.readlines()[1:-1]
     for r in rows:
         vals = [int(x.strip()) for x in r.split(",")]
@@ -137,7 +135,7 @@ with open("../results{}/lobsters_results/lobsters_disguise_stats.csv".format(res
         hobby_durs.append(hobby)
         unhobby_durs.append(unhobby)
 
-with open("../results{}/lobsters_results/lobsters_disguise_stats_baseline_stats.csv".format(results_file),'r') as csvfile:
+with open("../lobsters_results/lobsters_disguise_stats_baseline_stats.csv",'r') as csvfile:
     rows = csvfile.readlines()[1:-1]
     for r in rows:
         vals = [int(x.strip()) for x in r.split(",")]
@@ -146,19 +144,19 @@ with open("../results{}/lobsters_results/lobsters_disguise_stats_baseline_stats.
         story_durs_baseline.append(vals[1]);
         frontpage_durs_baseline.append(vals[2]);
 
-with open("../results{}/lobsters_results/lobsters_disguise_stats_baseline_delete.csv".format(results_file),'r') as csvfile:
+with open("../lobsters_results/lobsters_disguise_stats_baseline_delete.csv",'r') as csvfile:
     rows = csvfile.readlines()
     for r in rows:
         baseline_delete = int(r.strip())/1000
         delete_durs_baseline.append(baseline_delete);
 
-with open("../results{}/lobsters_results/lobsters_disguise_stats_baseline_decay.csv".format(results_file),'r') as csvfile:
+with open("../lobsters_results/lobsters_disguise_stats_baseline_decay.csv",'r') as csvfile:
     rows = csvfile.readlines()
     for r in rows:
         baseline_decay = int(r.strip())/1000
         decay_durs_baseline.append(baseline_decay);
 
-with open("../results{}/lobsters_results/lobsters_disguise_stats_baseline_hobbyanon.csv".format(results_file),'r') as csvfile:
+with open("../lobsters_results/lobsters_disguise_stats_baseline_hobbyanon.csv",'r') as csvfile:
     rows = csvfile.readlines()
     for r in rows:
         baseline_hobby_anon = int(r.strip())/1000
@@ -260,7 +258,7 @@ plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055,
            labelspacing=0.1);
 plt.tight_layout(h_pad=0)
-plt.savefig('lobsters_op_stats{}.pdf'.format(results_file), dpi=300)
+plt.savefig('lobsters_op_stats.pdf', dpi=300)
 
 print(
         statistics.median(story_durs),

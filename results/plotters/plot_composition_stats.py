@@ -7,8 +7,6 @@ import sys
 import numpy as np
 from textwrap import wrap
 
-results_file = sys.argv[1]
-
 plt.style.use('seaborn-deep')
 
 # plot styling for paper
@@ -78,15 +76,15 @@ for i in range(2):
     delete_durs_dryrun_noanon = []
     restore_durs_dryrun_noanon = []
 
-    filename_baseline ="../results{}/hotcrp_results/hotcrp_disguise_stats_3080users_baseline.csv".format(results_file)
-    filename ="../results{}/hotcrp_results/hotcrp_disguise_stats_3080users.csv".format(results_file)
-    filename_dryrun ="../results{}/hotcrp_results/hotcrp_disguise_stats_3080users_nocrypto.csv".format(results_file)
+    filename_baseline ="../hotcrp_results/hotcrp_disguise_stats_3080users_baseline.csv"
+    filename ="../hotcrp_results/hotcrp_disguise_stats_3080users.csv"
+    filename_dryrun ="../hotcrp_results/hotcrp_disguise_stats_3080users_nocrypto.csv"
     title = "hotcrp"
     offset = 13
     if i == 0:
-        filename_baseline ='../results{}/websubmit_results/disguise_stats_{}lec_{}users_baseline.csv'.format(results_file, 20, 2000)
-        filename = '../results{}/websubmit_results/disguise_stats_{}lec_{}users.csv'.format(results_file, 20,2000)
-        filename_dryrun = '../results{}/websubmit_results/disguise_stats_{}lec_{}users_dryrun.csv'.format(results_file, 20,2000)
+        filename_baseline ='../websubmit_results/disguise_stats_{}lec_{}users_baseline.csv'.format(20, 2000)
+        filename = '../websubmit_results/disguise_stats_{}lec_{}users.csv'.format(20,2000)
+        filename_dryrun = '../websubmit_results/disguise_stats_{}lec_{}users_dryrun.csv'.format(20,2000)
         title = "websubmit"
         offset = 5
         with open(filename,'r') as csvfile:
@@ -194,7 +192,7 @@ for i in range(2):
     plt.xticks(X, labels=labels)
     plt.subplots_adjust(left=0.25, right=1.0, bottom=0.4)
     plt.tight_layout(h_pad=0)
-    plt.savefig('composition_stats_{}{}.pdf'.format(title,results_file), dpi=300)
+    plt.savefig('composition_stats_{}.pdf'.format(title), dpi=300)
     plt.clf()
 
 

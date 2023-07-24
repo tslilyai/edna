@@ -6,7 +6,6 @@ import sys
 import numpy as np
 from textwrap import wrap
 
-results_file = sys.argv[1]
 
 plt.style.use('seaborn-deep')
 plt.figure(figsize = (3.33, 1.5))
@@ -83,9 +82,9 @@ delete_durs_baseline = []
 read_durs_baseline = []
 
 app = "hotcrp"
-filename_baseline ="../results{}/hotcrp_results/hotcrp_disguise_stats_3080users_baseline.csv".format(results_file)
-filename_dryrun="../results{}/hotcrp_results/hotcrp_disguise_stats_3080users_nocrypto.csv".format(results_file)
-filename ="../results{}/hotcrp_results/hotcrp_disguise_stats_3080users.csv".format(results_file)
+filename_baseline ="../hotcrp_results/hotcrp_disguise_stats_3080users_baseline.csv"
+filename_dryrun="../hotcrp_results/hotcrp_disguise_stats_3080users_nocrypto.csv"
+filename ="../hotcrp_results/hotcrp_disguise_stats_3080users.csv"
 offset = 8
 nusers = 80
 with open(filename,'r') as csvfile:
@@ -203,7 +202,7 @@ plt.yticks(range(0, 275, 50))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.tight_layout(h_pad=0)
-plt.savefig("{}_op_stats{}.pdf".format(app, results_file))
+plt.savefig("{}_op_stats.pdf".format(app))
 plt.clf()
 
 print(

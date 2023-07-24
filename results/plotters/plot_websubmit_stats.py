@@ -6,8 +6,6 @@ import sys
 import numpy as np
 from textwrap import wrap
 
-results_file = sys.argv[1]
-
 plt.style.use('seaborn-deep')
 plt.figure(figsize = (3.33, 1.5))
 
@@ -129,12 +127,12 @@ delete_durs_baseline = []
 
 nusers = 2000
 app = "websubmit"
-filename_baseline='../results{}/websubmit_results/disguise_stats_{}lec_{}users_baseline.csv'.format(results_file, 20,nusers)
-filename_dryrun='../results{}/websubmit_results/disguise_stats_{}lec_{}users_dryrun.csv'.format(results_file, 20,nusers)
-filename_qapla = '../results{}/websubmit_results/qapla_stats_{}lec_{}users.csv'.format(results_file, 20,nusers)
-filename_cryptdb='../results{}/websubmit_results/cryptdb_stats_{}lec_{}users_crypto.csv'.format(results_file, 20,nusers)
-#filename_cryptdb_nocrypto='../results{}/websubmit_results/cryptdb_stats_{}lec_{}users.csv'.format(results_file, 20,nusers)
-filename='../results{}/websubmit_results/disguise_stats_{}lec_{}users.csv'.format(results_file, 20,nusers)
+filename_baseline='../websubmit_results/disguise_stats_{}lec_{}users_baseline.csv'.format(20,nusers)
+filename_dryrun='../websubmit_results/disguise_stats_{}lec_{}users_dryrun.csv'.format(20,nusers)
+filename_qapla = '../websubmit_results/qapla_stats_{}lec_{}users.csv'.format(20,nusers)
+filename_cryptdb='../websubmit_results/cryptdb_stats_{}lec_{}users_crypto.csv'.format(20,nusers)
+#filename_cryptdb_nocrypto='../websubmit_results/cryptdb_stats_{}lec_{}users.csv'.format(20,nusers)
+filename='../websubmit_results/disguise_stats_{}lec_{}users.csv'.format(20,nusers)
 
 with open(filename_qapla,'r') as csvfile:
     rows = csvfile.readlines()
@@ -320,7 +318,7 @@ plt.xticks(X, labels=labels, rotation=-45, ha='left', rotation_mode="anchor")
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)
 plt.tight_layout(h_pad=0)
-plt.savefig("{}_op_stats{}.pdf".format(app, results_file))
+plt.savefig("{}_op_stats.pdf".format(app))
 plt.clf()
 
 ###############
@@ -465,7 +463,7 @@ plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)
 plt.tight_layout(h_pad=0)
-plt.savefig("{}_qapla_op_stats{}.pdf".format(app,results_file))
+plt.savefig("{}_qapla_op_stats.pdf".format(app))
 plt.clf()
 
 ###############
@@ -593,7 +591,7 @@ plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)
 plt.tight_layout(h_pad=0)
-plt.savefig("{}_cryptdb_op_stats{}.pdf".format(app, results_file))
+plt.savefig("{}_cryptdb_op_stats.pdf".format(app))
 plt.clf()
 
 #print(

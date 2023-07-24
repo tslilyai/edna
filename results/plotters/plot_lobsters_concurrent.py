@@ -7,8 +7,6 @@ import sys
 from collections import defaultdict
 import matplotlib.colors as mcolors
 
-results_file = sys.argv[1]
-
 plt.style.use('seaborn-deep')
 
 # plot styling for paper
@@ -104,18 +102,18 @@ users = [LOW_LOAD, HIGH_LOAD]
 disguiser = ['none', 'cheap', 'expensive']
 for u in users:
     for d in disguiser:
-        get_data_count('../results{}/lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(results_file,u, d),
+        get_data_count('../lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(u, d),
                 op_results, 1, u)
-        get_data_count('../results{}/lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(results_file,u, d),
+        get_data_count('../lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(u, d),
                 op_results_txn, 1, u)
         if d != 'none':
-            get_data_values('../results{}/lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(results_file,u, d),
+            get_data_values('../lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(u, d),
                     delete_results, 2, u)
-            get_data_values('../results{}/lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(results_file,u, d),
+            get_data_values('../lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(u, d),
                     delete_results_txn, 2, u)
-            get_data_values('../results{}/lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(results_file,u, d),
+            get_data_values('../lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(u, d),
                     restore_results, 3, u)
-            get_data_values('../results{}/lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(results_file,u, d),
+            get_data_values('../lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(u, d),
                     restore_results_txn, 3, u)
 print("low nontxnal")
 print(op_results[LOW_LOAD][0])
@@ -290,6 +288,7 @@ add_labels((X+2*barwidth),
 
 plt.ylabel('Time (sec)')
 plt.ylim(ymin=0, ymax=5000)
+plt.yticks(range(0, 5000, 2000))
 #plt.tick_params(
 #    axis='x',          # changes apply to the x-axis
 #    which='both',      # both major and minor ticks are affected
@@ -301,4 +300,4 @@ plt.rcParams.update({'hatch.color': 'w'})
 plt.ylabel('Throughput (ops/sec)')
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.tight_layout(h_pad=0)
-plt.savefig('lobsters_concurrent_results{}.pdf'.format(results_file))
+plt.savefig('lobsters_concurrent_results.pdf')
