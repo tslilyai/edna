@@ -6,6 +6,7 @@ protect inactive accounts, selectively dissociate personal data from public
 profiles, and remove service access to their data without permanently losing
 their accounts.
 
+Edna was last tested on a machine with 16 CPUs and 60 GB RAM, running Ubuntu 20.04.5 LTS, and uses MySQL with the InnoDB storage engine atop a local SSD. The CloudLab profile (`profile.py`) should provide these settings.
 
 ## Repository organization:
 * `deps/`: third-party libraries that Edna uses for e.g., MySQL parsing
