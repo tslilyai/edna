@@ -164,6 +164,7 @@ impl EdnaSpeaksForRecord {
         // remove the pseudoprincipal in all cases since it shouldn't exist
         // NOTE: the pseudoprincipal may already not exist because there may be more than one
         // object decorrelated to the same pp
+        // TODO: handle referential integrity of any objects that may now refer to this one
         db.query_drop(format!(
             "DELETE FROM {} WHERE {} = \'{}\'",
             guise_gen.name,

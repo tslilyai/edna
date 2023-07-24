@@ -17,13 +17,13 @@ skip-log-bin
 innodb-buffer-pool-size=16G
 innodb_read_io_threads = 64
 innodb_write_io_threads = 64
-innodb_io_capacity = 5000
-innodb_open_files=20000
+#innodb_io_capacity = 5000
+#innodb_open_files=20000
 skip-innodb-doublewrite
 innodb_flush_log_at_trx_commit=0
 innodb_data_file_path=ibdata1:25M:autoextend:max:512M
-query_cache_type=0
-query_cache_size=0
+#query_cache_type=0
+#query_cache_size=0
 
 #
 # * Basic Settings
@@ -32,7 +32,7 @@ user		= mysql
 # pid-file	= /var/run/mysqld/mysqld.pid
 # socket	= /var/run/mysqld/mysqld.sock
 # port		= 3306
-# datadir	= /var/lib/mysql
+datadir	= /data/mysql
 
 
 # If MySQL is running as a replication slave, this should be
@@ -72,7 +72,7 @@ myisam-recover-options  = BACKUP
 #
 # Error log - should be very few entries.
 #
-log_error = /var/log/mysql/error.log
+#log_error = /var/log/mysql/error.log
 #
 # Here you can see queries with especially long duration
 # slow_query_log		= 1

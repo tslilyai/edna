@@ -7,11 +7,9 @@ pip install matplotlib
 
 # move files around to the blockstore with enough room...
 sudo chmod ugo+rw -R /data
-#git clone https://github.com/tslilyai/edna.git repository
-mv /local/repository repository
-sudo find /data -type f -name *.sh -exec chmod ugo+x {} \
-cd /data
-cd repository
+sudo rm -rf /data/repository
+git clone https://github.com/tslilyai/edna.git repository
+cd /data/repository
 yes | ./config_mysql.sh
 cd related_systems/qapla
 make; cd examples; make

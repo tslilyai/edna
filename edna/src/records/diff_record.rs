@@ -15,7 +15,6 @@ use std::time;
 pub const REMOVE_GUISE: u8 = 0;
 pub const DECOR_GUISE: u8 = 1;
 pub const MODIFY_GUISE: u8 = 2;
-pub const INSERT_GUISE: u8 = 3;
 pub const REMOVE_PRINCIPAL: u8 = 5;
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -268,38 +267,6 @@ impl EdnaDiffRecord {
                     true,
                 );
                 warn!("Reveal removed principal: {}", start.elapsed().as_micros());
-            }
-
-            INSERT_GUISE => {
-                let start = time::Instant::now();
-                // get current guise in db
-                let table_info = timap.get(&self.table).unwrap();
-                let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
-                let select =
-                    &str_select_statement(&self.table, &self.table, &record_guise_selection);
-                let selected = get_query_rows_str_q::<Q>(select, db)?;
-
-                // if field hasn't been modified, delete it
-                if selected.is_empty() {
-                    warn!("DiffRecordWrapper Reveal: Modified value no longer exists\n",);
-                }
-                for rv in &selected[0] {
-                    if rv.column() == self.col {
-                        if rv.value() != self.new_val {
-                            warn!(
-                                "DiffRecordWrapper Reveal: Inserted value {:?} not equal to new value {:?}\n",
-                                rv.value(), self.new_val
-                            );
-                            return Ok(false);
-                        }
-                    }
-                }
-                db.query_drop(format!("DELETE FROM {} WHERE {}", self.table, select))?;
-                warn!(
-                    "Reveal inserted data for {}: {}",
-                    self.table,
-                    start.elapsed().as_micros()
-                );
             }
 
             REMOVE_GUISE => {
