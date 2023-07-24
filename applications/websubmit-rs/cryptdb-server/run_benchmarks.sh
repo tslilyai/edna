@@ -4,11 +4,13 @@ cargo build --release
 mkdir output &> /dev/null || true
 
 # spin off proxy
-(cd ../../proxy; ./run.sh)
+sudo killall proxy
+cd ../../proxy; ./run.sh
+cd ../websubmit-rs/cryptdb-server/
 
 crypto=true
 schema="src/schema_nocrypto.sql"
-BUILDDIR=/local/repository
+BUILDDIR=/data/repository
 
 if $crypto; then
 	schema="src/schema.sql"
@@ -16,7 +18,7 @@ fi
 
 for l in 20; do
     for u in 2000; do
-	RUST_LOG=error BUILDDIR/target/release/cryptdb-srv \
+	RUST_LOG=error $BUILDDIR/target/release/cryptdb-srv \
 		-i myclass_cryptdb --schema $schema --config sample-config.toml \
 		--benchmark true --crypto $crypto \
     	--nusers $u --nlec $l --nqs 4 &> \
