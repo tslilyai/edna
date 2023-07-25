@@ -97,7 +97,7 @@ several hours to complete all trials.
 NOTE: Currently API keys and other disguise IDs are not emailed, but rather printed out as logs on the server. API keys act as a user's "password," and can be used to rederive their private key.
 
 ## Misc Details
-The benchmark scripts relies on the following files (paths can be changed in the scripts if necessary, e.g., if not running on CloudLab):
+The benchmark scripts rely on the following files (paths can be changed in the scripts if necessary, e.g., if not running on CloudLab):
 * `/related_systems/qapla/lib`: contains Qapla library files used in `applications/websubmit-rs/qapla-server/build.rs`. These were built via `make` in `related_systems/qapla` and `related_systems/qapla/examples`; you should not have to rebuild them if using the provided image.
 * `/data/lobsters_edna_messages_and_tags.sql`: contains the 
     database with generated Lobsters data for the Lobsters benchmark. Used in
