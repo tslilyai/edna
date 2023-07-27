@@ -69,7 +69,7 @@ several hours to complete all trials.
    sudo docker exec -ti lobsters_edna /bin/bash
    ```
 6. You can observe the Lobste.rs code (and the modification made to add Edna) in the current `/lobsters` current working directory of the shell.
-7.  In the shell, run the Edna server:
+7. In the shell, run the Edna server:
    ```
    cd /edna_srv/edna_srv; ./run_srv.sh
    ```
