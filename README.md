@@ -6,7 +6,7 @@ protect inactive accounts, selectively dissociate personal data from public
 profiles, and remove service access to their data without permanently losing
 their accounts.
 
-Edna was last tested on a machine with 16 CPUs and 60 GB RAM, running Ubuntu 20.04.5 LTS, and uses MySQL with the InnoDB storage engine atop a local SSD. The CloudLab profile (`profile.py`) should provide these settings.
+Edna was last tested on a machine with 16 CPUs and 60 GB RAM, running Ubuntu 20.04.5 LTS, and uses MySQL with the InnoDB storage engine atop a local SSD. The CloudLab profile (`profile.py`) should provide these settings, but numbers may differ due to variability in the machine type, etc.
 
 ## Repository organization:
 * `deps/`: third-party libraries that Edna uses for e.g., MySQL parsing
@@ -35,7 +35,7 @@ The requisite scripts to run benchmarks are all contained in the root directory!
    ```
    cp /local/repository/initialize.sh /data; cd /data/; ./initialize.sh
    ```
-5. Run all benchmarks to produce all results (you might want to run this in a separate terminal session using `tmux`). This will execute per-application benchmark scripts, and then run a graph-plotting script to produce all the graphs from the paper. Graphs will be put in `results/result_graphs`.
+5. Run all benchmarks to produce all results (you might want to run this in a separate terminal session using `tmux`). This will execute per-application benchmark scripts in `applications/[app]`, and then run a graph-plotting script to produce all the graphs from the paper. Graphs will be put in `results/result_graphs`.
    ```
    cd /data/repository; ./run_all.sh
    ``` 
@@ -68,18 +68,21 @@ several hours to complete all trials.
    ```
    sudo docker exec -ti lobsters_edna /bin/bash
    ```
-6. In the shell, run the Edna server:
+6. You can observe the Lobste.rs code (and the modification made to add Edna) in the current `/lobsters` current working directory of the shell.
+7. In the shell, run the Edna server:
    ```
    cd /edna_srv/edna_srv; ./run_srv.sh
    ```
-7. Connect via ssh to the profile experiment instance, with port forwarding:
+8. Connect via ssh to the profile experiment instance, with port forwarding:
     ```
    ssh -L 3000:localhost:3000 [instance_url]
     ```
-8. Go to `localhost:3000` on your computer to access the Lobsters app
+9. Go to `localhost:3000` on your computer to access the Lobsters app
       * Create accounts, post content, and see what happens when you disguise it!
       * Note: the admin account has username `test` and password `test`
-     
+
+_Note: the Docker image runs Edna-fied Lobste.rs from 2021; currently, the image pulls in outdated libraries (causing some visible errors), and work to update this image to the newest version of Lobste.rs is ongoing_
+
 ### E2E WebSubmit
 0. Make sure you have run `./config_mysql.sh` in the repository root, and are using the profile instance.
 1. Run the server:
@@ -94,7 +97,7 @@ several hours to complete all trials.
    * Login as `tester@admin.edu` to have admin access to add lectures and questions, anonymize users, etc.
    * Create accounts with any other email to submit answers, try deleting your account, etc.
 
-NOTE: Currently API keys and other disguise IDs are not emailed, but rather printed out as logs on the server. API keys act as a user's "password," and can be used to rederive their private key.
+_NOTE: API keys and other disguise IDs are not emailed, but rather printed out as logs on the server. API keys act as a user's "password," and can be used to rederive their private key. Application CSS is not provided yet in this codebase._
 
 ## Misc Details
 The benchmark scripts rely on the following files (paths can be changed in the scripts if necessary, e.g., if not running on CloudLab):
