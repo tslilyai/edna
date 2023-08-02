@@ -35,6 +35,11 @@ The requisite scripts to run benchmarks are all contained in the root directory!
    ```
    cp /local/repository/initialize.sh /data; cd /data/; ./initialize.sh
    ```
+4. Install `rust` packages:
+   ```
+   yes | sudo apt remove rustc cargo
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh #take the default options
+   ```
 5. Run all benchmarks to produce all results (you might want to run this in a separate terminal session using `tmux`). This will execute per-application benchmark scripts in `applications/[app]`, and then run a graph-plotting script to produce all the graphs from the paper. Graphs will be put in `results/result_graphs`, which you can then `scp` to your local machine from Cloudtop.
    ```
    cd /data/repository; ./run_all.sh
