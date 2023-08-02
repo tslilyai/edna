@@ -35,7 +35,7 @@ The requisite scripts to run benchmarks are all contained in the root directory!
    ```
    cp /local/repository/initialize.sh /data; cd /data/; ./initialize.sh
    ```
-5. Run all benchmarks to produce all results (you might want to run this in a separate terminal session using `tmux`). This will execute per-application benchmark scripts in `applications/[app]`, and then run a graph-plotting script to produce all the graphs from the paper. Graphs will be put in `results/result_graphs`.
+5. Run all benchmarks to produce all results (you might want to run this in a separate terminal session using `tmux`). This will execute per-application benchmark scripts in `applications/[app]`, and then run a graph-plotting script to produce all the graphs from the paper. Graphs will be put in `results/result_graphs`, which you can then `scp` to your local machine from Cloudtop.
    ```
    cd /data/repository; ./run_all.sh
    ``` 
@@ -43,6 +43,8 @@ The requisite scripts to run benchmarks are all contained in the root directory!
 All benchmarks should individually take under 15 minutes to run, with the exception of
 Lobsters (which registers and iterates through disguising and revealing all 16k users); this will take 
 several hours to complete all trials.
+
+The graphs produced correspond to Figures 6-10 in the paper.
 
 ## Case Study Applications
 
