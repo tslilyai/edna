@@ -55,7 +55,7 @@ The graphs produced correspond to Figures 6-10 in the paper.
 ## Case Study Applications
 
 ### E2E Lobste.rs
-0. Make sure you are using the profile instance.
+0. Make sure you are using the profile instance and have run `cp /local/repository/initialize.sh /data; cd /data/; ./initialize.sh`.
 1. Stop any running mysql instances:
    ```
    sudo service mysql stop
