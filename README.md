@@ -75,6 +75,11 @@ The graphs produced correspond to Figures 6-10 in the paper.
    Edna running on the server.
 
    You can observe the Lobste.rs code (and the modification made to add Edna) in the `/lobsters` directory.
+
+   NOTE: If `docker-compose` hangs, try removing any old volumes used to save the Lobsters database contents:
+   ```
+   docker volume rm docker-lobsters-edna_lobsters_database
+   ```
 7. Connect via ssh to the profile experiment instance, with port forwarding:
     ```
    ssh -L 3000:localhost:3000 [instance_url]
