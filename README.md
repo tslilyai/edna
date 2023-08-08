@@ -63,7 +63,7 @@ The graphs produced correspond to Figures 6-10 in the paper.
 2. Get and initialize the docker code:
    ```
    cd /data
-   git clone https://tslilyai/docker-lobsters-edna
+   git clone https://github.com/tslilyai/docker-lobsters-edna.git
    cd docker-lobsters-edna
    git submodule update --init --recursive
    make init
