@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 fn init_logger() {
     let _ = env_logger::builder()
         // Include all events in tests
-        .filter_level(log::LevelFilter::Warn)
+        .filter_level(log::LevelFilter::Debug)
         // Ensure events are captured by `cargo test`
         .is_test(true)
         // Ignore errors initializing the logger if tests race to configure it
@@ -71,28 +71,28 @@ fn rocket(
             ],
         )*/
     .mount("/", routes![index])
-    .mount("/register_principal", routes![apiproxy::register_principal])
-    .mount("/start_disguise", routes![apiproxy::start_disguise])
-    .mount("/end_disguise", routes![apiproxy::end_disguise])
-    .mount("/start_reveal", routes![apiproxy::start_reveal])
-    .mount("/end_reveal", routes![apiproxy::end_reveal])
-    .mount("/apply_disguise", routes![apiproxy::apply_disguise])
-    .mount("/reveal_disguise", routes![apiproxy::reveal_disguise])
+    .mount("/", routes![apiproxy::register_principal])
+    .mount("/", routes![apiproxy::start_disguise])
+    .mount("/", routes![apiproxy::end_disguise])
+    .mount("/", routes![apiproxy::start_reveal])
+    .mount("/", routes![apiproxy::end_reveal])
+    .mount("/", routes![apiproxy::apply_disguise])
+    .mount("/", routes![apiproxy::reveal_disguise])
     .mount(
-        "/get_pseudoprincipals_of",
+        "/",
         routes![apiproxy::get_pseudoprincipals_of],
     )
     .mount(
-        "/get_records_of_disguise",
+        "/",
         routes![apiproxy::get_records_of_disguise],
     )
     .mount(
-        "/cleanup_records_of_disguise",
+        "/",
         routes![apiproxy::cleanup_records_of_disguise],
     )
-    .mount("/save_diff_record", routes![apiproxy::save_diff_record])
+    .mount("/", routes![apiproxy::save_diff_record])
     .mount(
-        "/save_pseudoprincipal_record",
+        "/",
         routes![apiproxy::save_pseudoprincipal_record],
     )
 }
