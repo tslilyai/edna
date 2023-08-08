@@ -60,26 +60,24 @@ The graphs produced correspond to Figures 6-10 in the paper.
    ```
    sudo service mysql stop
    ```
-2. Pull the docker instance:
+2. Install `docker-compose`:
    ```
-   sudo docker pull tslilyai/lobsters-edna:latest
+   yes | sudo apt install docker-compose
    ```
-3. Run the MariaDB docker instance that holds the Lobsters database:
+2. Get and initialize the docker code:
    ```
-   sudo docker run --name lobsters_mariadb -v lobsters_data:/var/lib/mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=lobsters -d mariadb
+   cd /data
+   git clone https://tslilyai/docker-lobsters-edna
+   cd docker-lobsters-edna
+   git submodule update --init --recursive
+   sudo make
+   sudo docker-compose up
    ```
-4. Run the docker instance with the repository mounted at `/edna_srv`; it will print out any logs from Lobsters:
-   ```
-   sudo docker run -p 3000:3000 -v /data/repository:/edna_srv -ti --user root --link lobsters_mariadb:mariadb --name lobsters_edna tslilyai/lobsters-edna
-   ```
-   `docker_entrypoint.sh` is called when docker runs the container, and invokes `cd /edna_srv/edna_srv; ./run_srv.sh` to start Edna running on the server.
 
-   _Note: the Docker image runs Edna-fied Lobste.rs from 2021; currently, the image pulls in outdated libraries (causing some visible errors), and work to      update this image to the newest version of Lobste.rs is ongoing_
-6. In another terminal, get a shell:
-   ```
-   sudo docker exec -ti lobsters_edna /bin/bash
-   ```
-   You can observe the Lobste.rs code (and the modification made to add Edna) in the current `/lobsters` current working directory of the shell.
+   `docker-assets/docker_entrypoint.sh` is called when docker runs the container, and invokes `cd /edna_srv/edna_srv; ./run_srv.sh` to start
+   Edna running on the server.
+
+   You can observe the Lobste.rs code (and the modification made to add Edna) in the `/lobsters` directory.
 7. Connect via ssh to the profile experiment instance, with port forwarding:
     ```
    ssh -L 3000:localhost:3000 [instance_url]
