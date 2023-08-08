@@ -60,18 +60,15 @@ The graphs produced correspond to Figures 6-10 in the paper.
    ```
    sudo service mysql stop
    ```
-2. Install `docker-compose`:
-   ```
-   yes | sudo apt install docker-compose
-   ```
 2. Get and initialize the docker code:
    ```
    cd /data
    git clone https://tslilyai/docker-lobsters-edna
    cd docker-lobsters-edna
    git submodule update --init --recursive
-   sudo make
-   sudo docker-compose up
+   make init
+   make build
+   docker-compose up
    ```
 
    `docker-assets/docker_entrypoint.sh` is called when docker runs the container, and invokes `cd /edna_srv/edna_srv; ./run_srv.sh` to start
