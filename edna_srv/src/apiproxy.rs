@@ -33,7 +33,7 @@ pub struct ApplyDisguiseResponse {
 }
 
 #[openapi]
-#[post("/apply_disguise", format = "json", data = "<data>")]
+#[post("/apply_disguise", format = "application/json", data = "<data>")]
 pub(crate) fn apply_disguise(
     data: Json<ApplyDisguise>,
     edna: &State<Arc<Mutex<EdnaClient>>>,
@@ -67,7 +67,7 @@ pub struct RevealDisguise {
 }
 
 #[openapi]
-#[post("/reveal_disguise/<uid>/<did>", format = "json", data = "<data>")]
+#[post("/reveal_disguise/<uid>/<did>", format = "application/json", data = "<data>")]
 pub(crate) fn reveal_disguise(
     uid: edna::UID,
     did: edna::DID,
@@ -202,7 +202,7 @@ pub struct GetRecordsOfDisguiseResponse {
 }
 
 #[openapi]
-#[post("/get_records_of_disguise", format = "json", data = "<data>")]
+#[post("/get_records_of_disguise", format = "application/json", data = "<data>")]
 pub(crate) fn get_records_of_disguise(
     data: Json<GetRecordsOfDisguise>,
     edna: &State<Arc<Mutex<EdnaClient>>>,
@@ -221,7 +221,7 @@ pub struct CleanupRecordsOfDisguise {
     decrypt_cap: edna::records::DecryptCap,
 }
 #[openapi]
-#[post("/cleanup_records_of_disguise", format = "json", data = "<data>")]
+#[post("/cleanup_records_of_disguise", format = "application/json", data = "<data>")]
 pub(crate) fn cleanup_records_of_disguise(
     data: Json<CleanupRecordsOfDisguise>,
     edna: &State<Arc<Mutex<EdnaClient>>>,
@@ -239,7 +239,7 @@ pub struct SavePseudoprincipalRecord {
 }
 
 #[openapi]
-#[post("/save_pp_record", format = "json", data = "<data>")]
+#[post("/save_pp_record", format = "application/json", data = "<data>")]
 pub(crate) fn save_pseudoprincipal_record(
     data: Json<SavePseudoprincipalRecord>,
     edna: &State<Arc<Mutex<EdnaClient>>>,
@@ -261,7 +261,7 @@ pub struct SaveDiffRecord {
 }
 
 #[openapi]
-#[post("/save_diff_record", format = "json", data = "<data>")]
+#[post("/save_diff_record", format = "application/json", data = "<data>")]
 pub(crate) fn save_diff_record(data: Json<SaveDiffRecord>, edna: &State<Arc<Mutex<EdnaClient>>>) {
     let e = edna.lock().unwrap();
     e.save_diff_record(data.uid.clone(), data.did, data.data.clone());
