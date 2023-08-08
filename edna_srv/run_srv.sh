@@ -1,4 +1,4 @@
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+nohup curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 PATH=$PATH:$HOME/.cargo/bin
 RUSTFLAGS=-Ctarget-feature=-crt-static
 
@@ -10,7 +10,7 @@ sleep 5
 set -e
 
 # start a new server
-cargo run --release -- -h mariadb -d lobsters_development --user root --pass password \
+cargo run --release -- -h database -d lobsters_development --user root --pass password \
     --schema ../applications/lobsters/schema.sql
 
 echo "Server Running, wait a bit"

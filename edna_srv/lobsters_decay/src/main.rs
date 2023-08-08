@@ -15,7 +15,7 @@ use std::collections::HashMap;
 
 pub const LOBSTERS_APP: &'static str = "lobsters";
 pub const HOTCRP_APP: &'static str = "hotcrp";
-const SERVER: &'static str = "http://localhost:8000";
+const SERVER: &'static str = "http://localhost:3000";
 
 #[derive(Serialize, Deserialize)]
 pub struct ApplyDisguiseResponse {
