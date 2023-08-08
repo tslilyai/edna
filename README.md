@@ -82,7 +82,7 @@ The graphs produced correspond to Figures 6-10 in the paper.
    ```
 7. Connect via ssh to the profile experiment instance, with port forwarding:
     ```
-   ssh -L 3000:localhost:3000 [instance_url]
+   ssh -L 3000:0.0.0.0:3000 [instance_url]
     ```
 8. Go to `localhost:3000` on your computer to access the Lobsters app
       * Create accounts, post content, and see what happens when you disguise it!
