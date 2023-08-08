@@ -72,24 +72,22 @@ The graphs produced correspond to Figures 6-10 in the paper.
    ```
    sudo docker run -p 3000:3000 -v /data/repository:/edna_srv -ti --user root --link lobsters_mariadb:mariadb --name lobsters_edna tslilyai/lobsters-edna
    ```
-5. In another terminal, get a shell:
+   `docker_entrypoint.sh` is called when docker runs the container, and invokes `cd /edna_srv/edna_srv; ./run_srv.sh` to start Edna running on the server.
+
+   _Note: the Docker image runs Edna-fied Lobste.rs from 2021; currently, the image pulls in outdated libraries (causing some visible errors), and work to      update this image to the newest version of Lobste.rs is ongoing_
+6. In another terminal, get a shell:
    ```
    sudo docker exec -ti lobsters_edna /bin/bash
    ```
-6. You can observe the Lobste.rs code (and the modification made to add Edna) in the current `/lobsters` current working directory of the shell.
-7. In the shell, run the Edna server:
-   ```
-   cd /edna_srv/edna_srv; ./run_srv.sh
-   ```
-8. Connect via ssh to the profile experiment instance, with port forwarding:
+   You can observe the Lobste.rs code (and the modification made to add Edna) in the current `/lobsters` current working directory of the shell.
+7. Connect via ssh to the profile experiment instance, with port forwarding:
     ```
    ssh -L 3000:localhost:3000 [instance_url]
     ```
-9. Go to `localhost:3000` on your computer to access the Lobsters app
+8. Go to `localhost:3000` on your computer to access the Lobsters app
       * Create accounts, post content, and see what happens when you disguise it!
       * Note: the admin account has username `test` and password `test`
 
-_Note: the Docker image runs Edna-fied Lobste.rs from 2021; currently, the image pulls in outdated libraries (causing some visible errors), and work to update this image to the newest version of Lobste.rs is ongoing_
 
 ### E2E WebSubmit
 0. Make sure you have run `./config_mysql.sh` in the repository root, and are using the profile instance.
