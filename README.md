@@ -60,31 +60,33 @@ The graphs produced correspond to Figures 6-10 in the paper.
    ```
    sudo service mysql stop
    ```
-2. Install `docker-compose`:
-   ```
-   yes | sudo apt install docker-compose
-   ```
 2. Get and initialize the docker code:
    ```
    cd /data
-   git clone https://tslilyai/docker-lobsters-edna
+   git clone https://github.com/tslilyai/docker-lobsters-edna.git
    cd docker-lobsters-edna
    git submodule update --init --recursive
-   sudo make
-   sudo docker-compose up
+   make init
+   make build
+   docker-compose up
    ```
 
    `docker-assets/docker_entrypoint.sh` is called when docker runs the container, and invokes `cd /edna_srv/edna_srv; ./run_srv.sh` to start
    Edna running on the server.
 
    You can observe the Lobste.rs code (and the modification made to add Edna) in the `/lobsters` directory.
+
+   NOTE: If `docker-compose` hangs, try removing any old volumes used to save the Lobsters database contents:
+   ```
+   docker volume rm docker-lobsters-edna_lobsters_database
+   ```
 7. Connect via ssh to the profile experiment instance, with port forwarding:
     ```
-   ssh -L 3000:localhost:3000 [instance_url]
+   ssh -L 3000:0.0.0.0:3000 [instance_url]
     ```
 8. Go to `localhost:3000` on your computer to access the Lobsters app
       * Create accounts, post content, and see what happens when you disguise it!
-      * Note: the admin account has username `test` and password `test`
+      * Note: Lobsters initializes an admin account with username `test` and password `test`, but you can't perform any disguises on this account because it hasn't been registered with Edna.
 
 
 ### E2E WebSubmit
