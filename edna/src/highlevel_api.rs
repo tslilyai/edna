@@ -573,7 +573,7 @@ impl HighLevelAPI {
         // drop all users now so we don't violate ref integrity from decorrelate
         for delstmt in drop_me_later {
             let start = time::Instant::now();
-            db.query_drop(delstmt.to_string()).unwrap();
+            conn.query_drop(delstmt.to_string()).unwrap();
             warn!("{}: {}", delstmt, start.elapsed().as_micros());
         }
 
