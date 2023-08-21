@@ -438,7 +438,7 @@ impl HighLevelAPI {
         // Handle REMOVE first
         // Any items that would've been modified or decorreltaed would've been revealed anyways
         let remove_start = time::Instant::now();
-        self.execute_removes(
+        let drop_me_later = self.execute_removes(
             did,
             disguise,
             table_info,
@@ -570,6 +570,13 @@ impl HighLevelAPI {
                 }
             }
         }
+        // drop all users now so we don't violate ref integrity from decorrelate
+        for delstmt in drop_me_later {
+            let start = time::Instant::now();
+            db.query_drop(delstmt.to_string()).unwrap();
+            warn!("{}: {}", delstmt, start.elapsed().as_micros());
+        }
+
         warn!(
             "Edna: Execute modify/decor total: {}",
             decor_start.elapsed().as_micros()
@@ -593,7 +600,7 @@ impl HighLevelAPI {
         guise_gen: &GuiseGen,
         sf_records: &Vec<SpeaksForRecordWrapper>,
         db: &mut Q,
-    ) {
+    ) -> Vec<String> {
         info!(
             "ApplyRemoves: removing objs for disguise {} with {} sf_records\n",
             did,
@@ -968,12 +975,7 @@ impl HighLevelAPI {
                 }
             }
         }
-
-        for delstmt in drop_me_later {
-            let start = time::Instant::now();
-            db.query_drop(delstmt.to_string()).unwrap();
-            warn!("{}: {}", delstmt, start.elapsed().as_micros());
-        }
+        return drop_me_later;
     }
 }
 
