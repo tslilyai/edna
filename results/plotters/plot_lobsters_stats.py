@@ -170,10 +170,10 @@ labels = [
     'Read\nFrontpage',
     'Remove\nAccount',
     'Decay\nAccount',
-    'Anon.\nCateg.',
+    'Anon.\nTopic',
     'Restore\nRem. Acct',
     'Restore\nDec. Acct',
-    'Reclaim\nCateg.'
+    'Reclaim\nTopic'
 ]
 offset = 10
 
