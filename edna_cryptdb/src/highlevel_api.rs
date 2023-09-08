@@ -159,6 +159,7 @@ impl HighLevelAPI {
         did: DID,
         table_info: &HashMap<String, TableInfo>,
         guise_gen: &GuiseGen,
+        reveal_pps: Option<RevealPPType>,
         conn: &mut Q,
         password: Option<String>,
         user_share: Option<(Share, Loc)>,
@@ -183,7 +184,7 @@ impl HighLevelAPI {
         }
 
         warn!("Revealing disguise for {:?}", uid);
-        self.reveal_using_secretkey(did, table_info, guise_gen, decrypt_cap, conn)
+        self.reveal_using_secretkey(did, table_info, guise_gen, reveal_pps, decrypt_cap, conn)
     }
 
     // Note: Decorrelations are not revealed if not using EdnaSpeaksForRecords
@@ -193,6 +194,7 @@ impl HighLevelAPI {
         did: DID,
         table_info: &HashMap<String, TableInfo>,
         guise_gen: &GuiseGen,
+        reveal_pps: Option<RevealPPType>,
         decrypt_cap: records::DecryptCap,
         conn: &mut Q,
     ) -> Result<(), mysql::Error> {
@@ -339,12 +341,13 @@ impl HighLevelAPI {
             }
         }
 
+        let mut recs_to_reveal = vec![];
         // reveal speaksfor records
         for sfr in &sfrs {
             // Note: only works for speaksfor records from edna's HLAPI
             match edna_sf_record_from_bytes(&sfr.record_data) {
                 Err(_) => continue,
-                Ok(d) => {
+                Ok(_d) => {
                     let mut rec_to_reveal = sfr.clone();
                     if sfr.did == did {
                         // if the original owner has since been recorrelated, then it won't exist
@@ -370,7 +373,7 @@ impl HighLevelAPI {
                                 // this assumes that the first uid in the path has been restored already...
                                 if recorrelated_pps.contains(&node.new_uid) {
                                     rec_to_reveal.old_uid = node.old_uid.clone();
-                                    debug!(
+                                    info!(
                                         "Changing UID to recorrelate to {} from {}",
                                         node.old_uid, sfr.old_uid
                                     );
@@ -378,21 +381,24 @@ impl HighLevelAPI {
                                 }
                             }
                         }
-
-                        debug!("Reversing record {:?}\n", d);
-                        let revealed =
-                            d.reveal(&table_info, &rec_to_reveal, guise_gen, &mut llapi, conn)?;
-                        if revealed {
-                            debug!(
-                                "Reversed SpeaksFor Record {}->{}!\n",
-                                sfr.old_uid, sfr.new_uid
-                            );
-                        } else {
-                            failed = true;
-                        }
+                        recs_to_reveal.push(rec_to_reveal);
                     }
                 }
             }
+        }
+        info!("Reversing record {:?}\n", recs_to_reveal);
+        let revealed = EdnaSpeaksForRecord::reveal(
+            &table_info,
+            &recs_to_reveal,
+            guise_gen,
+            reveal_pps,
+            &mut llapi,
+            conn,
+        )?;
+        if revealed {
+            info!("Reversed SpeaksFor Records {:?}!\n", recs_to_reveal);
+        } else {
+            failed = true;
         }
 
         llapi.cleanup_records_of_disguise(did, &decrypt_cap);

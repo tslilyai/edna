@@ -7,7 +7,7 @@ import numpy as np
 from textwrap import wrap
 
 plt.style.use('seaborn-deep')
-plt.figure(figsize = (3.33, 1.5))
+plt.figure(figsize = (3.33, 1.4))
 barwidth = 0.4
 
 # plot styling for paper
@@ -15,7 +15,7 @@ matplotlib.rc('font', family='serif', size=7)
 matplotlib.rc('text.latex', preamble='\\usepackage{times,mathptmx}')
 matplotlib.rc('text', usetex=True)
 matplotlib.rc('legend', fontsize=7)
-matplotlib.rc('figure', figsize=(3.33,1.5))
+matplotlib.rc('figure', figsize=(3.33,1.4))
 matplotlib.rc('axes', linewidth=0.5)
 matplotlib.rc('lines', linewidth=0.5)
 
@@ -180,7 +180,7 @@ offset = 10
 ###################### shading
 plt.axvspan(-0.5, 2.5, color='white', alpha=0, lw=0)
 plt.axvspan(2.5, 8.5, color='purple', alpha=0.08, lw=0)
-plt.text(2.7, 255, '\emph{Disguise/Reveal Ops}',
+plt.text(2.7, 210, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
          color='purple', fontsize=7)
 plt.margins(x=0.0)
@@ -252,8 +252,8 @@ add_labels((X+barwidth/2), [
 plt.ylabel('Time (ms)')
 #plt.ylim(ymin=0, ymax=np.percentile(restore_durs,95)*1.1)
 matplotlib.rc('font', family='serif', size=6)
-plt.ylim(ymin=0, ymax=275)
-plt.yticks(range(0, 275, 50))
+plt.ylim(ymin=0, ymax=225)
+plt.yticks(range(0, 225, 50))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055,
            labelspacing=0.1);

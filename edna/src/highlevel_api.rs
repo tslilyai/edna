@@ -157,6 +157,7 @@ impl HighLevelAPI {
         did: DID,
         table_info: &HashMap<String, TableInfo>,
         guise_gen: &GuiseGen,
+        reveal_pps: Option<RevealPPType>,
         conn: &mut Q,
         password: Option<String>,
         user_share: Option<(Share, Loc)>,
@@ -176,7 +177,7 @@ impl HighLevelAPI {
         }
 
         warn!("Revealing disguise for {:?}", uid);
-        self.reveal_using_secretkey(did, table_info, guise_gen, decrypt_cap, conn)
+        self.reveal_using_secretkey(did, table_info, guise_gen, reveal_pps, decrypt_cap, conn)
     }
 
     // Note: Decorrelations are not revealed if not using EdnaSpeaksForRecords
@@ -186,6 +187,7 @@ impl HighLevelAPI {
         did: DID,
         table_info: &HashMap<String, TableInfo>,
         guise_gen: &GuiseGen,
+        reveal_pps: Option<RevealPPType>,
         decrypt_cap: records::DecryptCap,
         conn: &mut Q,
     ) -> Result<(), mysql::Error> {
@@ -324,12 +326,13 @@ impl HighLevelAPI {
             }
         }
 
+        let mut recs_to_reveal = vec![];
         // reveal speaksfor records
         for sfr in &sfrs {
             // Note: only works for speaksfor records from edna's HLAPI
             match edna_sf_record_from_bytes(&sfr.record_data) {
                 Err(_) => continue,
-                Ok(d) => {
+                Ok(_d) => {
                     let mut rec_to_reveal = sfr.clone();
                     if sfr.did == did {
                         // if the original owner has since been recorrelated, then it won't exist
@@ -363,21 +366,24 @@ impl HighLevelAPI {
                                 }
                             }
                         }
-
-                        info!("Reversing record {:?}\n", d);
-                        let revealed =
-                            d.reveal(&table_info, &rec_to_reveal, guise_gen, &mut llapi, conn)?;
-                        if revealed {
-                            info!(
-                                "Reversed SpeaksFor Record {}->{}!\n",
-                                sfr.old_uid, sfr.new_uid
-                            );
-                        } else {
-                            failed = true;
-                        }
+                        recs_to_reveal.push(rec_to_reveal);
                     }
                 }
             }
+        }
+        info!("Reversing record {:?}\n", recs_to_reveal);
+        let revealed = EdnaSpeaksForRecord::reveal(
+            &table_info,
+            &recs_to_reveal,
+            guise_gen,
+            reveal_pps,
+            &mut llapi,
+            conn,
+        )?;
+        if revealed {
+            info!("Reversed SpeaksFor Records {:?}!\n", recs_to_reveal);
+        } else {
+            failed = true;
         }
 
         llapi.cleanup_records_of_disguise(did, &decrypt_cap, &mut self.seen_pps);
@@ -438,7 +444,7 @@ impl HighLevelAPI {
         // Handle REMOVE first
         // Any items that would've been modified or decorreltaed would've been revealed anyways
         let remove_start = time::Instant::now();
-        self.execute_removes(
+        let drop_me_later = self.execute_removes(
             did,
             disguise,
             table_info,
@@ -574,6 +580,13 @@ impl HighLevelAPI {
             "Edna: Execute modify/decor total: {}",
             decor_start.elapsed().as_micros()
         );
+
+        for delstmt in drop_me_later {
+            let start = time::Instant::now();
+            conn.query_drop(delstmt.to_string()).unwrap();
+            warn!("{}: {}", delstmt, start.elapsed().as_micros());
+        }
+
         drop(llapi);
 
         let end_start = time::Instant::now();
@@ -593,7 +606,7 @@ impl HighLevelAPI {
         guise_gen: &GuiseGen,
         sf_records: &Vec<SpeaksForRecordWrapper>,
         db: &mut Q,
-    ) {
+    ) -> Vec<String> {
         info!(
             "ApplyRemoves: removing objs for disguise {} with {} sf_records\n",
             did,
@@ -968,12 +981,7 @@ impl HighLevelAPI {
                 }
             }
         }
-
-        for delstmt in drop_me_later {
-            let start = time::Instant::now();
-            db.query_drop(delstmt.to_string()).unwrap();
-            warn!("{}: {}", delstmt, start.elapsed().as_micros());
-        }
+        return drop_me_later;
     }
 }
 

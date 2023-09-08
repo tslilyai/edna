@@ -100,6 +100,13 @@ pub enum Transformation {
 
 pub type DisguiseSpec = HashMap<String, Vec<Transformation>>;
 
+#[derive(Clone, PartialEq)]
+pub enum RevealPPType {
+    Delete,
+    Restore,
+    Retain,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Disguise {
     pub user: Option<UID>,
@@ -359,6 +366,7 @@ impl EdnaClient {
         did: DID,
         table_info_json: &str,
         guise_gen_json: &str,
+        reveal_pps: Option<RevealPPType>,
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
         use_txn: bool,
@@ -378,6 +386,7 @@ impl EdnaClient {
                 did,
                 &table_infos,
                 &guise_gen,
+                reveal_pps,
                 &mut txn,
                 password,
                 user_share,
@@ -389,6 +398,7 @@ impl EdnaClient {
                 did,
                 &table_infos,
                 &guise_gen,
+                reveal_pps,
                 &mut db,
                 password,
                 user_share,

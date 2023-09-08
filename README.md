@@ -6,9 +6,10 @@ protect inactive accounts, selectively dissociate personal data from public
 profiles, and remove service access to their data without permanently losing
 their accounts.
 
-Edna was last tested on a machine with 16 CPUs and 60 GB RAM, running Ubuntu 20.04.5 LTS, and uses MySQL with the InnoDB storage engine atop a local SSD. The CloudLab profile (`profile.py`) should provide these settings.
+Edna was last tested on a machine with 16 CPUs and 60 GB RAM, running Ubuntu 20.04.5 LTS, and uses MySQL with the InnoDB storage engine atop a local SSD. The CloudLab profile (`profile.py`) should provide these settings, but numbers may differ due to variability in the machine type, etc.
 
 ## Repository organization:
+* `config/`: configuration / installation scripts (CloudLab-tested)
 * `deps/`: third-party libraries that Edna uses for e.g., MySQL parsing
 * `edna/`: the Edna library itself
 * `edna_cryptdb/`: the Edna library, but meant to work atop an encrypted database (a la CryptDB)
@@ -31,11 +32,12 @@ The requisite scripts to run benchmarks are all contained in the root directory!
 ## Running Benchmarks
 1. Instantiate the profile in CloudLab: [profile link here](https://www.cloudlab.us/p/Edna/UbuntuRepo).
 2. `ssh` into the CloudLab instance
-3. Run initialization scripts:
+3. Run initialization scripts, taking the default options if prompted:
    ```
-   cp /local/repository/initialize.sh /data; cd /data/; ./initialize.sh
+   cp /local/repository/config/initialize.sh /data; cd /data/; ./initialize.sh
    ```
-5. Run all benchmarks to produce all results (you might want to run this in a separate terminal session using `tmux`). This will execute per-application benchmark scripts, and then run a graph-plotting script to produce all the graphs from the paper. Graphs will be put in `results/result_graphs`.
+   (Note: this script may need to be run twice if anything fails).
+4. Run all benchmarks to produce all results (you might want to run this in a separate terminal session using `tmux`). This will execute per-application benchmark scripts in `applications/[app]`, and then run a graph-plotting script to produce all the graphs from the paper. Graphs will be put in `results/result_graphs`, which you can then `scp` to your local machine from Cloudtop.
    ```
    cd /data/repository; ./run_all.sh
    ``` 
@@ -44,42 +46,45 @@ All benchmarks should individually take under 15 minutes to run, with the except
 Lobsters (which registers and iterates through disguising and revealing all 16k users); this will take 
 several hours to complete all trials.
 
+The graphs produced correspond to Figures 6-10 in the paper.
+
 ## Case Study Applications
 
 ### E2E Lobste.rs
-0. Make sure you are using the profile instance.
+0. Make sure you are using the profile instance and have run `cp /local/repository/config/initialize.sh /data; cd /data/; ./initialize.sh`.
 1. Stop any running mysql instances:
    ```
    sudo service mysql stop
    ```
-2. Pull the docker instance:
+2. Get and initialize the docker code:
    ```
-   sudo docker pull tslilyai/lobsters-edna:latest
+   cd /data
+   git clone https://github.com/tslilyai/docker-lobsters-edna.git
+   cd docker-lobsters-edna
+   git submodule update --init --recursive
+   make init
+   make build
+   docker-compose up
    ```
-3. Run the MariaDB docker instance that holds the Lobsters database:
+
+   `docker-assets/docker_entrypoint.sh` is called when docker runs the container, and invokes `cd /edna_srv/edna_srv; ./run_srv.sh` to start
+   Edna running on the server.
+
+   You can observe the Lobste.rs code (and the modification made to add Edna) in the `/lobsters` directory.
+
+   NOTE: If `docker-compose` hangs, try removing any old volumes used to save the Lobsters database contents:
    ```
-   sudo docker run --name lobsters_mariadb -v lobsters_data:/var/lib/mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=lobsters -d mariadb
-   ```
-4. Run the docker instance with the repository mounted at `/edna_srv`; it will print out any logs from Lobsters:
-   ```
-   sudo docker run -p 3000:3000 -v /data/repository:/edna_srv -ti --user root --link lobsters_mariadb:mariadb --name lobsters_edna tslilyai/lobsters-edna
-   ```
-5. In another terminal, get a shell:
-   ```
-   sudo docker exec -ti lobsters_edna /bin/bash
-   ```
-6. In the shell, run the Edna server:
-   ```
-   cd /edna_srv/edna_srv; ./run_srv.sh
+   docker volume rm docker-lobsters-edna_lobsters_database
    ```
 7. Connect via ssh to the profile experiment instance, with port forwarding:
     ```
-   ssh -L 3000:localhost:3000 [instance_url]
+   ssh -L 3000:0.0.0.0:3000 [instance_url]
     ```
 8. Go to `localhost:3000` on your computer to access the Lobsters app
       * Create accounts, post content, and see what happens when you disguise it!
-      * Note: the admin account has username `test` and password `test`
-     
+      * Note: Lobsters initializes an admin account with username `test` and password `test`, but you can't perform any disguises on this account because it hasn't been registered with Edna.
+
+
 ### E2E WebSubmit
 0. Make sure you have run `./config_mysql.sh` in the repository root, and are using the profile instance.
 1. Run the server:
@@ -94,10 +99,10 @@ several hours to complete all trials.
    * Login as `tester@admin.edu` to have admin access to add lectures and questions, anonymize users, etc.
    * Create accounts with any other email to submit answers, try deleting your account, etc.
 
-NOTE: Currently API keys and other disguise IDs are not emailed, but rather printed out as logs on the server. API keys act as a user's "password," and can be used to rederive their private key.
+_NOTE: API keys and other disguise IDs are not emailed, but rather printed out as logs on the server. API keys act as a user's "password," and can be used to rederive their private key. Application CSS is not provided yet in this codebase._
 
 ## Misc Details
-The benchmark scripts relies on the following files (paths can be changed in the scripts if necessary, e.g., if not running on CloudLab):
+The benchmark scripts rely on the following files (paths can be changed in the scripts if necessary, e.g., if not running on CloudLab):
 * `/related_systems/qapla/lib`: contains Qapla library files used in `applications/websubmit-rs/qapla-server/build.rs`. These were built via `make` in `related_systems/qapla` and `related_systems/qapla/examples`; you should not have to rebuild them if using the provided image.
 * `/data/lobsters_edna_messages_and_tags.sql`: contains the 
     database with generated Lobsters data for the Lobsters benchmark. Used in

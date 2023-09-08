@@ -1,7 +1,8 @@
 extern crate log;
 extern crate mysql;
 
-use edna::helpers;
+use edna_cryptdb::helpers;
+use edna_cryptdb::EdnaClient;
 use log::warn;
 use mysql::prelude::*;
 use mysql::Opts;
@@ -33,7 +34,11 @@ fn test_remove_shared_after_anon() {
     init_logger();
     let dbname = "testRemoveSharedAnon".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -50,7 +55,8 @@ fn test_remove_shared_after_anon() {
     ))
     .unwrap();
     // register user in Edna
-    let admin_user_share = edna.register_principal(&ADMIN.to_string(), String::from("password"));
+    let admin_user_share =
+        edna.register_principal(&ADMIN.to_string(), String::from("password"), true);
     for u in 1..USER_ITERS + 1 {
         // insert user into DB
         db.query_drop(format!(
@@ -71,7 +77,7 @@ fn test_remove_shared_after_anon() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -137,6 +143,7 @@ fn test_remove_shared_after_anon() {
         admin_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         Some(admin_user_share.clone()),
         false,
@@ -147,6 +154,7 @@ fn test_remove_shared_after_anon() {
         anon_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         Some(admin_user_share.clone()),
         false,
@@ -176,7 +184,11 @@ fn test_remove_one_shared() {
     init_logger();
     let dbname = "testRemoveOneSharedDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -193,7 +205,8 @@ fn test_remove_one_shared() {
     ))
     .unwrap();
     // register user in Edna
-    let admin_user_share = edna.register_principal(&ADMIN.to_string(), String::from("password"));
+    let admin_user_share =
+        edna.register_principal(&ADMIN.to_string(), String::from("password"), true);
     for u in 1..USER_ITERS + 1 {
         // insert user into DB
         db.query_drop(format!(
@@ -214,7 +227,7 @@ fn test_remove_one_shared() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -326,6 +339,7 @@ fn test_remove_one_shared() {
         user_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         Some(user_shares[0].clone()),
         false,
@@ -366,6 +380,7 @@ fn test_remove_one_shared() {
         admin_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         Some(admin_user_share.clone()),
         false,
@@ -468,6 +483,7 @@ fn test_remove_one_shared() {
         user_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         Some(user_shares[0].clone()),
         false,
@@ -497,6 +513,7 @@ fn test_remove_one_shared() {
         admin_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         Some(admin_user_share),
         false,
@@ -539,7 +556,11 @@ fn test_remove_all_shared() {
     init_logger();
     let dbname = "testRemoveAllSharedDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -556,7 +577,8 @@ fn test_remove_all_shared() {
     ))
     .unwrap();
     // register user in Edna
-    let admin_user_share = edna.register_principal(&ADMIN.to_string(), String::from("password"));
+    let admin_user_share =
+        edna.register_principal(&ADMIN.to_string(), String::from("password"), true);
     for u in 1..USER_ITERS + 1 {
         // insert user into DB
         db.query_drop(format!(
@@ -577,7 +599,7 @@ fn test_remove_all_shared() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -614,6 +636,7 @@ fn test_remove_all_shared() {
         did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         Some(admin_user_share),
         false,
@@ -644,6 +667,7 @@ fn test_remove_all_shared() {
             did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,

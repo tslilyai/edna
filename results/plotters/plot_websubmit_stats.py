@@ -38,11 +38,14 @@ def add_labels(x,y,plt,color,offset):
             label = "{0:.0f}".format(y[i])
         else:
             label = "{0:.1f}".format(y[i])
-        plt.text(x[i], y[i]+offset, label, ha='center', color=color, size=6)
+        new_offset = offset
+        if y[i] < 17:
+            new_offset = offset - 4
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6)
 
 def add_text_labels(x,y,plt,color,offset):
     for i in range(len(x)):
-        plt.text(x[i], offset, y[i], ha='center', color=color, size=6)
+        plt.text(x[i], offset - 4, y[i], ha='center', color=color, size=6)
 
 def get_yerr(durs):
     mins = []
@@ -226,10 +229,10 @@ print(answers_cryptdb_durs)
 
 # positions
 X = np.arange(8)
-offset = 10
+offset = 14
 plt.axvspan(-0.5, 3.5, color='white', alpha=0, lw=0)
 plt.axvspan(3.5, 7.5, color='purple', alpha=0.08, lw=0)
-plt.text(3.6, 255, '\emph{Disguise/Reveal Ops}',
+plt.text(3.6, 210, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
          color='purple', fontsize=7)
 
@@ -312,9 +315,9 @@ add_labels((X+0.5*barwidth),
 ], plt, 'black', offset)
 
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=275)
-plt.yticks(range(0, 275, 50))
-plt.xticks(X, labels=labels, rotation=-45, ha='left', rotation_mode="anchor")
+plt.ylim(ymin=0, ymax=225)
+plt.yticks(range(0, 225, 50))
+plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)
 plt.tight_layout(h_pad=0)
@@ -325,6 +328,7 @@ plt.clf()
 # QAPLA GRAPH
 ###############
 
+offset = 14
 def add_labels(x,y,plt,color,offset):
     for i in range(len(x)):
         if y[i] < 0.1:
@@ -333,11 +337,15 @@ def add_labels(x,y,plt,color,offset):
             label = "{0:.0f}".format(y[i])
         else:
             label = "{0:.1f}".format(y[i])
-        plt.text(x[i], y[i]+offset, label, ha='center', color=color, size=6,rotation=90)
+        new_offset = offset
+        if y[i] < 50:
+            new_offset = offset - 6
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6,
+                 rotation = 90)
 
 def add_text_labels(x,y,plt,color,offset):
     for i in range(len(x)):
-        plt.text(x[i], offset, y[i], ha='center', color=color,size=6,rotation=90)
+        plt.text(x[i], offset - 6, y[i], ha='center', color=color,size=6,rotation=90)
 
 barwidth = 0.25
 plt.figure(figsize = (3.33, 1.5))
@@ -345,7 +353,7 @@ X = np.arange(8)
 offset = 25
 plt.axvspan(-0.5, 3.5, color='white', alpha=0, lw=0)
 plt.axvspan(3.5, 7.5, color='purple', alpha=0.08, lw=0)
-plt.text(3.6, 380, '\emph{Disguise/Reveal Ops}',
+plt.text(3.6, 210, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
          color='purple', fontsize=7)
 
@@ -457,8 +465,8 @@ add_labels((X+1*barwidth),
 ], plt, 'blue', offset)
 
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=400)
-plt.yticks(range(0, 400, 75))
+plt.ylim(ymin=0, ymax=225)
+plt.yticks(range(0, 225, 50))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)
@@ -474,7 +482,7 @@ X = np.arange(8)
 offset = 25
 plt.axvspan(-0.5, 3.5, color='white', alpha=0, lw=0)
 plt.axvspan(3.5, 7.5, color='purple', alpha=0.08, lw=0)
-plt.text(3.6, 380, '\emph{Disguise/Reveal Ops}',
+plt.text(3.6, 350, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
          color='purple', fontsize=7)
 
@@ -585,8 +593,8 @@ add_labels((X+1*barwidth),
 ], plt, 'red', offset)
 
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=400)
-plt.yticks(range(0, 400, 75))
+plt.ylim(ymin=0, ymax=365)
+plt.yticks(range(0, 365, 75))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)

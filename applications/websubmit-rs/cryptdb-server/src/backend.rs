@@ -115,7 +115,7 @@ impl MySqlBackend {
         self.do_insert(table, vals, false);
     }
 
-    pub fn update(&mut self, table: &str, keys: Vec<(&str, String)>, vals: Vec<(&str, String)>) {
+    pub fn update(&mut self, table: &str, vals: Vec<(&str, String)>, keys: Vec<(&str, String)>) {
         let q = format!(
             "UPDATE {} SET {} WHERE {}",
             table,
@@ -126,7 +126,7 @@ impl MySqlBackend {
             keys.iter()
                 .map(|(c, v)| format!("{} = {}", c, v))
                 .collect::<Vec<String>>()
-                .join(" AND ")
+                .join(" AND "),
         );
         debug!(self.log, "executed update query {} for row {:?}", q, vals);
         while let Err(e) = self.handle.query_drop(&q) {

@@ -1,7 +1,8 @@
 extern crate log;
 extern crate mysql;
 
-use edna::helpers;
+use edna_cryptdb::helpers;
+use edna_cryptdb::EdnaClient;
 use log::warn;
 use mysql::prelude::*;
 use mysql::Opts;
@@ -34,7 +35,11 @@ fn test_app_join_test() {
     init_logger();
     let dbname = "testAppJoin".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -88,7 +93,7 @@ fn test_app_join_test() {
         }
 
         // register user in Edna
-        edna.register_principal(&u.to_string(), String::from("password"));
+        edna.register_principal(&u.to_string(), String::from("password"), true);
     }
 
     // APPLY DISGUISE FOR JOINED TAGS
@@ -170,7 +175,11 @@ fn test_app_decor_grouped_disguise() {
     init_logger();
     let dbname = "testAppDecorGroupedDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -199,7 +208,7 @@ fn test_app_decor_grouped_disguise() {
         }
 
         // register user in Edna
-        edna.register_principal(&u.to_string(), String::from("password"));
+        edna.register_principal(&u.to_string(), String::from("password"), true);
     }
 
     // APPLY GROUPED DECOR DISGUISE
@@ -261,7 +270,11 @@ fn test_app_anon_disguise() {
     init_logger();
     let dbname = "testAppAnonDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -292,7 +305,7 @@ fn test_app_anon_disguise() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -416,7 +429,11 @@ fn test_app_gdpr_disguise() {
     init_logger();
     let dbname = "testAppGDPR".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
     )
@@ -446,7 +463,7 @@ fn test_app_gdpr_disguise() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -549,7 +566,11 @@ fn test_compose_anon_gdpr_disguises() {
     init_logger();
     let dbname = "testAppComposeDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -581,7 +602,7 @@ fn test_compose_anon_gdpr_disguises() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 

@@ -92,6 +92,7 @@ fn test_app_rev_anon_disguise() {
         anon_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         None,
         false,
@@ -180,6 +181,9 @@ fn test_app_rev_anon_disguise() {
             let username = helpers::mysql_val_to_string(&vals[1]);
             assert_eq!(username.len(), 30);
         }
+        // add another story that refers to this guise
+        db.query_drop(format!(r"INSERT INTO stories (user_id) VALUES ({});", u))
+            .unwrap();
     }
 
     // REVERSE DISGUISE WITH USER DIFFS
@@ -190,6 +194,7 @@ fn test_app_rev_anon_disguise() {
             anon_did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -208,7 +213,7 @@ fn test_app_rev_anon_disguise() {
             let id = helpers::mysql_val_to_string(&vals[0]);
             results.push(id);
         }
-        assert_eq!(results.len(), NSTORIES as usize);
+        assert!(results.len() > NSTORIES as usize);
 
         // moderations recorrelated
         let mut results = vec![];
@@ -239,7 +244,7 @@ fn test_app_rev_anon_disguise() {
         assert!(user_id < USER_ITERS + 1, "{}", user_id);
         stories_results.push(user_id);
     }
-    assert_eq!(stories_results.len() as u64, USER_ITERS * NSTORIES);
+    assert!(stories_results.len() as u64 > USER_ITERS * NSTORIES);
 
     // moderations have no guises as owners
     let res = db
@@ -332,6 +337,7 @@ fn test_app_rev_gdpr_disguise() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -554,6 +560,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         anon_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         None,
         false,
@@ -648,6 +655,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -749,6 +757,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             anon_did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -908,6 +917,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             anon_did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1002,6 +1012,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1166,6 +1177,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             anon_did1,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1245,6 +1257,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             anon_did2,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,

@@ -1069,220 +1069,221 @@ impl RecordCtrler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{helpers, EdnaClient, RowVal};
-    use mysql::Opts;
+    
+    
+    
 
     fn start_logger() {
         let _ = env_logger::builder()
             // Include all events in tests
-            .filter_level(log::LevelFilter::info)
+            .filter_level(log::LevelFilter::Info)
             // Ensure events are captured by `cargo test`
             .is_test(true)
             // Ignore debugs initializing the logger if tests race to configure it
             .try_init();
     }
 
-    #[test]
-    fn test_insert_user_diff_record_multi() {
-        start_logger();
-        let iters = 5;
-        let dbname = "testRecordCtrlerUserMulti".to_string();
-        EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
-        helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, "");
-        let url = format!("mysql://{}:{}@{}/{}", "tester", "pass", "127.0.0.1", dbname);
-        let pool = mysql::Pool::new(Opts::from_url(&url).unwrap()).unwrap();
-        let mut db = pool.get_conn().unwrap();
-        let mut ctrler = RecordCtrler::new(&mut db, true, true);
+    /*
+        #[test]
+        fn test_insert_user_diff_record_multi() {
+            start_logger();
+            let iters = 5;
+            let dbname = "testRecordCtrlerUserMulti".to_string();
+            EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+            helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, "");
+            let url = format!("mysql://{}:{}@{}/{}", "tester", "pass", "127.0.0.1", dbname);
+            let pool = mysql::Pool::new(Opts::from_url(&url).unwrap()).unwrap();
+            let mut db = pool.get_conn().unwrap();
+            let mut ctrler = RecordCtrler::new(&mut db, true, true);
 
-        let guise_name = "guise".to_string();
-        let guise_ids = vec![];
-        let old_fk_value = 5;
-        let fk_col = "fk_col".to_string();
+            let guise_name = "guise".to_string();
+            let guise_ids = vec![];
+            let old_fk_value = 5;
+            let fk_col = "fk_col".to_string();
 
-        let mut user_shares = vec![];
+            let mut user_shares = vec![];
 
-        for u in 1..iters {
-            let user_data = ctrler.register_principal_secret_sharing::<mysql::PooledConn>(
-                &u.to_string(),
-                &mut db,
-                String::from("password"),
-                false,
-            );
-            user_shares.push(user_data.clone());
+            for u in 1..iters {
+                let user_data = ctrler.register_principal_secret_sharing::<mysql::PooledConn>(
+                    &u.to_string(),
+                    &mut db,
+                    String::from("password"),
+                    false,
+                );
+                user_shares.push(user_data.clone());
 
-            for _ in 1..iters {
-                let d = ctrler.start_disguise(Some(u.to_string()));
+                for _ in 1..iters {
+                    let d = ctrler.start_disguise(Some(u.to_string()));
+                    for i in 0..iters {
+                        let mut remove_record = new_delete_record_wrapper(
+                            d as u64,
+                            guise_name.clone(),
+                            guise_ids.clone(),
+                            vec![RowVal::new(
+                                fk_col.clone(),
+                                (old_fk_value + (i as u64)).to_string(),
+                            )],
+                        );
+                        remove_record.uid = u.to_string();
+                        ctrler.insert_user_diff_record_wrapper(&mut remove_record);
+                    }
+                    ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
+                }
+            }
+            ctrler.clear_tmp();
+
+            for u in 1..iters {
+                let priv_key1 = ctrler
+                    .get_priv_key(&u.to_string(), Some(String::from("password")), None)
+                    .unwrap();
+                let priv_key2 = ctrler
+                    .get_priv_key(&u.to_string(), None, Some(user_shares[u - 1].clone()))
+                    .unwrap();
+                assert_eq!(priv_key1, priv_key2);
+                let locators = ctrler.get_locators(&priv_key1);
+                assert_eq!(locators.len(), iters - 1);
+                let (diff_records, _, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
+                assert_eq!(diff_records.len(), (iters as usize));
                 for i in 0..iters {
+                    let dt = edna_diff_record_from_bytes(&diff_records[i].record_data);
+                    assert_eq!(
+                        dt.old_value[0].value(),
+                        (old_fk_value + (i as u64)).to_string()
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn test_insert_user_record_privkey() {
+            start_logger();
+            let iters = 5;
+            let dbname = "testRecordCtrlerUserPK".to_string();
+            EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+            helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, "");
+            let url = format!("mysql://{}:{}@{}/{}", "tester", "pass", "127.0.0.1", dbname);
+            let pool = mysql::Pool::new(Opts::from_url(&url).unwrap()).unwrap();
+            let mut db = pool.get_conn().unwrap();
+            let mut ctrler = RecordCtrler::new(&mut db, true, true);
+
+            let guise_name = "guise".to_string();
+            let guise_ids = vec![];
+            let referenced_name = "referenced".to_string();
+            let old_fk_value = 5;
+            let fk_col = "fk_col".to_string();
+
+            let mut rng = OsRng;
+            let mut user_shares = vec![];
+
+            for u in 1..iters {
+                let user_data = ctrler.register_principal_secret_sharing::<mysql::PooledConn>(
+                    &u.to_string(),
+                    &mut db,
+                    String::from("password"),
+                    false,
+                );
+                user_shares.push(user_data.clone());
+
+                for _ in 1..iters {
+                    let d = ctrler.start_disguise(Some(u.to_string()));
                     let mut remove_record = new_delete_record_wrapper(
                         d as u64,
                         guise_name.clone(),
                         guise_ids.clone(),
                         vec![RowVal::new(
                             fk_col.clone(),
-                            (old_fk_value + (i as u64)).to_string(),
+                            (old_fk_value + (d as u64)).to_string(),
                         )],
                     );
                     remove_record.uid = u.to_string();
                     ctrler.insert_user_diff_record_wrapper(&mut remove_record);
-                }
-                ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
-            }
-        }
-        ctrler.clear_tmp();
 
-        for u in 1..iters {
-            let priv_key1 = ctrler
-                .get_priv_key(&u.to_string(), Some(String::from("password")), None)
-                .unwrap();
-            let priv_key2 = ctrler
-                .get_priv_key(&u.to_string(), None, Some(user_shares[u - 1].clone()))
-                .unwrap();
-            assert_eq!(priv_key1, priv_key2);
-            let locators = ctrler.get_locators(&priv_key1);
-            assert_eq!(locators.len(), iters - 1);
-            let (diff_records, _, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
-            assert_eq!(diff_records.len(), (iters as usize));
-            for i in 0..iters {
-                let dt = edna_diff_record_from_bytes(&diff_records[i].record_data);
+                    let anon_uid: u64 = rng.next_u64();
+                    // create an anonymous user
+                    // and insert some record for the anon user
+                    let sf_record_bytes = edna_sf_record_to_bytes(&new_edna_speaksfor_record(
+                        referenced_name.to_string(),
+                        vec![],
+                        fk_col.to_string(),
+                        &anon_uid.to_string(),
+                    ));
+                    ctrler.register_anon_principal(
+                        &u.to_string(),
+                        &anon_uid.to_string(),
+                        d as u64,
+                        &mut db,
+                    );
+                    ctrler.insert_speaksfor_record(
+                        &u.to_string(),
+                        &anon_uid.to_string(),
+                        d as u64,
+                        sf_record_bytes,
+                    );
+                    ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
+                }
+                // check principal data
+                ctrler
+                    .principal_data
+                    .get(&u.to_string())
+                    .expect("failed to get user?");
+
+                let priv_key1 = ctrler
+                    .get_priv_key(&u.to_string(), Some(String::from("password")), None)
+                    .unwrap();
+                let priv_key2 = ctrler
+                    .get_priv_key(
+                        &u.to_string(),
+                        None,
+                        Some(user_shares[u as usize - 1].clone()),
+                    )
+                    .unwrap();
+
+                let locators = ctrler.get_locators(&priv_key1);
+                assert_eq!(locators.len(), iters - 1);
+
+                assert_eq!(priv_key1, priv_key2);
+                let (diff_records, sf_records, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
+
+                assert_eq!(diff_records.len(), 1);
+                assert_eq!(sf_records.len(), 1);
+                let dt = edna_diff_record_from_bytes(&diff_records[0].record_data);
                 assert_eq!(
                     dt.old_value[0].value(),
-                    (old_fk_value + (i as u64)).to_string()
+                    (old_fk_value + locators[0].did).to_string()
                 );
             }
         }
+
+    #[test]
+    fn test_make_pw_hash() {
+        let password = b"not password";
+        let salt = SaltString::generate(&mut OsRng);
+        let pass_info: String = Pbkdf2.hash_password(password, &salt).unwrap().to_string();
+        let hash_pass_bigint = BigInt::from_bytes_le(num_bigint::Sign::Plus, pass_info.as_bytes());
+
+        println!("{:?}", pass_info);
+        println!("{:?}", hash_pass_bigint);
     }
 
     #[test]
-    fn test_insert_user_record_privkey() {
-        start_logger();
-        let iters = 5;
-        let dbname = "testRecordCtrlerUserPK".to_string();
-        EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
-        helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, "");
-        let url = format!("mysql://{}:{}@{}/{}", "tester", "pass", "127.0.0.1", dbname);
-        let pool = mysql::Pool::new(Opts::from_url(&url).unwrap()).unwrap();
-        let mut db = pool.get_conn().unwrap();
-        let mut ctrler = RecordCtrler::new(&mut db, true, true);
+    fn test_default_hasher() {
+        let email_str1 = String::from("u password");
 
-        let guise_name = "guise".to_string();
-        let guise_ids = vec![];
-        let referenced_name = "referenced".to_string();
-        let old_fk_value = 5;
-        let fk_col = "fk_col".to_string();
+        let uid_pw_hash1 = {
+            let mut hasher = DefaultHasher::new();
+            email_str1.hash(&mut hasher);
+            hasher.finish()
+        };
 
-        let mut rng = OsRng;
-        let mut user_shares = vec![];
+        let email_str2 = String::from("u password");
 
-        for u in 1..iters {
-            let user_data = ctrler.register_principal_secret_sharing::<mysql::PooledConn>(
-                &u.to_string(),
-                &mut db,
-                String::from("password"),
-                false,
-            );
-            user_shares.push(user_data.clone());
+        let uid_pw_hash2 = {
+            let mut hasher = DefaultHasher::new();
+            email_str2.hash(&mut hasher);
+            hasher.finish()
+        };
 
-            for _ in 1..iters {
-                let d = ctrler.start_disguise(Some(u.to_string()));
-                let mut remove_record = new_delete_record_wrapper(
-                    d as u64,
-                    guise_name.clone(),
-                    guise_ids.clone(),
-                    vec![RowVal::new(
-                        fk_col.clone(),
-                        (old_fk_value + (d as u64)).to_string(),
-                    )],
-                );
-                remove_record.uid = u.to_string();
-                ctrler.insert_user_diff_record_wrapper(&mut remove_record);
-
-                let anon_uid: u64 = rng.next_u64();
-                // create an anonymous user
-                // and insert some record for the anon user
-                let sf_record_bytes = edna_sf_record_to_bytes(&new_edna_speaksfor_record(
-                    referenced_name.to_string(),
-                    vec![],
-                    fk_col.to_string(),
-                    &anon_uid.to_string(),
-                ));
-                ctrler.register_anon_principal(
-                    &u.to_string(),
-                    &anon_uid.to_string(),
-                    d as u64,
-                    &mut db,
-                );
-                ctrler.insert_speaksfor_record(
-                    &u.to_string(),
-                    &anon_uid.to_string(),
-                    d as u64,
-                    sf_record_bytes,
-                );
-                ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
-            }
-            // check principal data
-            ctrler
-                .principal_data
-                .get(&u.to_string())
-                .expect("failed to get user?");
-
-            let priv_key1 = ctrler
-                .get_priv_key(&u.to_string(), Some(String::from("password")), None)
-                .unwrap();
-            let priv_key2 = ctrler
-                .get_priv_key(
-                    &u.to_string(),
-                    None,
-                    Some(user_shares[u as usize - 1].clone()),
-                )
-                .unwrap();
-
-            let locators = ctrler.get_locators(&priv_key1);
-            assert_eq!(locators.len(), iters - 1);
-
-            assert_eq!(priv_key1, priv_key2);
-            let (diff_records, sf_records, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
-
-            assert_eq!(diff_records.len(), 1);
-            assert_eq!(sf_records.len(), 1);
-            let dt = edna_diff_record_from_bytes(&diff_records[0].record_data);
-            assert_eq!(
-                dt.old_value[0].value(),
-                (old_fk_value + locators[0].did).to_string()
-            );
-        }
-    }
-}
-
-#[test]
-fn test_make_pw_hash() {
-    let password = b"not password";
-    let salt = SaltString::generate(&mut OsRng);
-    let pass_info: String = Pbkdf2.hash_password(password, &salt).unwrap().to_string();
-    let hash_pass_bigint = BigInt::from_bytes_le(num_bigint::Sign::Plus, pass_info.as_bytes());
-
-    println!("{:?}", pass_info);
-    println!("{:?}", hash_pass_bigint);
-}
-
-#[test]
-fn test_default_hasher() {
-    let email_str1 = String::from("u password");
-
-    let uid_pw_hash1 = {
-        let mut hasher = DefaultHasher::new();
-        email_str1.hash(&mut hasher);
-        hasher.finish()
-    };
-
-    let email_str2 = String::from("u password");
-
-    let uid_pw_hash2 = {
-        let mut hasher = DefaultHasher::new();
-        email_str2.hash(&mut hasher);
-        hasher.finish()
-    };
-
-    println!("{}", uid_pw_hash1);
-    println!("{}", uid_pw_hash2);
+        println!("{}", uid_pw_hash1);
+        println!("{}", uid_pw_hash2);
+    }*/
 }

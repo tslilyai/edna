@@ -87,6 +87,7 @@ pub(crate) fn reveal_disguise(
         did,
         &data.tableinfo_json,
         &data.guisegen_json,
+        Some(edna::RevealPPType::Restore),
         password,
         None,
         false, // use_txn
@@ -137,7 +138,10 @@ pub(crate) fn get_pseudoprincipals_of(
         Some(data.password.clone())
     };
 
-    let pps : Vec<String> = e.get_pseudoprincipals(uid, password, None).into_iter().collect();
+    let pps: Vec<String> = e
+        .get_pseudoprincipals(uid, password, None)
+        .into_iter()
+        .collect();
     return Json(pps);
 }
 

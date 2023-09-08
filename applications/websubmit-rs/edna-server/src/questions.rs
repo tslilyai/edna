@@ -8,12 +8,12 @@ use chrono::Local;
 use mysql::from_value;
 use rocket::form::{Form, FromForm};
 use rocket::http::CookieJar;
-use std::time;
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_dyn_templates::Template;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time;
 
 //pub(crate) enum LectureQuestionFormError {
 //   Invalid,
@@ -117,7 +117,11 @@ pub(crate) fn answers(
     let start = time::Instant::now();
     let mut bg = backend.lock().unwrap();
     let res = bg.query_iter(&format!("SELECT * FROM answers WHERE lec = {}", num));
-    warn!(bg.log,"Querying answers server-side took {}mus", start.elapsed().as_micros());
+    warn!(
+        bg.log,
+        "Querying answers server-side took {}mus",
+        start.elapsed().as_micros()
+    );
     let start = time::Instant::now();
     let answers: Vec<_> = res
         .into_iter()
@@ -133,7 +137,11 @@ pub(crate) fn answers(
             },
         })
         .collect();
-    warn!(bg.log,"Iterating answers server-side took {}mus", start.elapsed().as_micros());
+    warn!(
+        bg.log,
+        "Iterating answers server-side took {}mus",
+        start.elapsed().as_micros()
+    );
 
     let ctx = LectureAnswersContext {
         lec_id: num,
@@ -216,14 +224,12 @@ pub(crate) fn questions_submit(
     for (id, answer) in &data.answers {
         let rec: Vec<(&str, String)> = vec![
             ("answer", format!("'{}'", answer)),
-            ("submitted_at", format!("'{}'", ts)),
-        ];
-        let keys: Vec<(&str, String)> = vec![
+            ("submitted_at", format!("'{}'", ts.clone())),
             ("email", format!("'{}'", apikey.user.clone())),
             ("lec", num.to_string()),
             ("q", id.to_string()),
         ];
-        bg.update("answers", keys, rec);
+        bg.update("answers", rec);
     }
 
     let answer_log = format!(

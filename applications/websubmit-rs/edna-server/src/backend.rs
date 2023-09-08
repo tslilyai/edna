@@ -154,19 +154,23 @@ impl MySqlBackend {
         self.do_insert(table, vals, false);
     }
 
-    pub fn update(&mut self, table: &str, keys: Vec<(&str, String)>, vals: Vec<(&str, String)>) {
+    pub fn update(&mut self, table: &str, vals: Vec<(&str, String)>) {
         let start = time::Instant::now();
         let q = format!(
-            "UPDATE {} SET {} WHERE {}",
+            "INSERT INTO {} ({}) VALUES ({}) ON DUPLICATE KEY UPDATE {}",
             table,
+            vals.iter()
+                .map(|(c, _)| format!("{}", c))
+                .collect::<Vec<String>>()
+                .join(","),
+            vals.iter()
+                .map(|(_, v)| format!("{}", v))
+                .collect::<Vec<String>>()
+                .join(","),
             vals.iter()
                 .map(|(c, v)| format!("{} = {}", c, v))
                 .collect::<Vec<String>>()
                 .join(","),
-            keys.iter()
-                .map(|(c, v)| format!("{} = {}", c, v))
-                .collect::<Vec<String>>()
-                .join(" AND ")
         );
         debug!(self.log, "executed update query {} for row {:?}", q, vals);
         while let Err(e) = self.handle.query_drop(&q) {

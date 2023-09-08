@@ -33,7 +33,7 @@ pub struct EdnaDiffRecord {
     // metadata set by Edna
     pub typ: u8,
 
-    // guise information
+    // obj information
     pub table: String,
     pub tabids: Vec<String>,
 
@@ -271,7 +271,7 @@ impl EdnaDiffRecord {
 
             REMOVE_GUISE => {
                 let start = time::Instant::now();
-                // get current guise in db
+                // get current obj in db
                 let table_info = timap.get(&self.table).unwrap();
                 let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
                 let selected = get_query_rows_str_q::<Q>(
@@ -358,7 +358,7 @@ impl EdnaDiffRecord {
                 );
             }
             MODIFY_GUISE => {
-                // get current guise in db
+                // get current obj in db
                 let table_info = timap.get(&self.table).unwrap();
                 let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
                 let selected = get_query_rows_str_q(

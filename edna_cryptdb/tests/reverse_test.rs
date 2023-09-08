@@ -1,7 +1,8 @@
 extern crate log;
 extern crate mysql;
 
-use edna::helpers;
+use edna_cryptdb::helpers;
+use edna_cryptdb::EdnaClient;
 use log::warn;
 use mysql::prelude::*;
 use mysql::Opts;
@@ -31,7 +32,11 @@ fn test_app_rev_anon_disguise() {
     init_logger();
     let dbname = "testRevAnon".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
     )
@@ -68,7 +73,7 @@ fn test_app_rev_anon_disguise() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -91,6 +96,7 @@ fn test_app_rev_anon_disguise() {
         anon_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         None,
         false,
@@ -189,6 +195,7 @@ fn test_app_rev_anon_disguise() {
             anon_did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -272,7 +279,11 @@ fn test_app_rev_gdpr_disguise() {
     init_logger();
     let dbname = "testRevGDPR".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
     )
@@ -302,7 +313,7 @@ fn test_app_rev_gdpr_disguise() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -330,6 +341,7 @@ fn test_app_rev_gdpr_disguise() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -401,7 +413,11 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
     init_logger();
     let dbname = "testRevCompose".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
     )
@@ -431,7 +447,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -551,6 +567,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         anon_did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna::RevealPPType::Restore),
         None,
         None,
         false,
@@ -645,6 +662,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -746,6 +764,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             anon_did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -834,7 +853,11 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
 
     let dbname = "testRevComposeTwo".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
     let url = format!("mysql://{}:{}@{}", "tester", "pass", "127.0.0.1");
     let mut db = mysql::Conn::new(Opts::from_url(&format!("{}/{}", url, dbname)).unwrap()).unwrap();
     assert_eq!(db.ping(), true);
@@ -862,7 +885,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -904,6 +927,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             anon_did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -998,6 +1022,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1097,7 +1122,11 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
 
     let dbname = "testRevComposeThree".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = edna::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+        true,
+        true,
+    );
     let url = format!("mysql://{}:{}@{}", "tester", "pass", "127.0.0.1");
     let mut db = mysql::Conn::new(Opts::from_url(&format!("{}/{}", url, dbname)).unwrap()).unwrap();
     assert_eq!(db.ping(), true);
@@ -1124,7 +1153,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
         user_shares.push(user_share.clone());
     }
 
@@ -1161,6 +1190,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             anon_did1,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1240,6 +1270,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             anon_did2,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,

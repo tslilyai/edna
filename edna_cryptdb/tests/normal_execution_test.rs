@@ -1,7 +1,8 @@
 extern crate log;
 extern crate mysql;
 
-use edna::helpers;
+use edna_cryptdb::helpers;
+use edna_cryptdb::EdnaClient;
 use mysql::prelude::*;
 use mysql::Opts;
 use std::*;
@@ -25,7 +26,11 @@ fn test_normal_execution() {
 
     // init schema, etc.
     helpers::init_db(true, "tester", "pass", "127.0.0.1", DBNAME, SCHEMA);
-    edna::EdnaClient::new("tester", "pass", "127.0.0.1", DBNAME, true);
+    let mut edna = EdnaClient::new(
+        &format!("mysql://tester:pass@127.0.0.1/{}", DBNAME),
+        true,
+        true,
+    );
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", DBNAME)).unwrap(),
     )

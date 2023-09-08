@@ -44,12 +44,16 @@ def add_labels(x,y,plt,color,offset):
             label = "{0:.0f}".format(y[i])
         else:
             label = "{0:.1f}".format(y[i])
-        plt.text(x[i], y[i]+offset, label, ha='center', color=color, size=6)
+        new_offset = offset
+        if y[i] < 50 or (y[i] < 80 and y[i] > 60 and color != 'm'):
+            new_offset = (offset / 3)
+
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6)
 
 
 def add_text_labels(x,y,plt,color,offset):
     for i in range(len(x)):
-        plt.text(x[i], offset, y[i], ha='center', color=color, size=6)
+        plt.text(x[i], (offset/3), y[i], ha='center', color=color, size=6)
 
 def get_yerr(durs):
     mins = []
@@ -80,13 +84,14 @@ for i in range(2):
     filename ="../hotcrp_results/hotcrp_disguise_stats_3080users.csv"
     filename_dryrun ="../hotcrp_results/hotcrp_disguise_stats_3080users_nocrypto.csv"
     title = "hotcrp"
-    offset = 13
+
+    offset = 90
     if i == 0:
         filename_baseline ='../websubmit_results/disguise_stats_{}lec_{}users_baseline.csv'.format(20, 2000)
         filename = '../websubmit_results/disguise_stats_{}lec_{}users.csv'.format(20,2000)
         filename_dryrun = '../websubmit_results/disguise_stats_{}lec_{}users_dryrun.csv'.format(20,2000)
         title = "websubmit"
-        offset = 5
+        offset = 18
         with open(filename,'r') as csvfile:
             rows = csvfile.readlines()
             delete_durs = [float(x)/1000 for x in rows[6].strip().split(',')]
@@ -183,11 +188,11 @@ for i in range(2):
         statistics.median(restore_durs),
     ], plt, 'm', offset)
 
-    plt.ylim(ymin=0, ymax=510)
-    plt.yticks(range(0, 510, 125))
+    plt.ylim(ymin=0, ymax=500)
+    plt.yticks(range(0, 500, 150))
     if i == 0:
-        plt.ylim(ymin=0, ymax=110)
-        plt.yticks(range(0, 110, 30))
+        plt.ylim(ymin=0, ymax=130)
+        plt.yticks(range(0, 130, 40))
         plt.ylabel('Time (ms)')
     plt.xticks(X, labels=labels)
     plt.subplots_adjust(left=0.25, right=1.0, bottom=0.4)

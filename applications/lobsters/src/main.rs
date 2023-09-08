@@ -387,6 +387,7 @@ fn run_disguising_thread(
             did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             Some(uid.to_string()),
             None,
             use_txn,
@@ -486,6 +487,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
                 did,
                 TABLEINFO_JSON,
                 GUISEGEN_JSON,
+                Some(edna::RevealPPType::Restore),
                 Some(u.to_string()),
                 None,
                 false,
@@ -647,6 +649,7 @@ fn run_stats_test(
             did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             Some(user_id.to_string()),
             None,
             use_txn,
@@ -728,6 +731,7 @@ fn run_stats_test(
             did,
             TABLEINFO_JSON,
             GUISEGEN_JSON,
+            Some(edna::RevealPPType::Restore),
             Some(user_id.to_string()),
             None,
             use_txn,
@@ -849,6 +853,7 @@ fn run_stats_test(
                 did,
                 TABLEINFO_JSON,
                 GUISEGEN_JSON,
+                Some(edna::RevealPPType::Restore),
                 Some(user_id.to_string()),
                 None,
                 use_txn,
@@ -892,7 +897,8 @@ fn run_stats_test(
 
 fn run_baseline_stats_test(db: &mut mysql::PooledConn, sampler: &datagen::Sampler) {
     // READS
-    let filename = format!("../../results/lobsters_results/lobsters_disguise_stats_baseline_stats.csv");
+    let filename =
+        format!("../../results/lobsters_results/lobsters_disguise_stats_baseline_stats.csv");
     let mut file = File::create(filename).unwrap();
 
     file.write("create, read_story, read_frontpage\n".as_bytes())
@@ -930,7 +936,8 @@ fn run_baseline_stats_test(db: &mut mysql::PooledConn, sampler: &datagen::Sample
 }
 
 fn run_baseline_delete_test(sampler: &datagen::Sampler, db: &mut mysql::PooledConn) {
-    let filename = format!("../../results/lobsters_results/lobsters_disguise_stats_baseline_delete.csv");
+    let filename =
+        format!("../../results/lobsters_results/lobsters_disguise_stats_baseline_delete.csv");
     let mut file = File::create(filename).unwrap();
     for u in 0..sampler.nusers() {
         // now sample every 10 users (just temporary)
@@ -947,7 +954,8 @@ fn run_baseline_delete_test(sampler: &datagen::Sampler, db: &mut mysql::PooledCo
 }
 
 fn run_baseline_decay_test(sampler: &datagen::Sampler, db: &mut mysql::PooledConn) {
-    let filename = format!("../../results/lobsters_results/lobsters_disguise_stats_baseline_decay.csv");
+    let filename =
+        format!("../../results/lobsters_results/lobsters_disguise_stats_baseline_decay.csv");
     let mut file = File::create(filename).unwrap();
     for u in 0..sampler.nusers() {
         // now sample every 10 users (just temporary)
@@ -965,7 +973,8 @@ fn run_baseline_decay_test(sampler: &datagen::Sampler, db: &mut mysql::PooledCon
 }
 
 fn run_baseline_hobby_anon_test(sampler: &datagen::Sampler, db: &mut mysql::PooledConn) {
-    let filename = format!("../../results/lobsters_results/lobsters_disguise_stats_baseline_hobbyanon.csv");
+    let filename =
+        format!("../../results/lobsters_results/lobsters_disguise_stats_baseline_hobbyanon.csv");
     let mut file = File::create(filename).unwrap();
 
     for u in 0..sampler.nusers() {
@@ -1116,7 +1125,10 @@ fn print_concurrent_stats(
     )
     .unwrap();
 
-    let filename = format!("../../results/lobsters_results/concurrent_op_stats_{}.csv", args.filename);
+    let filename = format!(
+        "../../results/lobsters_results/concurrent_op_stats_{}.csv",
+        args.filename
+    );
 
     // print out stats
     let mut f = OpenOptions::new()

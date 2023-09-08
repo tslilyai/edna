@@ -35,6 +35,7 @@ pub fn reveal(
         did,
         TABLEINFO_JSON,
         GUISEGEN_JSON,
+        Some(edna_cryptdb::RevealPPType::Restore),
         Some(user_pw),
         None,
         false,

@@ -218,7 +218,7 @@ pub(crate) fn questions_submit(
             ("lec", num.to_string()),
             ("q", id.to_string()),
         ];
-        bg.update("answers", keys, rec);
+        bg.update("answers", rec, keys);
     }
 
     let answer_log = format!(

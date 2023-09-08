@@ -27,11 +27,14 @@ def add_labels(x,y,plt,color,offset):
             label = "{0:.0f}".format(y[i])
         else:
             label = "{0:.1f}".format(y[i])
-        plt.text(x[i], y[i]+offset, label, ha='center', color=color, size=6)
+        new_offset = offset
+        if y[i] < 10 or y[i] > 80:
+            new_offset = offset - 8
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6)
 
 def add_text_labels(x,y,plt,color,offset):
     for i in range(len(x)):
-        plt.text(x[i], offset, y[i], ha='center', color=color, size=6)
+        plt.text(x[i], offset - 8, y[i], ha='center', color=color, size=6)
 
 def get_yerr(durs):
     mins = []
@@ -85,7 +88,7 @@ app = "hotcrp"
 filename_baseline ="../hotcrp_results/hotcrp_disguise_stats_3080users_baseline.csv"
 filename_dryrun="../hotcrp_results/hotcrp_disguise_stats_3080users_nocrypto.csv"
 filename ="../hotcrp_results/hotcrp_disguise_stats_3080users.csv"
-offset = 8
+offset = 20
 nusers = 80
 with open(filename,'r') as csvfile:
     rows = csvfile.readlines()
@@ -122,7 +125,7 @@ with open(filename_dryrun,'r') as csvfile:
 ###################### shading
 plt.axvspan(-0.5, 2.45, color='white', alpha=0, lw=0)
 plt.axvspan(2.45, 6.5, color='purple', alpha=0.08, lw=0)
-plt.text(2.55, 255, '\emph{Disguise/Reveal Ops}',
+plt.text(2.55, 210, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
          color='purple', fontsize=7)
 plt.margins(x=0.0)
@@ -197,8 +200,8 @@ add_labels((X+barwidth/2),
     statistics.median(restore_durs_noanon),
 ], plt, 'black', offset)
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=275)
-plt.yticks(range(0, 275, 50))
+plt.ylim(ymin=0, ymax=225)
+plt.yticks(range(0, 225, 50))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.tight_layout(h_pad=0)
