@@ -4,7 +4,7 @@ Edna[^*] is a library for web developers to add support for data disguising and
 revealing of user data to their applications. For example, Edna can help users
 protect inactive accounts, selectively dissociate personal data from public
 profiles, and remove service access to their data without permanently losing
-their accounts.
+their accounts. Edna's paper at SOSP'23 can be found [here](https://github.com/tslilyai/edna/blob/main/paper/edna.pdf).
 
 Edna was last tested on a machine with 16 CPUs and 60 GB RAM, running Ubuntu 20.04.5 LTS, and uses MySQL with the InnoDB storage engine atop a local SSD. The CloudLab profile (`profile.py`) should provide these settings, but numbers may differ due to variability in the machine type, etc.
 
