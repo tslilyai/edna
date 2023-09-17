@@ -97,7 +97,7 @@ impl EdnaSpeaksForRecord {
     pub fn reveal<Q: Queryable>(
         timap: &HashMap<String, TableInfo>,
         sfrws: &Vec<SpeaksForRecordWrapper>,
-        guise_gen: &GuiseGen,
+        pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
         llapi: &mut LowLevelAPI,
         db: &mut Q,
@@ -140,19 +140,19 @@ impl EdnaSpeaksForRecord {
         // CHECK: if original entity does not exist, do not recorrelate
         let selection = format!(
             "{} IN ({})",
-            guise_gen.id_col,
+            pp_gen.id_col,
             old_to_new.keys().cloned().collect::<Vec<_>>().join(",")
         );
         debug!("selection: {}", selection.to_string());
         let selected = get_query_rows_str_q::<Q>(
-            &str_select_statement(&guise_gen.name, &guise_gen.name, &selection.to_string()),
+            &str_select_statement(&pp_gen.name, &pp_gen.name, &selection.to_string()),
             db,
         )?;
         debug!("selected : {:?}", selected);
         if selected.len() != old_to_new.keys().len() {
             debug!(
                 "SFRecord Reveal: {} col selection {} != {}\n",
-                guise_gen.id_col,
+                pp_gen.id_col,
                 selected.len(),
                 old_to_new.keys().len(),
             );
@@ -190,7 +190,7 @@ impl EdnaSpeaksForRecord {
                 }
             }
             for (table, tinfo) in timap.into_iter() {
-                if table == &guise_gen.name {
+                if table == &pp_gen.name {
                     continue;
                 }
                 // note that we already restored links for the actual SPRs so we don't need to
@@ -251,14 +251,14 @@ impl EdnaSpeaksForRecord {
         if reveal_pps != Some(Retain) {
             db.query_drop(format!(
                 "DELETE FROM {} WHERE {} IN ({})",
-                guise_gen.name,
-                guise_gen.id_col,
+                pp_gen.name,
+                pp_gen.id_col,
                 pps_to_delete.join(",")
             ))?;
         }
         debug!(
             "Delete users {:?} from table {}",
-            pps_to_delete, guise_gen.name
+            pps_to_delete, pp_gen.name
         );
         // remove PP metadata from the record ctrler (when all locators are gone)
         // do per new uid because did might differ

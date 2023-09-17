@@ -24,7 +24,7 @@ pub struct ApplyDisguise {
     disguise_json: String,
     tableinfo_json: String,
     password: String,
-    guisegen_json: String,
+    pseudoprincipalgen_json: String,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -49,7 +49,7 @@ pub(crate) fn apply_disguise(
             data.user.clone(),
             &data.disguise_json,
             &data.tableinfo_json,
-            &data.guisegen_json,
+            &data.ppgen_json,
             password,
             None,
             false, // use_txn
@@ -62,7 +62,7 @@ pub(crate) fn apply_disguise(
 #[derive(Deserialize, JsonSchema)]
 pub struct RevealDisguise {
     tableinfo_json: String,
-    guisegen_json: String,
+    pseudoprincipalgen_json: String,
     password: String,
 }
 
@@ -86,7 +86,7 @@ pub(crate) fn reveal_disguise(
         uid,
         did,
         &data.tableinfo_json,
-        &data.guisegen_json,
+        &data.ppgen_json,
         Some(edna::RevealPPType::Restore),
         password,
         None,

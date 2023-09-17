@@ -3,7 +3,7 @@ use edna::*;
 
 const TABLEINFO_JSON: &'static str = include_str!("./table_info.json");
 const GDPR_JSON: &'static str = include_str!("./gdpr_disguise.json");
-const GUISEGEN_JSON: &'static str = include_str!("./guise_gen.json");
+const PPGEN_JSON: &'static str = include_str!("./pp_gen.json");
 
 pub fn apply(
     edna: &mut EdnaClient,
@@ -17,7 +17,7 @@ pub fn apply(
         uid.to_string(),
         &gdpr_json,
         TABLEINFO_JSON,
-        GUISEGEN_JSON,
+        PPGEN_JSON,
         pw,
         None,
         false,
@@ -34,7 +34,7 @@ pub fn reveal(
         uid.to_string(),
         did,
         TABLEINFO_JSON,
-        GUISEGEN_JSON,
+        PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
         Some(password),
         None,

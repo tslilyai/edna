@@ -32,14 +32,14 @@ pub type ColName = String;
 pub type TableName = String;
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct GuiseGen {
+pub struct PseudoprincipalGenerator {
     pub name: TableName,
     pub id_col: ColName,
     pub cols: Vec<String>,
     pub val_generation: Vec<gen_value::GenValue>,
 }
 
-impl GuiseGen {
+impl PseudoprincipalGenerator {
     pub fn get_vals(&self) -> Vec<String> {
         let mut vals: Vec<String> = vec![];
         for genval in &self.val_generation {
@@ -367,7 +367,7 @@ impl EdnaClient {
         for_user: UID,
         disguise_spec_json: &str,
         table_info_json: &str,
-        guise_gen_json: &str,
+        pp_gen_json: &str,
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
         use_txn: bool,
@@ -375,7 +375,7 @@ impl EdnaClient {
         warn!("EDNA: APPLYING Disguise");
         let table_infos: HashMap<TableName, TableInfo> =
             serde_json::from_str(table_info_json).unwrap();
-        let guise_gen: GuiseGen = serde_json::from_str(guise_gen_json).unwrap();
+        let pp_gen: PseudoprincipalGenerator = serde_json::from_str(pp_gen_json).unwrap();
         let disguise_spec: DisguiseSpec = serde_json::from_str(disguise_spec_json).unwrap();
         let disguise = Disguise {
             user: if for_user == "NULL" {
@@ -393,7 +393,7 @@ impl EdnaClient {
             let res = self.hlapi.apply(
                 &disguise,
                 &table_infos,
-                &guise_gen,
+                &pp_gen,
                 &mut txn,
                 password,
                 user_share,
@@ -404,7 +404,7 @@ impl EdnaClient {
             return self.hlapi.apply(
                 &disguise,
                 &table_infos,
-                &guise_gen,
+                &pp_gen,
                 &mut db,
                 password,
                 user_share,
@@ -418,7 +418,7 @@ impl EdnaClient {
         uid: UID,
         did: DID,
         table_info_json: &str,
-        guise_gen_json: &str,
+        pp_gen_json: &str,
         reveal_pps: Option<RevealPPType>,
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
@@ -427,7 +427,7 @@ impl EdnaClient {
         warn!("EDNA: REVERSING Disguise {}", did);
         let table_infos: HashMap<TableName, TableInfo> =
             serde_json::from_str(table_info_json).unwrap();
-        let guise_gen: GuiseGen = serde_json::from_str(guise_gen_json).unwrap();
+        let pp_gen: PseudoprincipalGenerator = serde_json::from_str(pp_gen_json).unwrap();
         let mut db = self.pool.get_conn().unwrap();
         let user = if uid == "NULL" { None } else { Some(&uid) };
         if use_txn {
@@ -438,7 +438,7 @@ impl EdnaClient {
                 user,
                 did,
                 &table_infos,
-                &guise_gen,
+                &pp_gen,
                 reveal_pps,
                 &mut txn,
                 password,
@@ -450,7 +450,7 @@ impl EdnaClient {
                 user,
                 did,
                 &table_infos,
-                &guise_gen,
+                &pp_gen,
                 reveal_pps,
                 &mut db,
                 password,

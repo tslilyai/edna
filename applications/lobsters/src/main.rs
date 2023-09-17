@@ -28,7 +28,7 @@ include!("statistics.rs");
 const TOTAL_TIME: u128 = 500000;
 const SCHEMA: &'static str = include_str!("../schema.sql");
 const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
-const GUISEGEN_JSON: &'static str = include_str!("./disguises/guise_gen.json");
+const PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen.json");
 const DECAY_JSON: &'static str = include_str!("./disguises/data_decay.json");
 const GDPR_JSON: &'static str = include_str!("./disguises/gdpr_disguise.json");
 const HOBBY_JSON: &'static str = include_str!("./disguises/hobby_anon.json");
@@ -370,7 +370,7 @@ fn run_disguising_thread(
             uid.to_string(),
             GDPR_JSON,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             None, //Some(uid.to_string()),
             None,
             use_txn,
@@ -386,7 +386,7 @@ fn run_disguising_thread(
             uid.to_string(),
             did,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             Some(uid.to_string()),
             None,
@@ -465,7 +465,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
                     user_id.to_string(),
                     DECAY_JSON,
                     TABLEINFO_JSON,
-                    GUISEGEN_JSON,
+                    PPGEN_JSON,
                     None, //Some(user_id.to_string()),
                     None,
                     false,
@@ -486,7 +486,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
                 u.to_string(),
                 did,
                 TABLEINFO_JSON,
-                GUISEGEN_JSON,
+                PPGEN_JSON,
                 Some(edna::RevealPPType::Restore),
                 Some(u.to_string()),
                 None,
@@ -608,7 +608,7 @@ fn run_stats_test(
                 user_id.to_string(),
                 DECAY_JSON,
                 TABLEINFO_JSON,
-                GUISEGEN_JSON,
+                PPGEN_JSON,
                 None, //Some(user_id.to_string()),
                 None,
                 use_txn,
@@ -648,7 +648,7 @@ fn run_stats_test(
             user_id.to_string(),
             did,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             Some(user_id.to_string()),
             None,
@@ -691,7 +691,7 @@ fn run_stats_test(
                 user_id.to_string(),
                 GDPR_JSON,
                 TABLEINFO_JSON,
-                GUISEGEN_JSON,
+                PPGEN_JSON,
                 None, //Some(user_id.to_string()),
                 None,
                 use_txn,
@@ -730,7 +730,7 @@ fn run_stats_test(
             user_id.to_string(),
             did,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             Some(user_id.to_string()),
             None,
@@ -806,7 +806,7 @@ fn run_stats_test(
                     user_id.to_string(),
                     HOBBY_JSON,
                     TABLEINFO_JSON,
-                    GUISEGEN_JSON,
+                    PPGEN_JSON,
                     None, //Some(user_id.to_string()),
                     None,
                     use_txn,
@@ -852,7 +852,7 @@ fn run_stats_test(
                 user_id.to_string(),
                 did,
                 TABLEINFO_JSON,
-                GUISEGEN_JSON,
+                PPGEN_JSON,
                 Some(edna::RevealPPType::Restore),
                 Some(user_id.to_string()),
                 None,

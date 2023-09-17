@@ -23,7 +23,7 @@ use std::time;
 
 pub type Loc = u64; // locator
 pub type Index = u64; // index into shares map, enc locators map
-pub type DecryptCap = Vec<u8>; // private key
+pub type DecryptCap = Vec<u8>; // decryption capability (e.g., private key)
 pub type Share = [BigInt; 2];
 pub type ShareValue = BigInt;
 pub type UserData = (Share, Index);
@@ -35,8 +35,6 @@ pub struct PrincipalData {
     pub enc_locators_index: Index,
 }
 
-// UID: marks the (pseudo or natural) principal whose data is stored at the locator L_{uid-d}/
-//  determines which public key to use to encrypt at end
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Bag {
     pub diffrecs: Vec<DiffRecordWrapper>,
@@ -68,8 +66,10 @@ pub struct ShareStore {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Hash)]
 pub struct Locator {
     pub loc: Loc,
-    // UID here is necessary because interactive disguises
-    // return UIDs to the client for other principals
+    // UID here is necessary because composed disguises return UIDs to the
+    // client for other principals. UID marks the (pseudo or natural) principal
+    // whose data is stored at the locator; this principal's public key should
+    // be used to encrypt
     pub uid: UID,
     pub did: DID,
 }
@@ -213,10 +213,9 @@ impl RecordCtrler {
     }
 
     /*
-     * LOCATING CAPABILITIES
+     * Disguising Functions
      */
-
-    // sets tmp_did to one higher than before
+    // sets tmp_did to a new random DID
     pub fn start_disguise(&mut self, acting_uid: Option<UID>) -> DID {
         let did = self.rng.next_u64();
         self.tmp_did = Some(did);
@@ -226,14 +225,15 @@ impl RecordCtrler {
     }
 
     //
-    // Invariants:
-    //  * Edna only ever retains encrypted locators for pseudoprincipals
-    //  * If NP is acting on behalf of a PP, Edna returns the PP locators for the NP and does not
-    //    save them in the PP metadata
+    // Invariant: 
+    // * Edna retains encrypted locators at opaque indexes corresponding to encrypted indexes encrypted with the user's public key 
+    // OLD: Edna used to only ever retain encrypted locators for pseudoprincipals
+    // OLD: If NP is acting on behalf of a PP, Edna returns the PP
+    //   locators for the NP and does not save them in the PP metadata
     //
     pub fn save_and_clear_disguise<Q: Queryable>(&mut self, db: &mut Q) {
-        // this creates locators, so we have to do it first before deleting or clearing
-        // principaldata
+        // this creates locators, so we have to do it first before deleting or
+        // clearing principaldata
         let start = time::Instant::now();
         let bag_uids = self.tmp_bags.keys().cloned().collect::<Vec<_>>();
         for uid in &bag_uids {
@@ -259,8 +259,12 @@ impl RecordCtrler {
                 .expect(&format!("no user with uid {} when saving?", uid))
                 .clone();
 
-            // Don't do the interactive mess since that would mean that we have to iterate through
-            // private keys and find the right one...
+            // Don't do the interactive mess since that would mean that we have
+            // to iterate through private keys and find the right one...  Note:
+            // This comment was from when we believed we wouldn't have to store
+            // encrypted locators, since we could return them to the client (if
+            // the client was interactive); however, it's just easier to store
+            // them all encrypted at opaque indices.
             let start_enc = time::Instant::now();
             let enc_lc =
                 encrypt_with_pubkey(&p.pubkey.as_ref(), &serialize_to_bytes(&lc), self.dryrun);
@@ -410,7 +414,7 @@ impl RecordCtrler {
         let pdata = PrincipalData {
             pubkey: Some(pubkey.clone()),
             is_anon: is_anon,
-            // create index for enc_locators for this pricncipal
+            // create index for enc_locators for this principal 
             enc_locators_index: pk_hash,
         };
         self.mark_principal_to_insert(uid, &pdata);
@@ -434,7 +438,7 @@ impl RecordCtrler {
     }
 
     // registers the princiapl with edna, giving them a private/public keypair
-    // breaks the pciate key into shares and returns the users portion
+    // breaks the private key into shares and returns the user's portion
     pub fn register_principal_secret_sharing<Q: Queryable>(
         &mut self,
         uid: &UID,
@@ -540,8 +544,6 @@ impl RecordCtrler {
         speaksfor_record_data: Vec<u8>,
     ) {
         let start = time::Instant::now();
-        //let uidstr = uid.trim_matches('\'');
-        //let anon_uidstr = anon_uid.trim_matches('\'');
         let sf_record_wrapped = new_generic_speaksfor_record_wrapper(
             uid.to_string(),
             anon_uid.to_string(),
@@ -648,7 +650,8 @@ impl RecordCtrler {
         );
     }
 
-    fn insert_speaksfor_record_wrapper(&mut self, pppk: &SpeaksForRecordWrapper, old_uid: &UID) {
+    fn insert_speaksfor_record_wrapper(&mut self, pppk: &SpeaksForRecordWrapper,
+    old_uid: &UID) { 
         let start = time::Instant::now();
         let p = self.principal_data.get_mut(old_uid);
         if p.is_none() {
@@ -1099,8 +1102,8 @@ mod tests {
         let mut db = pool.get_conn().unwrap();
         let mut ctrler = RecordCtrler::new(&mut db, true, true, false);
 
-        let guise_name = "guise".to_string();
-        let guise_ids = vec![];
+        let pseudoprincipal_name = "guise".to_string();
+        let pseudoprincipal_ids = vec![];
         let old_fk_value = 5;
         let fk_col = "fk_col".to_string();
 
@@ -1119,8 +1122,8 @@ mod tests {
                 for i in 0..iters {
                     let mut remove_record = new_delete_record_wrapper(
                         d as u64,
-                        guise_name.clone(),
-                        guise_ids.clone(),
+                        pseudoprincipal_name.clone(),
+                        pseudoprincipal_ids.clone(),
                         vec![RowVal::new(
                             fk_col.clone(),
                             (old_fk_value + (i as u64)).to_string(),
@@ -1168,8 +1171,8 @@ mod tests {
         let mut db = pool.get_conn().unwrap();
         let mut ctrler = RecordCtrler::new(&mut db, true, true, false);
 
-        let guise_name = "guise".to_string();
-        let guise_ids = vec![];
+        let pseudoprincipal_name = "guise".to_string();
+        let pseudoprincipal_ids = vec![];
         let referenced_name = "referenced".to_string();
         let old_fk_value = 5;
         let fk_col = "fk_col".to_string();
@@ -1189,8 +1192,8 @@ mod tests {
                 let d = ctrler.start_disguise(Some(u.to_string()));
                 let mut remove_record = new_delete_record_wrapper(
                     d as u64,
-                    guise_name.clone(),
-                    guise_ids.clone(),
+                    pseudoprincipal_name.clone(),
+                    pseudoprincipal_ids.clone(),
                     vec![RowVal::new(
                         fk_col.clone(),
                         (old_fk_value + (d as u64)).to_string(),

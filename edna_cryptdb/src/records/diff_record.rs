@@ -34,7 +34,7 @@ pub struct EdnaDiffRecord {
     // metadata set by Edna
     pub typ: u8,
 
-    // guise information
+    // pseudoprincipal information
     pub table: String,
     pub tabids: Vec<String>,
 
@@ -272,7 +272,7 @@ impl EdnaDiffRecord {
 
             INSERT_GUISE => {
                 let start = time::Instant::now();
-                // get current guise in db
+                // get current pseudoprincipal in db
                 let table_info = timap.get(&self.table).unwrap();
                 let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
                 let select =
@@ -304,7 +304,7 @@ impl EdnaDiffRecord {
 
             REMOVE_GUISE => {
                 let start = time::Instant::now();
-                // get current guise in db
+                // get current pseudoprincipal in db
                 let table_info = timap.get(&self.table).unwrap();
                 let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
                 let select_q = str_select_statement(
@@ -315,7 +315,7 @@ impl EdnaDiffRecord {
 
                 let selected = get_query_rows_str_q::<Q>(&select_q, db)?;
                 warn!(
-                    "Selected removed guises {}: {}mus",
+                    "Selected removed pseudoprincipals {}: {}mus",
                     select_q,
                     start.elapsed().as_micros()
                 );
@@ -403,7 +403,7 @@ impl EdnaDiffRecord {
                 );
             }
             MODIFY_GUISE => {
-                // get current guise in db
+                // get current pseudoprincipal in db
                 let table_info = timap.get(&self.table).unwrap();
                 let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
                 let selected = get_query_rows_str_q(

@@ -3,6 +3,10 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+///
+///#GenValue
+///
+///Types of values that Edna can generate to populate
 #[derive(Clone, Serialize, Deserialize)]
 pub enum GenValue {
     ConstNum(u64),
