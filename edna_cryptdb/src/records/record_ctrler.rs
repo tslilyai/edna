@@ -1096,8 +1096,8 @@ mod tests {
             let mut db = pool.get_conn().unwrap();
             let mut ctrler = RecordCtrler::new(&mut db, true, true);
 
-            let guise_name = "guise".to_string();
-            let guise_ids = vec![];
+            let pseudoprincipal_name = "guise".to_string();
+            let pseudoprincipal_ids = vec![];
             let old_fk_value = 5;
             let fk_col = "fk_col".to_string();
 
@@ -1117,8 +1117,8 @@ mod tests {
                     for i in 0..iters {
                         let mut remove_record = new_delete_record_wrapper(
                             d as u64,
-                            guise_name.clone(),
-                            guise_ids.clone(),
+                            pseudoprincipal_name.clone(),
+                            pseudoprincipal_ids.clone(),
                             vec![RowVal::new(
                                 fk_col.clone(),
                                 (old_fk_value + (i as u64)).to_string(),
@@ -1166,8 +1166,8 @@ mod tests {
             let mut db = pool.get_conn().unwrap();
             let mut ctrler = RecordCtrler::new(&mut db, true, true);
 
-            let guise_name = "guise".to_string();
-            let guise_ids = vec![];
+            let pseudoprincipal_name = "guise".to_string();
+            let pseudoprincipal_ids = vec![];
             let referenced_name = "referenced".to_string();
             let old_fk_value = 5;
             let fk_col = "fk_col".to_string();
@@ -1188,8 +1188,8 @@ mod tests {
                     let d = ctrler.start_disguise(Some(u.to_string()));
                     let mut remove_record = new_delete_record_wrapper(
                         d as u64,
-                        guise_name.clone(),
-                        guise_ids.clone(),
+                        pseudoprincipal_name.clone(),
+                        pseudoprincipal_ids.clone(),
                         vec![RowVal::new(
                             fk_col.clone(),
                             (old_fk_value + (d as u64)).to_string(),

@@ -1,11 +1,11 @@
 use crate::records::*;
 use crypto_box::aead::generic_array::GenericArray;
 use crypto_box::{aead::Aead, Box, PublicKey, SecretKey};
+use log::info;
 use num_bigint::BigInt;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
-use log::info;
 use std::time;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
@@ -26,7 +26,7 @@ pub fn get_pk_bytes(bytes: Vec<u8>) -> [u8; 32] {
 }
 
 /*
- * ENCRYPTION STUFF
+ * EncData Functions
  */
 pub fn decrypt_encdata(ed: &EncData, decrypt_cap: &DecryptCap, dryrun: bool) -> (bool, Vec<u8>) {
     if decrypt_cap.is_empty() {
@@ -36,22 +36,13 @@ pub fn decrypt_encdata(ed: &EncData, decrypt_cap: &DecryptCap, dryrun: bool) -> 
     let start = time::Instant::now();
     if dryrun {
         let ret = (true, ed.encdata.to_vec());
-        info!(
-            "dryrun decrypted: {}",
-            start.elapsed().as_micros()
-        );
+        info!("dryrun decrypted: {}", start.elapsed().as_micros());
         return ret;
     }
 
     let secretkey = SecretKey::from(get_pk_bytes(decrypt_cap.clone()));
     let pubkey = PublicKey::from(get_pk_bytes(ed.pubkey.clone()));
     let salsabox = Box::new(&pubkey, &secretkey);
-    /*debug!(
-        "decrypt {:?} with secret {} and pubkey {}",
-        base64::encode(&ed.encdata),
-        base64::encode(&decrypt_cap),
-        base64::encode(&ed.pubkey),
-    );*/
     match salsabox.decrypt(&GenericArray::from_slice(&ed.nonce), &ed.encdata[..]) {
         Ok(plaintext) => {
             info!(
@@ -85,13 +76,6 @@ pub fn encrypt_with_pubkey(pubkey: &Option<&PublicKey>, bytes: &Vec<u8>, dryrun:
     let salsabox = Box::new(pubkey, &secretkey);
     let nonce = crypto_box::generate_nonce(&mut rng);
     let encrypted = salsabox.encrypt(&nonce, &bytes[..]).unwrap();
-    /*debug!(
-        "encrypt to {:?} with secret {} and pubkey {}, pair {}",
-        base64::encode(&encrypted),
-        base64::encode(&secretkey.to_bytes()),
-        base64::encode(&pubkey.as_bytes()),
-        base64::encode(&edna_pubkey.as_bytes()),
-    );*/
     info!("encrypt: {}", start.elapsed().as_micros());
     EncData {
         encdata: encrypted,
@@ -103,7 +87,6 @@ pub fn encrypt_with_pubkey(pubkey: &Option<&PublicKey>, bytes: &Vec<u8>, dryrun:
 /*
  * SHAMIR SECRET SHARING STUFF
  */
-
 pub struct ShamirSecretSharing {
     /// Maximum number of shares that can be known without exposing the secret.
     pub threshold: usize,
@@ -365,7 +348,6 @@ fn realistic_test() {
         .hash_password(password.as_bytes(), &salt)
         .unwrap()
         .to_string();
-    // let hash_pass_bigint2 = BigInt::from_bytes_le(num_bigint::Sign::Plus, pass_info2.as_bytes());
     let hash_pass_bigint2 = BigInt::from(123456789);
 
     let derived_share = [hash_pass_bigint2, edna_share_value.clone()];

@@ -2,8 +2,6 @@ use crate::UID;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-//use log::error;
-//use std::mem::size_of_val;
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PrivkeyRecord {
@@ -40,10 +38,5 @@ pub fn new_privkey_record(old_uid: UID, new_uid: UID, priv_key: Vec<u8>) -> Priv
     record.old_uid = old_uid;
     record.new_uid = new_uid;
     record.priv_key = priv_key;
-    /*error!("PK DATA: new_uid {}, pk {}, all: {}",
-        size_of_val(&*record.new_uid),
-        size_of_val(&*record.priv_key),
-        size_of_val(&record),
-    );*/
     record
 }

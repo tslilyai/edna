@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::*;
 
 const SCHEMA: &'static str = include_str!("./schema.sql");
-const GUISEGEN_JSON: &'static str = include_str!("./disguises/guise_gen.json");
+const PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen.json");
 const ANON_JSON: &'static str = include_str!("./disguises/universal_anon_disguise.json");
 const GDPR_JSON: &'static str = include_str!("./disguises/gdpr_disguise.json");
 const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
@@ -83,7 +83,7 @@ fn test_app_rev_anon_disguise() {
             "NULL".to_string(),
             ANON_JSON,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             None,
             None,
             false,
@@ -95,7 +95,7 @@ fn test_app_rev_anon_disguise() {
         String::from("NULL"),
         anon_did,
         TABLEINFO_JSON,
-        GUISEGEN_JSON,
+        PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
         None,
         None,
@@ -157,9 +157,9 @@ fn test_app_rev_anon_disguise() {
         assert_eq!(results.len(), 0);
     }
 
-    let mut guises = HashSet::new();
+    let mut pseudoprincipals = HashSet::new();
 
-    // stories have guises as owners
+    // stories have pseudoprincipals as owners
     let mut stories_results = vec![];
     let res = db
         .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -174,8 +174,8 @@ fn test_app_rev_anon_disguise() {
     }
     assert_eq!(stories_results.len() as u64, USER_ITERS * NSTORIES);
 
-    // check that all guises exist
-    for u in guises {
+    // check that all pseudoprincipals exist
+    for u in pseudoprincipals {
         let res = db
             .query_iter(format!(r"SELECT * FROM users WHERE id={}", u))
             .unwrap();
@@ -194,7 +194,7 @@ fn test_app_rev_anon_disguise() {
             u.to_string(),
             anon_did,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
@@ -233,7 +233,7 @@ fn test_app_rev_anon_disguise() {
         assert_eq!(results.len(), NSTORIES as usize);
     }
     // CHECK AFTER ALL USERS HAVE REVERSED
-    // stories have no guises as owners
+    // stories have no pseudoprincipals as owners
     let mut stories_results = vec![];
     let res = db
         .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -247,7 +247,7 @@ fn test_app_rev_anon_disguise() {
     }
     assert_eq!(stories_results.len() as u64, USER_ITERS * NSTORIES);
 
-    // moderations have no guises as owners
+    // moderations have no pseudoprincipals as owners
     let res = db
         .query_iter(format!(
             r"SELECT moderator_user_id, user_id FROM moderations"
@@ -262,7 +262,7 @@ fn test_app_rev_anon_disguise() {
         assert!(moderator_user_id < USER_ITERS + 1);
     }
 
-    // guises are all gone
+    // pseudoprincipals are all gone
     let res = db.query_iter(format!(r"SELECT id FROM users")).unwrap();
     for row in res {
         let vals = row.unwrap().unwrap();
@@ -325,7 +325,7 @@ fn test_app_rev_gdpr_disguise() {
                 u.to_string(),
                 GDPR_JSON,
                 TABLEINFO_JSON,
-                GUISEGEN_JSON,
+                PPGEN_JSON,
                 None,
                 None,
                 false,
@@ -340,7 +340,7 @@ fn test_app_rev_gdpr_disguise() {
             u.to_string(),
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
@@ -397,7 +397,7 @@ fn test_app_rev_gdpr_disguise() {
         assert_eq!(stories_results.len() as u64, NSTORIES);
     }
 
-    // guises are all gone
+    // pseudoprincipals are all gone
     let res = db.query_iter(format!(r"SELECT id FROM users")).unwrap();
     for row in res {
         let vals = row.unwrap().unwrap();
@@ -457,7 +457,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             "NULL".to_string(),
             ANON_JSON,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             None,
             None,
             false,
@@ -472,7 +472,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
                 u.to_string(),
                 GDPR_JSON,
                 TABLEINFO_JSON,
-                GUISEGEN_JSON,
+                PPGEN_JSON,
                 None,
                 Some(user_shares[u as usize - 1].clone()),
                 false,
@@ -529,8 +529,8 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         }
         assert_eq!(stories_results.len() as u64, 0);
 
-        // moderations have guises as owners
-        let mut guises = HashSet::new();
+        // moderations have pseudoprincipals as owners
+        let mut pseudoprincipals = HashSet::new();
         let res = db
             .query_iter(format!(
                 r"SELECT moderator_user_id, user_id FROM moderations"
@@ -547,8 +547,8 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
 
-        // check that all guises exist
-        for u in guises {
+        // check that all pseudoprincipals exist
+        for u in pseudoprincipals {
             let res = db
                 .query_iter(format!(r"SELECT * FROM users WHERE id={}", u))
                 .unwrap();
@@ -566,7 +566,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         String::from("NULL"),
         anon_did,
         TABLEINFO_JSON,
-        GUISEGEN_JSON,
+        PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
         None,
         None,
@@ -622,8 +622,8 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         }
         assert_eq!(stories_results.len() as u64, 0);
 
-        // moderations have guises as owners
-        let mut guises = HashSet::new();
+        // moderations have pseudoprincipals as owners
+        let mut pseudoprincipals = HashSet::new();
         let res = db
             .query_iter(format!(
                 r"SELECT moderator_user_id, user_id FROM moderations"
@@ -640,8 +640,8 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
 
-        // check that all guises exist
-        for u in guises {
+        // check that all pseudoprincipals exist
+        for u in pseudoprincipals {
             let res = db
                 .query_iter(format!(r"SELECT * FROM users WHERE id={}", u))
                 .unwrap();
@@ -661,7 +661,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             u.to_string(),
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
@@ -706,9 +706,9 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             assert_eq!(results.len(), 0);
         }
 
-        let mut guises = HashSet::new();
+        let mut pseudoprincipals = HashSet::new();
 
-        // stories have guises as owners
+        // stories have pseudoprincipals as owners
         let mut stories_results = vec![];
         let res = db
             .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -726,7 +726,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             (USER_ITERS + 1 - 1) * NSTORIES
         );
 
-        // moderations have guises as owners
+        // moderations have pseudoprincipals as owners
         let res = db
             .query_iter(format!(
                 r"SELECT moderator_user_id, user_id FROM moderations"
@@ -743,8 +743,8 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
 
-        // check that all guises exist
-        for u in guises {
+        // check that all pseudoprincipals exist
+        for u in pseudoprincipals {
             let res = db
                 .query_iter(format!(r"SELECT * FROM users WHERE id={}", u))
                 .unwrap();
@@ -763,7 +763,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             u.to_string(),
             anon_did,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
@@ -803,7 +803,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
     }
 
     // CHECK AFTER ALL USERS HAVE REVERSED
-    // stories have no guises as owners
+    // stories have no pseudoprincipals as owners
     let mut stories_results = vec![];
     let res = db
         .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -820,7 +820,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         (USER_ITERS + 1 - 1) * NSTORIES
     );
 
-    // moderations have no guises as owners
+    // moderations have no pseudoprincipals as owners
     let res = db
         .query_iter(format!(
             r"SELECT moderator_user_id, user_id FROM moderations"
@@ -835,7 +835,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         assert!(moderator_user_id < USER_ITERS + 1);
     }
 
-    // guises are all gone
+    // pseudoprincipals are all gone
     let res = db.query_iter(format!(r"SELECT id FROM users")).unwrap();
     for row in res {
         let vals = row.unwrap().unwrap();
@@ -895,7 +895,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             "NULL".to_string(),
             ANON_JSON,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             None,
             None,
             false,
@@ -910,7 +910,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
                 u.to_string(),
                 GDPR_JSON,
                 TABLEINFO_JSON,
-                GUISEGEN_JSON,
+                PPGEN_JSON,
                 None,
                 Some(user_shares[u as usize - 1].clone()),
                 false,
@@ -926,7 +926,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             String::from("NULL"),
             anon_did,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
@@ -983,8 +983,8 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         }
         assert_eq!(stories_results.len() as u64, 0);
 
-        // moderations have guises as owners
-        let mut guises = HashSet::new();
+        // moderations have pseudoprincipals as owners
+        let mut pseudoprincipals = HashSet::new();
         let res = db
             .query_iter(format!(
                 r"SELECT moderator_user_id, user_id FROM moderations"
@@ -1001,8 +1001,8 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
 
-        // check that all guises exist
-        for u in guises {
+        // check that all pseudoprincipals exist
+        for u in pseudoprincipals {
             let res = db
                 .query_iter(format!(r"SELECT * FROM users WHERE id={}", u))
                 .unwrap();
@@ -1021,7 +1021,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             u.to_string(),
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
@@ -1064,9 +1064,9 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         assert_eq!(results.len(), 0);
     }
 
-    let mut guises = HashSet::new();
+    let mut pseudoprincipals = HashSet::new();
 
-    // stories have guises as owners
+    // stories have pseudoprincipals as owners
     let mut stories_results = vec![];
     let res = db
         .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -1084,7 +1084,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         (USER_ITERS + 1 - 1) * NSTORIES
     );
 
-    // moderations have guises as owners
+    // moderations have pseudoprincipals as owners
     let res = db
         .query_iter(format!(
             r"SELECT moderator_user_id, user_id FROM moderations"
@@ -1101,8 +1101,8 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         assert!(moderator_user_id >= USER_ITERS + 1);
     }
 
-    // check that all guises exist
-    for u in guises {
+    // check that all pseudoprincipals exist
+    for u in pseudoprincipals {
         let res = db
             .query_iter(format!(r"SELECT * FROM users WHERE id={}", u))
             .unwrap();
@@ -1163,7 +1163,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             "NULL".to_string(),
             ANON_JSON,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             None,
             None,
             false,
@@ -1176,7 +1176,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             "NULL".to_string(),
             ANON_JSON,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             None,
             None,
             false,
@@ -1189,7 +1189,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             u.to_string(),
             anon_did1,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
@@ -1217,9 +1217,9 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             }
             assert_eq!(results.len(), 0);
         }
-        let mut guises = HashSet::new();
+        let mut pseudoprincipals = HashSet::new();
 
-        // stories owned by guises
+        // stories owned by pseudoprincipals
         let mut stories_results = vec![];
         let res = db
             .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -1228,12 +1228,12 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             let vals = row.unwrap().unwrap();
             let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
             assert!(user_id >= USER_ITERS + 1);
-            guises.insert(user_id);
+            pseudoprincipals.insert(user_id);
             stories_results.push(1);
         }
         assert_eq!(stories_results.len() as u64, NSTORIES * USER_ITERS);
 
-        // moderations have guises as owners
+        // moderations have pseudoprincipals as owners
         let res = db
             .query_iter(format!(
                 r"SELECT moderator_user_id, user_id FROM moderations"
@@ -1250,8 +1250,8 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
 
-        // check that all guises exist
-        for u in guises {
+        // check that all pseudoprincipals exist
+        for u in pseudoprincipals {
             let res = db
                 .query_iter(format!(r"SELECT * FROM users WHERE id={}", u))
                 .unwrap();
@@ -1269,7 +1269,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             u.to_string(),
             anon_did2,
             TABLEINFO_JSON,
-            GUISEGEN_JSON,
+            PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
@@ -1280,7 +1280,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
 
     // CHECK DISGUISE RESULTS: everything restored
     {
-        // stories have no guises as owners
+        // stories have no pseudoprincipals as owners
         let mut stories_results = vec![];
         let res = db
             .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -1294,7 +1294,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
         }
         assert_eq!(stories_results.len() as u64, USER_ITERS * NSTORIES);
 
-        // moderations have no guises as owners
+        // moderations have no pseudoprincipals as owners
         let res = db
             .query_iter(format!(
                 r"SELECT moderator_user_id, user_id FROM moderations"
@@ -1309,7 +1309,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             assert!(moderator_user_id < USER_ITERS + 1);
         }
 
-        // guises are all gone
+        // pseudoprincipals are all gone
         let res = db.query_iter(format!(r"SELECT id FROM users")).unwrap();
         for row in res {
             let vals = row.unwrap().unwrap();

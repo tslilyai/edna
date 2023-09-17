@@ -395,7 +395,7 @@
         "type": "object",
         "required": [
           "disguise_json",
-          "guisegen_json",
+          "ppgen_json",
           "password",
           "tableinfo_json",
           "user"
@@ -413,7 +413,7 @@
           "password": {
             "type": "string"
           },
-          "guisegen_json": {
+          "ppgen_json": {
             "type": "string"
           }
         }
@@ -421,7 +421,7 @@
       "RevealDisguise": {
         "type": "object",
         "required": [
-          "guisegen_json",
+          "ppgen_json",
           "password",
           "tableinfo_json"
         ],
@@ -429,7 +429,7 @@
           "tableinfo_json": {
             "type": "string"
           },
-          "guisegen_json": {
+          "ppgen_json": {
             "type": "string"
           },
           "password": {

@@ -9,8 +9,8 @@ use serde_json::json;
 
 const LOBSTERS_TABLEINFO_JSON: &'static str =
     include_str!("../../applications/lobsters/src/disguises/table_info.json");
-const LOBSTERS_GUISEGEN_JSON: &'static str =
-    include_str!("../../applications/lobsters/src/disguises/guise_gen.json");
+const LOBSTERS_PPGEN_JSON: &'static str =
+    include_str!("../../applications/lobsters/src/disguises/pp_gen.json");
 const LOBSTERS_DECAY_JSON: &'static str =
     include_str!("../../applications/lobsters/src/disguises/data_decay.json");
 const LOBSTERS_GDPR_JSON: &'static str =
@@ -22,8 +22,8 @@ const HOTCRP_TABLEINFO_JSON: &'static str =
 //    include_str!("../../applications/hotcrp/src/disguises/universal_anon_disguise.json");
 const HOTCRP_GDPR_JSON: &'static str =
     include_str!("../../applications/hotcrp/src/disguises/gdpr_disguise.json");
-const HOTCRP_GUISEGEN_JSON: &'static str =
-    include_str!("../../applications/hotcrp/src/disguises/guise_gen.json");
+const HOTCRP_PPGEN_JSON: &'static str =
+    include_str!("../../applications/hotcrp/src/disguises/pp_gen.json");
 
 pub async fn test_lobsters_disguise() {
     let client = Client::tracked(rocket(
@@ -90,7 +90,7 @@ pub async fn test_lobsters_disguise() {
         let postdata = json!({
             "disguise_json": LOBSTERS_GDPR_JSON,
             "tableinfo_json": LOBSTERS_TABLEINFO_JSON,
-            "guisegen_json": LOBSTERS_GUISEGEN_JSON,
+            "ppgen_json": LOBSTERS_PPGEN_JSON,
             "password": u.to_string(),
             "user": u.to_string(),
         });
@@ -149,7 +149,7 @@ pub async fn test_lobsters_disguise() {
     for u in 1..nusers {
         let postdata = json!({
             "tableinfo_json": LOBSTERS_TABLEINFO_JSON,
-            "guisegen_json": LOBSTERS_GUISEGEN_JSON,
+            "ppgen_json": LOBSTERS_PPGEN_JSON,
             "password": u.to_string(),
         });
 
@@ -204,7 +204,7 @@ pub async fn test_lobsters_disguise() {
         let postdata = json!({
             "disguise_json": LOBSTERS_DECAY_JSON,
             "tableinfo_json": LOBSTERS_TABLEINFO_JSON,
-            "guisegen_json": LOBSTERS_GUISEGEN_JSON,
+            "ppgen_json": LOBSTERS_PPGEN_JSON,
             "password": u.to_string(),
             "user": u.to_string(),
         });
@@ -312,7 +312,7 @@ pub async fn test_hotcrp_disguise() {
         let postdata = json!({
             "disguise_json": HOTCRP_GDPR_JSON,
             "tableinfo_json": HOTCRP_TABLEINFO_JSON,
-            "guisegen_json": HOTCRP_GUISEGEN_JSON,
+            "ppgen_json": HOTCRP_PPGEN_JSON,
             "password": u.to_string(),
             "user": u.to_string(),
         });
@@ -353,7 +353,7 @@ pub async fn test_hotcrp_disguise() {
     /*for u in 1..nusers {
         let postdata = json!({
             "tableinfo_json": HOTCRP_TABLEINFO_JSON,
-            "guisegen_json": HOTCRP_GUISEGEN_JSON,
+            "ppgen_json": HOTCRP_PPGEN_JSON,
             "password": u.to_string(),
         });
         client
@@ -390,7 +390,7 @@ pub async fn test_hotcrp_disguise() {
             "user": u.to_string(),
             "disguise_json": HOTCRP_ANON_JSON,
             "tableinfo_json": HOTCRP_TABLEINFO_JSON,
-            "guisegen_json": HOTCRP_GUISEGEN_JSON,
+            "ppgen_json": HOTCRP_PPGEN_JSON,
             "password": u.to_string(),
         });
 

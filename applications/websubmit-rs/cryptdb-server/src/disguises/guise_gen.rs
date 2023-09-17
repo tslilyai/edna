@@ -1,4 +1,4 @@
-use edna_cryptdb::GuiseGen;
+use edna_cryptdb::PseudoprincipalGenerator;
 use rand::prelude::*;
 use sql_parser::ast::*;
 use std::sync::{Arc, RwLock};
@@ -24,10 +24,10 @@ pub fn get_insert_guise_vals() -> Vec<Expr> {
     ]
 }
 
-pub fn get_guise_gen() -> Arc<RwLock<GuiseGen>> {
-    Arc::new(RwLock::new(GuiseGen {
-        guise_name: "users".to_string(),
-        guise_id_col: "email".to_string(),
+pub fn get_pp_gen() -> Arc<RwLock<PseudoprincipalGenerator>> {
+    Arc::new(RwLock::new(PseudoprincipalGenerator {
+        pseudoprincipal_name: "users".to_string(),
+        pseudoprincipal_id_col: "email".to_string(),
         col_generation: Box::new(get_insert_guise_cols),
         val_generation: Box::new(get_insert_guise_vals),
     }))

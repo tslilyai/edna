@@ -3,7 +3,7 @@ use edna::{DID, UID};
 
 const TABLEINFO_JSON: &'static str = include_str!("./table_info.json");
 const GDPR_JSON: &'static str = include_str!("./gdpr_disguise.json");
-const GUISEGEN_JSON: &'static str = include_str!("./guise_gen.json");
+const PPGEN_JSON: &'static str = include_str!("./pp_gen.json");
 
 pub fn apply(
     bg: &mut MySqlBackend,
@@ -26,7 +26,7 @@ pub fn apply(
         user_email,
         GDPR_JSON,
         TABLEINFO_JSON,
-        GUISEGEN_JSON,
+        PPGEN_JSON,
         pw,
         None,
         false,
@@ -47,7 +47,7 @@ pub fn reveal(
         user_email,
         did,
         TABLEINFO_JSON,
-        GUISEGEN_JSON,
+        PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
         Some(user_pw),
         None,

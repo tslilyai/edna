@@ -30,14 +30,14 @@ pub type ColName = String;
 pub type TableName = String;
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct GuiseGen {
+pub struct PseudoprincipalGenerator {
     pub name: TableName,
     pub id_col: ColName,
     pub cols: Vec<String>,
     pub val_generation: Vec<gen_value::GenValue>,
 }
 
-impl GuiseGen {
+impl PseudoprincipalGenerator {
     pub fn get_vals(&self) -> Vec<String> {
         let mut vals: Vec<String> = vec![];
         for genval in &self.val_generation {
@@ -69,8 +69,8 @@ pub struct TableInfo {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Transformation {
-    // XXX Note: we don't have a "RemovePermanent" option because this is just SQL. We could add
-    // support for it though.
+    // XXX Note: we don't have a "RemovePermanent" option because this is just
+    // SQL. We could add support for it though.
     Remove {
         pred: String,
         from: String,
@@ -322,7 +322,7 @@ impl EdnaClient {
         warn!("EDNA: APPLYING Disguise");
         let table_infos: HashMap<TableName, TableInfo> =
             serde_json::from_str(table_info_json).unwrap();
-        let guise_gen: GuiseGen = serde_json::from_str(guise_gen_json).unwrap();
+        let guise_gen: PseudoprincipalGenerator = serde_json::from_str(guise_gen_json).unwrap();
         let disguise_spec: DisguiseSpec = serde_json::from_str(disguise_spec_json).unwrap();
         let disguise = Disguise {
             user: if for_user == "NULL" {
@@ -374,7 +374,7 @@ impl EdnaClient {
         warn!("EDNA: REVERSING Disguise {}", did);
         let table_infos: HashMap<TableName, TableInfo> =
             serde_json::from_str(table_info_json).unwrap();
-        let guise_gen: GuiseGen = serde_json::from_str(guise_gen_json).unwrap();
+        let guise_gen: PseudoprincipalGenerator = serde_json::from_str(guise_gen_json).unwrap();
         let mut db = self.pool.get_conn()?;
         let user = if uid == "NULL" { None } else { Some(&uid) };
         if use_txn {

@@ -158,7 +158,7 @@ impl HighLevelAPI {
         uid: Option<&UID>,
         did: DID,
         table_info: &HashMap<String, TableInfo>,
-        guise_gen: &GuiseGen,
+        pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
         conn: &mut Q,
         password: Option<String>,
@@ -184,7 +184,7 @@ impl HighLevelAPI {
         }
 
         warn!("Revealing disguise for {:?}", uid);
-        self.reveal_using_secretkey(did, table_info, guise_gen, reveal_pps, decrypt_cap, conn)
+        self.reveal_using_secretkey(did, table_info, pp_gen, reveal_pps, decrypt_cap, conn)
     }
 
     // Note: Decorrelations are not revealed if not using EdnaSpeaksForRecords
@@ -193,7 +193,7 @@ impl HighLevelAPI {
         &mut self,
         did: DID,
         table_info: &HashMap<String, TableInfo>,
-        guise_gen: &GuiseGen,
+        pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
         decrypt_cap: records::DecryptCap,
         conn: &mut Q,
@@ -287,13 +287,13 @@ impl HighLevelAPI {
 
         // reveal user removed records first for referential integrity
         self.reveal_remove_diffs_of_table(
-            &guise_gen.name,
+            &pp_gen.name,
             &remove_diffs_for_table,
             table_info,
             &mut llapi,
             conn,
         )?;
-        removed_revealed.insert(guise_gen.name.clone());
+        removed_revealed.insert(pp_gen.name.clone());
 
         // insert all other removed records
         for table in remove_diffs_for_table.keys() {
@@ -390,7 +390,7 @@ impl HighLevelAPI {
         let revealed = EdnaSpeaksForRecord::reveal(
             &table_info,
             &recs_to_reveal,
-            guise_gen,
+            pp_gen,
             reveal_pps,
             &mut llapi,
             conn,
@@ -414,7 +414,7 @@ impl HighLevelAPI {
         &mut self,
         disguise: &Disguise,
         table_info: &HashMap<String, TableInfo>,
-        guise_gen: &GuiseGen,
+        pp_gen: &PseudoprincipalGenerator,
         conn: &mut Q,
         password: Option<String>,
         user_share: Option<(Share, Loc)>,
@@ -439,14 +439,14 @@ impl HighLevelAPI {
         }
 
         warn!("Applying disguise for {:?}", disguise.user);
-        self.apply_using_secretkey(disguise, table_info, guise_gen, decrypt_cap, conn)
+        self.apply_using_secretkey(disguise, table_info, pp_gen, decrypt_cap, conn)
     }
 
     pub fn apply_using_secretkey<Q: Queryable>(
         &mut self,
         disguise: &Disguise,
         table_info: &HashMap<String, TableInfo>,
-        guise_gen: &GuiseGen,
+        pp_gen: &PseudoprincipalGenerator,
         decrypt_cap: records::DecryptCap,
         conn: &mut Q,
     ) -> Result<DID, mysql::Error> {
@@ -472,7 +472,7 @@ impl HighLevelAPI {
             did,
             disguise,
             table_info,
-            guise_gen,
+            pp_gen,
             &speaksfor_records,
             conn,
             self.crypto,
@@ -595,7 +595,7 @@ impl HighLevelAPI {
                             &selected_rows,
                             user_fk_cols,
                             group_by_cols,
-                            guise_gen,
+                            pp_gen,
                             &speaksfor_records,
                             conn,
                             self.crypto,
@@ -623,7 +623,7 @@ impl HighLevelAPI {
         did: DID,
         disguise: &Disguise,
         table_info: &HashMap<String, TableInfo>,
-        guise_gen: &GuiseGen,
+        pp_gen: &PseudoprincipalGenerator,
         sf_records: &Vec<SpeaksForRecordWrapper>,
         db: &mut Q,
         crypto: bool,
@@ -691,7 +691,7 @@ impl HighLevelAPI {
                                 );
                                 // if we're working on the principal table (e.g., a users table),
                                 // remove the user from Edna's metadata
-                                if guise_gen.name == table {
+                                if pp_gen.name == table {
                                     debug!(
                                         "Found item to delete from table {} that is principal {}",
                                         table, curuid
@@ -710,7 +710,7 @@ impl HighLevelAPI {
                         // don't need the X for WS
                         let delstmt = format!("DELETE FROM {} WHERE {}", table, selection,);
                         debug!("delstmt all: {}", delstmt);
-                        if guise_gen.name == table {
+                        if pp_gen.name == table {
                             drop_me_later.push(delstmt);
                         } else {
                             let start = time::Instant::now();
@@ -723,7 +723,7 @@ impl HighLevelAPI {
                         }
                     } else {
                         // assert that users are never shared...
-                        assert!(guise_gen.name != table);
+                        assert!(pp_gen.name != table);
 
                         // MULTIPLE OWNERS
                         // Go through each object one by one... this is slow
@@ -832,7 +832,7 @@ impl HighLevelAPI {
                                     }
 
                                     // create pseudoprincipal for this owner
-                                    let pp = create_new_pseudoprincipal(guise_gen);
+                                    let pp = create_new_pseudoprincipal(pp_gen);
                                     pps.push(pp.clone());
 
                                     // we want to store the diff of an item with the pp as the new owner/fk
@@ -871,7 +871,7 @@ impl HighLevelAPI {
                                         .collect();
                                     let q = format!(
                                         "INSERT INTO {} ({}) VALUES {};",
-                                        guise_gen.name,
+                                        pp_gen.name,
                                         cols,
                                         vals.join(",")
                                     );
@@ -1034,7 +1034,7 @@ fn decor_items<Q: Queryable>(
     items: &Vec<Vec<RowVal>>,
     user_fk_cols: &Vec<String>,
     group_by_cols: &Vec<String>,
-    guise_gen: &GuiseGen,
+    pp_gen: &PseudoprincipalGenerator,
     sf_records: &Vec<SpeaksForRecordWrapper>,
     db: &mut Q,
     crypto: bool,
@@ -1081,7 +1081,7 @@ fn decor_items<Q: Queryable>(
                         if uid.is_none()
                             || valid_owners.contains(&get_value_of_col(&i, &user_fk_col).unwrap())
                         {
-                            pseudoprincipals.push(create_new_pseudoprincipal(guise_gen));
+                            pseudoprincipals.push(create_new_pseudoprincipal(pp_gen));
                         }
                     }
                     groups.insert(attrs, vec![i.clone()]);
@@ -1093,7 +1093,7 @@ fn decor_items<Q: Queryable>(
                     if uid.is_none()
                         || valid_owners.contains(&get_value_of_col(&i, &user_fk_col).unwrap())
                     {
-                        pseudoprincipals.push(create_new_pseudoprincipal(guise_gen));
+                        pseudoprincipals.push(create_new_pseudoprincipal(pp_gen));
                     }
                 }
                 let mut groups = HashMap::new();
@@ -1113,8 +1113,8 @@ fn decor_items<Q: Queryable>(
     for (_owners, groups) in &owner_groups {
         /*
          * DECOR OBJECT MODIFICATIONS
-         * A) insert guises for parents
-         * B) update child to point to new guise
+         * A) insert pseudoprincipals for parents
+         * B) update child to point to new pseudoprincipal
          * */
         for (_group, items) in groups {
             for user_fk_col in user_fk_cols {
@@ -1123,7 +1123,7 @@ fn decor_items<Q: Queryable>(
                 let old_uid = get_value_of_col(&items[0], &user_fk_col).unwrap();
                 if uid.is_none() || valid_owners.contains(&old_uid) {
                     debug!(
-                        "decor_obj {}: Creating guise for old uid {} col {}",
+                        "decor_obj {}: Creating pseudoprincipal for old uid {} col {}",
                         child_name, old_uid, user_fk_col
                     );
                     let (new_uid, pp) = &pseudoprincipals[index];
@@ -1146,7 +1146,7 @@ fn decor_items<Q: Queryable>(
                     // insert pseudoprincipal
                     let q = format!(
                         "INSERT INTO {} ({}) VALUES {};",
-                        guise_gen.name,
+                        pp_gen.name,
                         cols,
                         format!(
                             "({})",
@@ -1258,15 +1258,15 @@ fn modify_items<Q: Queryable>(
     warn!("Update record inserted: {}", start.elapsed().as_micros());
 }
 
-fn create_new_pseudoprincipal(guise_gen: &GuiseGen) -> (UID, Vec<RowVal>) {
-    let new_parent_vals = guise_gen.get_vals();
-    let new_parent_cols = guise_gen.cols.clone();
+fn create_new_pseudoprincipal(pp_gen: &PseudoprincipalGenerator) -> (UID, Vec<RowVal>) {
+    let new_parent_vals = pp_gen.get_vals();
+    let new_parent_cols = pp_gen.cols.clone();
     let mut ix = 0;
     let mut uid_ix = 0;
     let rowvals = new_parent_cols
         .iter()
         .map(|c| {
-            if c == &guise_gen.id_col {
+            if c == &pp_gen.id_col {
                 uid_ix = ix;
             }
             let rv = RowVal::new(c.to_string(), new_parent_vals[ix].to_string());
