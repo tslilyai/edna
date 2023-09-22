@@ -30,6 +30,7 @@ use edna::helpers;
 //use mysql::from_value;
 use mysql::prelude::*;
 use mysql::{Opts, Value};
+use rocket::fs::FileServer;
 use rocket::http::ContentType;
 use rocket::http::CookieJar;
 use rocket::http::Status;
@@ -62,11 +63,7 @@ fn index(cookies: &CookieJar<'_>, bg: &State<Arc<Mutex<MySqlBackend>>>) -> Redir
     if let Some(cookie) = cookies.get("apikey") {
         let apikey: String = cookie.value().parse().ok().unwrap();
         if let Some(cookie) = cookies.get("anonkey") {
-            let anonkey: String = cookie
-            .value()
-            .parse()
-            .ok()
-            .unwrap();
+            let anonkey: String = cookie.value().parse().ok().unwrap();
             // TODO validate API key
             match apikey::check_api_key(&*bg, &apikey, &anonkey) {
                 Ok(_user) => Redirect::to("/leclist"),
@@ -88,8 +85,14 @@ fn rocket(args: &args::Args) -> Rocket<Build> {
         .attach(Template::fairing())
         .manage(backend)
         .manage(args.config.clone())
-        //.mount("/css", FileServer::from(format!("{}/css", resource_dir)))
-        //.mount("/js", FileServer::from(format!("{}/js", resource_dir)))
+        .mount(
+            "/css",
+            FileServer::from(format!("{}/css", args.config.resource_dir)),
+        )
+        .mount(
+            "/js",
+            FileServer::from(format!("{}/js", args.config.resource_dir)),
+        )
         .mount("/", routes![index])
         .mount(
             "/questions",
