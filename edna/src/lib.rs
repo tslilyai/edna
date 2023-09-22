@@ -22,9 +22,9 @@ pub mod predicate;
 pub mod proxy;
 pub mod records;
 
-// disguise ID
+/// disguise ID
 pub type DID = u64;
-// user ID
+/// user ID
 pub type UID = String;
 pub type ColName = String;
 pub type TableName = String;
@@ -230,12 +230,12 @@ impl EdnaClient {
     }
 
     //-----------------------------------------------------------------------------
-    // Get all records of a particular disguise
-    // returns all the diff records and all the speaksfor record blobs
-    // Additional function to get and mark records revealed (if records are retrieved for the
-    // purpose of reversal)
-    //-----------------------------------------------------------------------------
-    // note that this does not interface with the HLAPI's ability to track produced pps
+    /// Get all records of a particular disguise
+    /// returns all the diff records and all the speaksfor record blobs
+    /// Additional function to get and mark records revealed (if records are retrieved for the
+    /// purpose of reversal)
+    ///-----------------------------------------------------------------------------
+    /// note that this does not interface with the HLAPI's ability to track produced pps
     pub fn cleanup_records_of_disguise(&self, did: DID, decrypt_cap: &records::DecryptCap) {
         let mut locked_llapi = self.llapi.lock().unwrap();
         locked_llapi.cleanup_records_of_disguise(did, &decrypt_cap, &mut HashSet::new());
