@@ -363,7 +363,7 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
      * anonymization
      ***********************************/
     // create all users again... because we just deleted them all lol
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..args.nusers {
         let email = format!("{}@mail.edu", u);
         let postdata = serde_urlencoded::to_string(&vec![("email", email.clone())]).unwrap();
         let start = time::Instant::now();
