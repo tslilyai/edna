@@ -37,6 +37,9 @@ tokio = { version = "1", features = ["full"] }
 version = "0.1.0-rc.1"
 features = ["handlebars", "tera"]
 
+[dependencies.handlebars]
+features = ["dir_source"]
+
 [dependencies.rocket_sync_db_pools]
 version = "0.1.0-rc.1"
 default-features = false
@@ -51,3 +54,5 @@ doc = false
 name = "cryptdb-srv"
 path = "cryptdb-server/src/main.rs"
 doc = false
+
+
