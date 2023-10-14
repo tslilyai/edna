@@ -81,8 +81,18 @@ fn rocket(args: &args::Args) -> Rocket<Build> {
     let backend = Arc::new(Mutex::new(
         MySqlBackend::new(&format!("{}", args.class), Some(new_logger()), &args).unwrap(),
     ));
+
+    let template_dir = args.config.template_dir.clone();
+    let template = Template::custom(move |engines| {
+        engines
+            .handlebars
+            .register_templates_directory(".hbs", std::path::Path::new(&template_dir))
+            .expect("failed to set template path!");
+    });
+
     rocket::build()
-        .attach(Template::fairing())
+        //.attach(Template::fairing())
+        .attach(template)
         .manage(backend)
         .manage(args.config.clone())
         .mount(
