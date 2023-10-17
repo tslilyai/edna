@@ -1,6 +1,7 @@
 nohup curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 PATH=$PATH:$HOME/.cargo/bin
-RUSTFLAGS=-Ctarget-feature=-crt-static
+#RUSTFLAGS=-Ctarget-feature=-crt-static
+rustup default 1.70.0
 
 # kill the current server
 ps -ef | grep 'edna-server' | grep -v grep | awk '{print $2}' | xargs -r kill -9 || true
