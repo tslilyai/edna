@@ -62,7 +62,7 @@ pub(crate) fn apply_disguise(
 #[derive(Deserialize, JsonSchema)]
 pub struct RevealDisguise {
     tableinfo_json: String,
-    pseudoprincipalgen_json: String,
+    ppgen_json: String,
     password: String,
 }
 
