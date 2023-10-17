@@ -24,7 +24,7 @@ pub struct ApplyDisguise {
     disguise_json: String,
     tableinfo_json: String,
     password: String,
-    pseudoprincipalgen_json: String,
+    ppgen_json: String,
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
