@@ -496,7 +496,7 @@ pub fn get_expr_idents(e: &Expr) -> Vec<String> {
 }
 
 pub fn trim_quotes(s: &str) -> &str {
-    let original_s = s.clone();
+    let original_s = s;
     let mut s = s.trim_matches('\'');
     s = s.trim_matches('\"');
     s = s.trim_matches('`');

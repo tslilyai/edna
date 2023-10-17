@@ -199,7 +199,7 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
 
     // create admin
     debug!(log, "Creating admin");
-    let postdata = serde_urlencoded::to_string(&vec![("email", config::ADMIN.0.clone())]).unwrap();
+    let postdata = serde_urlencoded::to_string(&vec![("email", config::ADMIN.0)]).unwrap();
     let response = client
         .post("/apikey/generate")
         .body(postdata)
@@ -452,7 +452,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
 
     // create admin
     debug!(log, "Creating admin");
-    let postdata = serde_urlencoded::to_string(&vec![("email", config::ADMIN.0.clone())]).unwrap();
+    let postdata = serde_urlencoded::to_string(&vec![("email", config::ADMIN.0)]).unwrap();
     let response = client
         .post("/apikey/generate")
         .body(postdata)
