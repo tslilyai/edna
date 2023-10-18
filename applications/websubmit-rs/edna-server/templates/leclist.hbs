@@ -1,20 +1,20 @@
 {{#*inline "page"}}
-  <h1>List of lectures</h1>
+  <h2>List of course meetings</h2>
 
-  <ol>
+  <uli style="list-style: none;">
   {{#each lectures}}
     <li>
-      <a href="/questions/{{{ this.id }}}">{{{ this.label }}}</a> ({{{ this.num_answered }}}/{{{ this.num_qs }}})
+      {{{this.id}}}. <a href="/questions/{{{ this.id }}}">{{{ this.label }}}</a> ({{{ this.num_qs }}})
       {{#if ../admin}}
       &ndash; <small><a href="/answers/{{{ this.id }}}">answers</a> <a href="/admin/lec/{{{ this.id }}}">admin</a></small>
       {{/if}}
     </li>
   {{/each}}
-  </ol>
+  </ul>
 
   {{#if ../admin}}
   <hr />
-  Admin:
+  Admin: 
   <ul>
     <li>
       <a href="/admin/lec/add">add lecture</a>
@@ -26,6 +26,7 @@
       <a href="admin/anonymize">anonymize answers</a>
     </li>
   </ul>
+
   {{/if}}
 {{/inline}}
-{{~> layout ~}}
+{{~> (parent)~}}
