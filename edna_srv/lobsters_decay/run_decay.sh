@@ -8,5 +8,5 @@ set -e
 echo "Running decay"
 
 cd lobsters-decay
-RUSTFLAGS=-Ctarget-feature=-crt-static
+#RUSTFLAGS=-Ctarget-feature=-crt-static
 cargo run --release -- -h mariadb -d lobsters_development
