@@ -1,13 +1,13 @@
 {{#*inline "page"}}
     <h1>Lecture {{{ lec_id }}} answers:</h1>
 
-    <table>
-      <tr>
-        <th>User</th>
-        <th>ID</th>
-        <th>Answer</th>
-        <th>Submission time</th>
-      </tr>
+    <table class="table table-bordered table-sm">
+      <thead class="thead-light">
+        <th scope="col">User</th>
+        <th scope="col">ID</th>
+        <th scope="col">Answer</th>
+        <th scope="col">Submission time</th>
+      </thead>
       {{#each answers}}
       <tr>
         <td>{{{ this.user }}}</td>
@@ -18,4 +18,4 @@
       {{/each}}
     </table>
 {{/inline}}
-{{~> layout~}}
+{{~> (parent)~}}

@@ -1,7 +1,7 @@
 {{#*inline "page"}}
-    <h1>Registered users:</h1>
+    <h1>Registered users</h1>
 
-    <table>
+    <table class="table table-striped">
       <tr>
         <th>Email</th>
         <th>Admin?</th>
@@ -24,4 +24,4 @@
       {{/each}}
     </table>
 {{/inline}}
-{{~> layout~}}
+{{~> (parent)~}}
