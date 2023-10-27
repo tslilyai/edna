@@ -1,13 +1,37 @@
 use crate::UID;
 use log::debug;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PrivkeyRecord {
     pub old_uid: UID,
     pub new_uid: UID,
     pub priv_key: Vec<u8>,
+}
+
+pub fn find_old_uid(
+    map: &HashMap<UID, Vec<PrivkeyRecord>>,
+    from: &UID,
+    recorrelated: &HashSet<UID>,
+) -> Option<UID> {
+    let mut path = vec![];
+    let mut q = VecDeque::new();
+    q.push_back(from);
+
+    while let Some(from) = q.pop_front() {
+        if let Some(vs) = map.get(from) {
+            for child in vs {
+                debug!("Path: {}->{}", child.old_uid, child.new_uid);
+                path.push(child.clone());
+                if recorrelated.get(&child.old_uid).is_none() {
+                    return Some(child.old_uid.clone());
+                }
+                q.push_back(&child.old_uid);
+            }
+        }
+    }
+    return None;
 }
 
 pub fn find_path_to(map: &HashMap<UID, Vec<PrivkeyRecord>>, to: &UID) -> Vec<PrivkeyRecord> {

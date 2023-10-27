@@ -129,6 +129,9 @@ impl HighLevelAPI {
         &self,
         table: &str,
         dsmap: &HashMap<String, Vec<(String, EdnaDiffRecord)>>,
+        ppgen: &PseudoprincipalGenerator,
+        recorrelated_pps: &HashSet<UID>,
+        edges: &HashMap<UID, Vec<PrivkeyRecord>>,
         table_info: &HashMap<String, TableInfo>,
         llapi: &mut LowLevelAPI,
         conn: &mut Q,
@@ -137,7 +140,15 @@ impl HighLevelAPI {
             Some(ds) => {
                 for (uid, d) in ds {
                     info!("Reversing remove record {:?}\n", d);
-                    let revealed = d.reveal(&table_info, &uid, llapi, conn)?;
+                    let revealed = d.reveal(
+                        &table_info,
+                        ppgen,
+                        recorrelated_pps,
+                        edges,
+                        &uid,
+                        llapi,
+                        conn,
+                    )?;
                     if revealed {
                         info!("Remove Record revealed!\n");
                     } else {
@@ -206,10 +217,11 @@ impl HighLevelAPI {
             start.elapsed().as_micros()
         );
 
-        // Invariant: any pps that have been decorrelated so far, but still have existing data
+        // Invariant: any pps that have been recorrelated so far, but still have existing data
         // (meaning their disguises haven't yet been reverted, or they were further decorrelated)
         // will have a matching private key, but no direct speaks-for record pointing to them
         let mut recorrelated_pps: HashSet<UID> = pks.keys().cloned().collect();
+        warn!("Recorrelated pps pre-pruning: {:?}", recorrelated_pps);
         for sfr in &sfrs {
             //warn!("Got sfr uid: {}", sfr.new_uid);
             recorrelated_pps.remove(&sfr.new_uid);
@@ -239,7 +251,15 @@ impl HighLevelAPI {
                         dwrapper.uid
                     );
                 }
-                let revealed = d.reveal(&table_info, &dwrapper.uid, &mut llapi, conn)?;
+                let revealed = d.reveal(
+                    &table_info,
+                    &pp_gen,
+                    &recorrelated_pps,
+                    &edges,
+                    &dwrapper.uid,
+                    &mut llapi,
+                    conn,
+                )?;
                 if revealed {
                     info!("Principal Remove Record revealed!\n");
                 } else {
@@ -274,6 +294,9 @@ impl HighLevelAPI {
         self.reveal_remove_diffs_of_table(
             &pp_gen.name,
             &remove_diffs_for_table,
+            &pp_gen,
+            &recorrelated_pps,
+            &edges,
             table_info,
             &mut llapi,
             conn,
@@ -294,6 +317,9 @@ impl HighLevelAPI {
                 self.reveal_remove_diffs_of_table(
                     &reftab,
                     &remove_diffs_for_table,
+                    &pp_gen,
+                    &recorrelated_pps,
+                    &edges,
                     table_info,
                     &mut llapi,
                     conn,
@@ -304,6 +330,9 @@ impl HighLevelAPI {
             self.reveal_remove_diffs_of_table(
                 table,
                 &remove_diffs_for_table,
+                &pp_gen,
+                &recorrelated_pps,
+                &edges,
                 table_info,
                 &mut llapi,
                 conn,
@@ -316,7 +345,15 @@ impl HighLevelAPI {
             let d = edna_diff_record_from_bytes(&dwrapper.record_data);
             if dwrapper.did == did && d.typ != REMOVE_GUISE && d.typ != REMOVE_PRINCIPAL {
                 info!("Reversing record {:?}\n", d);
-                let revealed = d.reveal(&table_info, &dwrapper.uid, &mut llapi, conn)?;
+                let revealed = d.reveal(
+                    &table_info,
+                    &pp_gen,
+                    &recorrelated_pps,
+                    &edges,
+                    &dwrapper.uid,
+                    &mut llapi,
+                    conn,
+                )?;
                 if revealed {
                     info!("NonRemove Diff Record revealed!\n");
                 } else {
@@ -444,14 +481,8 @@ impl HighLevelAPI {
         // Handle REMOVE first
         // Any items that would've been modified or decorreltaed would've been revealed anyways
         let remove_start = time::Instant::now();
-        let drop_me_later = self.execute_removes(
-            did,
-            disguise,
-            table_info,
-            pp_gen,
-            &speaksfor_records,
-            conn,
-        );
+        let drop_me_later =
+            self.execute_removes(did, disguise, table_info, pp_gen, &speaksfor_records, conn);
         warn!(
             "Edna: Execute removes total: {}",
             remove_start.elapsed().as_micros()
@@ -809,8 +840,7 @@ impl HighLevelAPI {
                                     }
 
                                     // create pseudoprincipal for this owner
-                                    let pp =
-                                        create_new_pseudoprincipal(&mut self.seen_pps, pp_gen);
+                                    let pp = create_new_pseudoprincipal(&mut self.seen_pps, pp_gen);
                                     pps.push(pp.clone());
 
                                     // we want to store the diff of an item with the pp as the new owner/fk

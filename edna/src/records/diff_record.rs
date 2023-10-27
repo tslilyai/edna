@@ -2,13 +2,13 @@ use crate::crypto::*;
 use crate::helpers::*;
 use crate::lowlevel_api::*;
 use crate::records::*;
-use crate::{RowVal, TableInfo, DID, UID};
+use crate::{RowVal, TableInfo, DID, UID, PseudoprincipalGenerator};
 use crypto_box::PublicKey;
-use log::warn;
+use log::{debug, warn};
 use mysql::prelude::*;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time;
 //use std::mem::size_of_val;
 
@@ -240,6 +240,9 @@ impl EdnaDiffRecord {
     pub fn reveal<Q: Queryable>(
         &self,
         timap: &HashMap<String, TableInfo>,
+        pp_gen: &PseudoprincipalGenerator,
+        recorrelated_pps: &HashSet<UID>,
+        edges: &HashMap<UID, Vec<PrivkeyRecord>>,
         uid: &str,
         llapi: &mut LowLevelAPI,
         db: &mut Q,
@@ -271,6 +274,7 @@ impl EdnaDiffRecord {
 
             REMOVE_GUISE => {
                 let start = time::Instant::now();
+                let mut old_value = self.old_value.clone();
                 // get current obj in db
                 let table_info = timap.get(&self.table).unwrap();
                 let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
@@ -297,7 +301,7 @@ impl EdnaDiffRecord {
                 let table_info = timap.get(&self.table).unwrap();
                 for (reftable, refcol, fk_col) in &table_info.other_fk_cols {
                     // if original entity does not exist, do not reveal
-                    let curval = get_value_of_col(&self.old_value, fk_col).unwrap();
+                    let curval = get_value_of_col(&old_value, fk_col).unwrap();
                     if curval.to_lowercase() == "null" {
                         continue;
                     }
@@ -313,23 +317,48 @@ impl EdnaDiffRecord {
                             "No original entity exists for fk col {} val {}",
                             fk_col, curval
                         );
-
-                        // TODO handle case where fk_col is pointing to the users table, in which
-                        // we could reveal as long as there's some speaks-for path to the stored
-                        // UID in the diff, and we rewrite this col to the correct restored UID
                         return Ok(false);
+                    }
+                }
+                // handle case where fk_col is pointing to the users table, in which
+                // we could reveal as long as there's some speaks-for path to the stored
+                // UID in the diff, and we rewrite this col to the correct restored UID
+                // note that we don't want to do this if this is actually the users table
+                if self.table != pp_gen.name {
+                    for fk_col in &table_info.owner_fk_cols {
+                        let mut curval = get_value_of_col(&old_value, fk_col).unwrap();
+                        debug!("Diff record corresponds to user reftable");
+                        if recorrelated_pps.contains(&curval) {
+                            warn!("Recorrelated pps contained the old_uid {}", curval);
+
+                            // find the most recent UID in the path up to this one that should exist in
+                            // the DB
+                            let old_uid =
+                                privkey_record::find_old_uid(edges, &curval, recorrelated_pps);
+                            curval = old_uid.unwrap_or(curval);
+                            set_value_of_col(&mut old_value, fk_col, &curval);
+                        }
+                        // select here too
+                        let selection = format!(
+                            "SELECT * FROM {} WHERE {}.{} = {}",
+                            pp_gen.name, pp_gen.name, pp_gen.id_col, curval
+                        );
+                        warn!("selection: {}", selection.to_string());
+                        let selected = get_query_rows_str_q::<Q>(&selection, db)?;
+                        if selected.is_empty() {
+                            warn!(
+                                "No original entity exists for fk col {} val {}",
+                                fk_col, curval
+                            );
+                            return Ok(false);
+                        }
                     }
                 }
 
                 // otherwise insert it
-                let cols: Vec<String> = self
-                    .old_value
-                    .iter()
-                    .map(|rv| rv.column().clone())
-                    .collect();
+                let cols: Vec<String> = old_value.iter().map(|rv| rv.column().clone()).collect();
                 let colstr = cols.join(",");
-                let vals: Vec<String> = self
-                    .old_value
+                let vals: Vec<String> = old_value
                     .iter()
                     .map(|rv| {
                         if rv.value().is_empty() {

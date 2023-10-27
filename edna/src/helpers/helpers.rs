@@ -21,6 +21,14 @@ pub fn get_value_of_col(row: &Vec<RowVal>, col: &str) -> Option<String> {
     None
 }
 
+pub fn set_value_of_col(row: &mut Vec<RowVal>, col: &str, val: &str) {
+    for rv in row {
+        if &rv.column() == col {
+            rv.set_value(val);
+        }
+    }
+}
+
 pub fn get_ids(id_cols: &Vec<String>, row: &Vec<RowVal>) -> Vec<RowVal> {
     id_cols
         .iter()
