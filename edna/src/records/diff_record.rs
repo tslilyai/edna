@@ -4,7 +4,7 @@ use crate::lowlevel_api::*;
 use crate::records::*;
 use crate::{RowVal, TableInfo, TableName, DID, UID};
 use crypto_box::PublicKey;
-use log::warn;
+use log::{debug, warn};
 use mysql::prelude::*;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -310,6 +310,7 @@ impl EdnaDiffRecord {
                     // we could reveal as long as there's some speaks-for path to the stored
                     // UID in the diff, and we rewrite this col to the correct restored UID
                     if reftable == users_table {
+                        debug!("Diff record corresponds to user reftable");
                         if recorrelated_pps.contains(&curval) {
                             warn!("Recorrelated pps contained the old_uid {}", curval);
 

@@ -405,7 +405,7 @@ fn test_app_rev_gdpr_disguise() {
 }
 
 #[test]
-fn test_app_anon_gdpr_rev_gdpr_anon_dispseudoprincipals() {
+fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
     init_logger();
     let dbname = "testRevCompose".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
@@ -839,7 +839,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_dispseudoprincipals() {
 }
 
 #[test]
-fn test_app_anon_gdpr_rev_anon_gdpr_dispseudoprincipals() {
+fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
     init_logger();
 
     let dbname = "testRevComposeTwo".to_string();
@@ -1018,8 +1018,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_dispseudoprincipals() {
         .unwrap();
     }
 
-    // CHECK DISGUISE RESULTS: everything restored but still anon
-    // users exist
+    // CHECK DISGUISE RESULTS: everything restored as non-anon
     for u in 1..USER_ITERS + 1 {
         let mut results = vec![];
         let res = db
@@ -1031,7 +1030,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_dispseudoprincipals() {
             let id = helpers::mysql_val_to_string(&vals[0]);
             results.push(id);
         }
-        assert_eq!(results.len(), 0);
+        assert!(results.len() > 0);
     }
 
     // moderations recorrelated
@@ -1088,7 +1087,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_dispseudoprincipals() {
 }
 
 #[test]
-fn test_app_anon_anon_rev_anon_anon_dispseudoprincipals() {
+fn test_app_anon_anon_rev_anon_anon_disguises() {
     init_logger();
 
     let dbname = "testRevComposeThree".to_string();

@@ -221,6 +221,7 @@ impl HighLevelAPI {
         // (meaning their disguises haven't yet been reverted, or they were further decorrelated)
         // will have a matching private key, but no direct speaks-for record pointing to them
         let mut recorrelated_pps: HashSet<UID> = pks.keys().cloned().collect();
+        warn!("Recorrelated pps pre-pruning: {:?}", recorrelated_pps);
         for sfr in &sfrs {
             //warn!("Got sfr uid: {}", sfr.new_uid);
             recorrelated_pps.remove(&sfr.new_uid);
