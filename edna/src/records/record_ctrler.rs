@@ -225,8 +225,8 @@ impl RecordCtrler {
     }
 
     //
-    // Invariant: 
-    // * Edna retains encrypted locators at opaque indexes corresponding to encrypted indexes encrypted with the user's public key 
+    // Invariant:
+    // * Edna retains encrypted locators at opaque indexes corresponding to encrypted indexes encrypted with the user's public key
     // OLD: Edna used to only ever retain encrypted locators for pseudoprincipals
     // OLD: If NP is acting on behalf of a PP, Edna returns the PP
     //   locators for the NP and does not save them in the PP metadata
@@ -414,7 +414,7 @@ impl RecordCtrler {
         let pdata = PrincipalData {
             pubkey: Some(pubkey.clone()),
             is_anon: is_anon,
-            // create index for enc_locators for this principal 
+            // create index for enc_locators for this principal
             enc_locators_index: pk_hash,
         };
         self.mark_principal_to_insert(uid, &pdata);
@@ -650,8 +650,7 @@ impl RecordCtrler {
         );
     }
 
-    fn insert_speaksfor_record_wrapper(&mut self, pppk: &SpeaksForRecordWrapper,
-    old_uid: &UID) { 
+    fn insert_speaksfor_record_wrapper(&mut self, pppk: &SpeaksForRecordWrapper, old_uid: &UID) {
         let start = time::Instant::now();
         let p = self.principal_data.get_mut(old_uid);
         if p.is_none() {
@@ -943,6 +942,7 @@ impl RecordCtrler {
                 start.elapsed().as_micros(),
             );
             if records.is_empty() || records[0].did == did {
+                info!("Edna: Removed {} own records", records.len(),);
                 no_owns_at_loc = true;
                 bag.ownrecs = vec![];
                 changed |= !records.is_empty();

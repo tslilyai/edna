@@ -301,32 +301,45 @@ impl EdnaDiffRecord {
                 let table_info = timap.get(&self.table).unwrap();
                 for (reftable, refcol, fk_col) in &table_info.other_fk_cols {
                     // if original entity does not exist, do not reveal
-                    let mut curval = get_value_of_col(&old_value, fk_col).unwrap();
+                    let curval = get_value_of_col(&old_value, fk_col).unwrap();
                     if curval.to_lowercase() == "null" {
                         continue;
                     }
-
-                    // handle case where fk_col is pointing to the users table, in which
-                    // we could reveal as long as there's some speaks-for path to the stored
-                    // UID in the diff, and we rewrite this col to the correct restored UID
-                    if reftable == users_table {
-                        debug!("Diff record corresponds to user reftable");
-                        if recorrelated_pps.contains(&curval) {
-                            warn!("Recorrelated pps contained the old_uid {}", curval);
-
-                            // find the most recent UID in the path up to this one that should exist in
-                            // the DB
-                            let old_uid =
-                                privkey_record::find_old_uid(edges, &curval, recorrelated_pps);
-                            curval = old_uid.unwrap_or(curval);
-                            set_value_of_col(&mut old_value, fk_col, &curval);
-                        }
-                    }
-
                     // xxx this might have problems with quotes?
                     let selection = format!(
                         "SELECT * FROM {} WHERE {}.{} = {}",
                         reftable, reftable, refcol, curval
+                    );
+                    warn!("selection: {}", selection.to_string());
+                    let selected = get_query_rows_str_q::<Q>(&selection, db)?;
+                    if selected.is_empty() {
+                        warn!(
+                            "No original entity exists for fk col {} val {}",
+                            fk_col, curval
+                        );
+                        return Ok(false);
+                    }
+                }
+                for fk_col in &table_info.owner_fk_cols {
+                    // handle case where fk_col is pointing to the users table, in which
+                    // we could reveal as long as there's some speaks-for path to the stored
+                    // UID in the diff, and we rewrite this col to the correct restored UID
+                    let mut curval = get_value_of_col(&old_value, fk_col).unwrap();
+                    debug!("Diff record corresponds to user reftable");
+                    if recorrelated_pps.contains(&curval) {
+                        warn!("Recorrelated pps contained the old_uid {}", curval);
+
+                        // find the most recent UID in the path up to this one that should exist in
+                        // the DB
+                        let old_uid =
+                            privkey_record::find_old_uid(edges, &curval, recorrelated_pps);
+                        curval = old_uid.unwrap_or(curval);
+                        set_value_of_col(&mut old_value, fk_col, &curval);
+                    }
+                    // select here too
+                    let selection = format!(
+                        "SELECT * FROM {} WHERE {}.{} = {}",
+                        users_table, users_table, fk_col, curval
                     );
                     warn!("selection: {}", selection.to_string());
                     let selected = get_query_rows_str_q::<Q>(&selection, db)?;
