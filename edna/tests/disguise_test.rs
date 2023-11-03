@@ -376,7 +376,7 @@ fn test_app_anon_disguise() {
         let vals = row.unwrap().unwrap();
         assert_eq!(vals.len(), 1);
         let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-        assert!(guises.insert(user_id));
+        assert!(pseudoprincipals.insert(user_id));
         assert!(user_id >= USER_ITERS);
         stories_results.push(user_id);
     }
@@ -393,8 +393,8 @@ fn test_app_anon_disguise() {
         assert_eq!(vals.len(), 2);
         let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
         let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-        assert!(guises.insert(user_id));
-        assert!(guises.insert(moderator_user_id));
+        assert!(pseudoprincipals.insert(user_id));
+        assert!(pseudoprincipals.insert(moderator_user_id));
         assert!(user_id >= USER_ITERS);
         assert!(moderator_user_id >= USER_ITERS);
     }
@@ -527,8 +527,8 @@ fn test_app_gdpr_disguise() {
         assert_eq!(vals.len(), 2);
         let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
         let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-        assert!(guises.insert(user_id));
-        assert!(guises.insert(moderator_user_id));
+        assert!(pseudoprincipals.insert(user_id));
+        assert!(pseudoprincipals.insert(moderator_user_id));
         assert!(user_id >= USER_ITERS);
         assert!(moderator_user_id >= USER_ITERS);
     }
@@ -549,7 +549,7 @@ fn test_app_gdpr_disguise() {
 }
 
 #[test]
-fn test_compose_anon_gdpr_disguises() {
+fn test_compose_anon_gdpr_dispseudoprincipals() {
     init_logger();
     let dbname = "testAppComposeDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
@@ -680,7 +680,7 @@ fn test_compose_anon_gdpr_disguises() {
         let vals = row.unwrap().unwrap();
         assert_eq!(vals.len(), 1);
         let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-        assert!(guises.insert(user_id));
+        assert!(pseudoprincipals.insert(user_id));
         assert!(user_id >= USER_ITERS);
         stories_results.push(user_id);
     }
@@ -697,8 +697,8 @@ fn test_compose_anon_gdpr_disguises() {
         assert_eq!(vals.len(), 2);
         let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
         let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-        assert!(guises.insert(user_id));
-        assert!(guises.insert(moderator_user_id));
+        assert!(pseudoprincipals.insert(user_id));
+        assert!(pseudoprincipals.insert(moderator_user_id));
         assert!(user_id >= USER_ITERS);
         assert!(moderator_user_id >= USER_ITERS);
     }

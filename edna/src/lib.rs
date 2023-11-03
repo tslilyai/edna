@@ -125,6 +125,9 @@ impl RowVal {
     pub fn new(c: ColName, r: String) -> RowVal {
         RowVal(c, r)
     }
+    pub fn set_value(&mut self, r: &str) {
+        self.1 = r.to_string();
+    }
 }
 
 pub struct EdnaClient {
