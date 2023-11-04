@@ -129,7 +129,7 @@ impl HighLevelAPI {
         &self,
         table: &str,
         dsmap: &HashMap<String, Vec<(String, EdnaDiffRecord)>>,
-        users_table: &TableName,
+        ppgen: &PseudoprincipalGenerator,
         recorrelated_pps: &HashSet<UID>,
         edges: &HashMap<UID, Vec<PrivkeyRecord>>,
         table_info: &HashMap<String, TableInfo>,
@@ -142,7 +142,7 @@ impl HighLevelAPI {
                     info!("Reversing remove record {:?}\n", d);
                     let revealed = d.reveal(
                         &table_info,
-                        users_table,
+                        ppgen,
                         recorrelated_pps,
                         edges,
                         &uid,
@@ -253,7 +253,7 @@ impl HighLevelAPI {
                 }
                 let revealed = d.reveal(
                     &table_info,
-                    &pp_gen.name,
+                    &pp_gen,
                     &recorrelated_pps,
                     &edges,
                     &dwrapper.uid,
@@ -294,7 +294,7 @@ impl HighLevelAPI {
         self.reveal_remove_diffs_of_table(
             &pp_gen.name,
             &remove_diffs_for_table,
-            &pp_gen.name,
+            &pp_gen,
             &recorrelated_pps,
             &edges,
             table_info,
@@ -317,7 +317,7 @@ impl HighLevelAPI {
                 self.reveal_remove_diffs_of_table(
                     &reftab,
                     &remove_diffs_for_table,
-                    &pp_gen.name,
+                    &pp_gen,
                     &recorrelated_pps,
                     &edges,
                     table_info,
@@ -330,7 +330,7 @@ impl HighLevelAPI {
             self.reveal_remove_diffs_of_table(
                 table,
                 &remove_diffs_for_table,
-                &pp_gen.name,
+                &pp_gen,
                 &recorrelated_pps,
                 &edges,
                 table_info,
@@ -347,7 +347,7 @@ impl HighLevelAPI {
                 info!("Reversing record {:?}\n", d);
                 let revealed = d.reveal(
                     &table_info,
-                    &pp_gen.name,
+                    &pp_gen,
                     &recorrelated_pps,
                     &edges,
                     &dwrapper.uid,

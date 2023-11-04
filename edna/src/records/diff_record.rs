@@ -2,7 +2,7 @@ use crate::crypto::*;
 use crate::helpers::*;
 use crate::lowlevel_api::*;
 use crate::records::*;
-use crate::{RowVal, TableInfo, TableName, DID, UID};
+use crate::{RowVal, TableInfo, DID, UID, PseudoprincipalGenerator};
 use crypto_box::PublicKey;
 use log::{debug, warn};
 use mysql::prelude::*;
@@ -240,7 +240,7 @@ impl EdnaDiffRecord {
     pub fn reveal<Q: Queryable>(
         &self,
         timap: &HashMap<String, TableInfo>,
-        users_table: &TableName,
+        pp_gen: &PseudoprincipalGenerator,
         recorrelated_pps: &HashSet<UID>,
         edges: &HashMap<UID, Vec<PrivkeyRecord>>,
         uid: &str,
@@ -320,35 +320,38 @@ impl EdnaDiffRecord {
                         return Ok(false);
                     }
                 }
-                for fk_col in &table_info.owner_fk_cols {
-                    // handle case where fk_col is pointing to the users table, in which
-                    // we could reveal as long as there's some speaks-for path to the stored
-                    // UID in the diff, and we rewrite this col to the correct restored UID
-                    let mut curval = get_value_of_col(&old_value, fk_col).unwrap();
-                    debug!("Diff record corresponds to user reftable");
-                    if recorrelated_pps.contains(&curval) {
-                        warn!("Recorrelated pps contained the old_uid {}", curval);
+                // handle case where fk_col is pointing to the users table, in which
+                // we could reveal as long as there's some speaks-for path to the stored
+                // UID in the diff, and we rewrite this col to the correct restored UID
+                // note that we don't want to do this if this is actually the users table
+                if self.table != pp_gen.name {
+                    for fk_col in &table_info.owner_fk_cols {
+                        let mut curval = get_value_of_col(&old_value, fk_col).unwrap();
+                        debug!("Diff record corresponds to user reftable");
+                        if recorrelated_pps.contains(&curval) {
+                            warn!("Recorrelated pps contained the old_uid {}", curval);
 
-                        // find the most recent UID in the path up to this one that should exist in
-                        // the DB
-                        let old_uid =
-                            privkey_record::find_old_uid(edges, &curval, recorrelated_pps);
-                        curval = old_uid.unwrap_or(curval);
-                        set_value_of_col(&mut old_value, fk_col, &curval);
-                    }
-                    // select here too
-                    let selection = format!(
-                        "SELECT * FROM {} WHERE {}.{} = {}",
-                        users_table, users_table, fk_col, curval
-                    );
-                    warn!("selection: {}", selection.to_string());
-                    let selected = get_query_rows_str_q::<Q>(&selection, db)?;
-                    if selected.is_empty() {
-                        warn!(
-                            "No original entity exists for fk col {} val {}",
-                            fk_col, curval
+                            // find the most recent UID in the path up to this one that should exist in
+                            // the DB
+                            let old_uid =
+                                privkey_record::find_old_uid(edges, &curval, recorrelated_pps);
+                            curval = old_uid.unwrap_or(curval);
+                            set_value_of_col(&mut old_value, fk_col, &curval);
+                        }
+                        // select here too
+                        let selection = format!(
+                            "SELECT * FROM {} WHERE {}.{} = {}",
+                            pp_gen.name, pp_gen.name, pp_gen.id_col, curval
                         );
-                        return Ok(false);
+                        warn!("selection: {}", selection.to_string());
+                        let selected = get_query_rows_str_q::<Q>(&selection, db)?;
+                        if selected.is_empty() {
+                            warn!(
+                                "No original entity exists for fk col {} val {}",
+                                fk_col, curval
+                            );
+                            return Ok(false);
+                        }
                     }
                 }
 

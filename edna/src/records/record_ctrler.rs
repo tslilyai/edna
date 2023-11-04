@@ -72,6 +72,9 @@ pub struct Locator {
     // be used to encrypt
     pub uid: UID,
     pub did: DID,
+    // we need this to reveal deleted principal's data, as they no longer have 
+    // principaldata entries
+    pub pubkey: Vec<u8>,
 }
 
 #[derive(Clone)]
@@ -83,6 +86,10 @@ pub struct RecordCtrler {
     enc_map: HashMap<Loc, EncData>,
 
     shares_map: HashMap<Index, ShareStore>,
+
+
+    // Note: this acts also as the "deleted principals" table referenced
+    // by the paper, indexed via a hash of the user's password
     enc_locators_map: HashMap<Index, HashSet<EncData>>,
 
     // used for randomness and encryption
@@ -238,10 +245,17 @@ impl RecordCtrler {
         let bag_uids = self.tmp_bags.keys().cloned().collect::<Vec<_>>();
         for uid in &bag_uids {
             let start_update = time::Instant::now();
+            let p = self
+                .principal_data
+                .get(uid)
+                .expect(&format!("no user with uid {} when saving?", uid))
+                .clone();
+
             let lc = Locator {
                 loc: self.rng.next_u64(),
                 uid: uid.clone(),
                 did: self.tmp_did.expect("No disguise?"),
+                pubkey: p.pubkey.as_ref().unwrap().as_bytes().to_vec(),
             };
             let bag = self.tmp_bags.get(&uid.to_string()).unwrap().clone();
             self.update_bag_at_loc(&lc, &bag, db);
@@ -253,11 +267,6 @@ impl RecordCtrler {
                 uid,
                 start_update.elapsed().as_micros(),
             );
-            let p = self
-                .principal_data
-                .get(uid)
-                .expect(&format!("no user with uid {} when saving?", uid))
-                .clone();
 
             // Don't do the interactive mess since that would mean that we have
             // to iterate through private keys and find the right one...  Note:
@@ -597,13 +606,18 @@ impl RecordCtrler {
      */
     // encrypts bag contents and inserts it
     fn update_bag_at_loc<Q: Queryable>(&mut self, lc: &Locator, bag: &Bag, db: &mut Q) {
-        let p = self
+        let popt = self
             .principal_data
-            .get(&lc.uid)
-            .expect(&format!("no user with uid {} found?", lc.uid))
-            .clone();
+            .get(&lc.uid);
+        let pubkey = if popt.is_none() {
+            warn!("UpdateBagAtLoc: no user with uid {} found, bag had {} sfrs", lc.uid, bag.ownrecs.len());
+            Some(PublicKey::from(get_pk_bytes(lc.pubkey.clone())))
+        } else {
+            popt.unwrap().pubkey.clone()
+        };
+        // we just need the pubkey here! put in the loc?
         let plaintext = bincode::serialize(bag).unwrap();
-        let enc_bag = encrypt_with_pubkey(&p.pubkey.as_ref(), &plaintext, self.dryrun);
+        let enc_bag = encrypt_with_pubkey(&pubkey.as_ref(), &plaintext, self.dryrun);
 
         // insert the encrypted pppk into locating capability
         RecordPersister::update_enc_bag_at_loc(lc.loc, &enc_bag, db);
@@ -615,7 +629,7 @@ impl RecordCtrler {
         let start = time::Instant::now();
         let p = self.principal_data.get_mut(old_uid);
         if p.is_none() {
-            info!("no user with uid {} found?", old_uid);
+            info!("InsertPrivkeyRecord: no user with uid {} found?", old_uid);
             return;
         }
         match self.tmp_bags.get_mut(old_uid) {
@@ -925,7 +939,7 @@ impl RecordCtrler {
             let mut bag: Bag = bincode::deserialize(&plaintext).unwrap();
             let records = bag.diffrecs.clone();
             info!(
-                "Edna: Decrypted diff records added {} total: {}",
+                "EdnaCleanup: Decrypted diff records added {} total: {}",
                 records.len(),
                 start.elapsed().as_micros(),
             );
@@ -937,12 +951,12 @@ impl RecordCtrler {
             }
             let records = bag.ownrecs.clone();
             info!(
-                "EdnaCleanup: Decrypted own records added {} total: {}",
+                "EdnaCleanup: Decrypted sf records added {} total: {}",
                 records.len(),
                 start.elapsed().as_micros(),
             );
             if records.is_empty() || records[0].did == did {
-                info!("Edna: Removed {} own records", records.len(),);
+                info!("EdnaCleanup: Removed {} sf records uid {}", records.len(), lc.uid);
                 no_owns_at_loc = true;
                 bag.ownrecs = vec![];
                 changed |= !records.is_empty();
@@ -1019,6 +1033,8 @@ impl RecordCtrler {
             } else if changed {
                 bag.pkrecs = keep_pks;
                 self.update_bag_at_loc(&lc, &bag, db);
+            } else {
+                info!("Bag of {} not changed and not empty", lc.uid);
             }
         }
         // return whether we removed bags

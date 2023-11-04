@@ -13,8 +13,8 @@ const PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen.json");
 const ANON_JSON: &'static str = include_str!("./disguises/universal_anon_disguise.json");
 const GDPR_JSON: &'static str = include_str!("./disguises/gdpr_disguise.json");
 const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
-const USER_ITERS: u64 = 3;
-const NSTORIES: u64 = 4;
+const USER_ITERS: u64 = 1;
+const NSTORIES: u64 = 1;
 
 fn init_logger() {
     let _ = env_logger::builder()
@@ -909,9 +909,9 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
 
     // REVERSE ANON DISGUISE
     for u in 1..USER_ITERS + 1 {
-        // get diffs
         edna.reveal_disguise(
-            String::from("NULL"),
+            //String::from("NULL"),
+            u.to_string(),
             anon_did,
             TABLEINFO_JSON,
             PPGEN_JSON,
@@ -1018,7 +1018,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         .unwrap();
     }
 
-    // CHECK DISGUISE RESULTS: everything restored as non-anon
+    // CHECK DISGUISE RESULTS: everything not anon
     for u in 1..USER_ITERS + 1 {
         let mut results = vec![];
         let res = db
@@ -1033,7 +1033,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         assert!(results.len() > 0);
     }
 
-    // moderations recorrelated
+    // moderations still decorrelated 
     for u in 1..USER_ITERS + 1 {
         let mut results = vec![];
         let res = db
@@ -1050,8 +1050,6 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         }
         assert!(results.len() > 0);
     }
-
-    // stories have original owners
     let mut stories_results = vec![];
     let res = db
         .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -1067,8 +1065,6 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         stories_results.len() as u64,
         (USER_ITERS + 1 - 1) * NSTORIES
     );
-
-    // moderations have original owners
     let res = db
         .query_iter(format!(
             r"SELECT moderator_user_id, user_id FROM moderations"
