@@ -251,11 +251,16 @@ impl RecordCtrler {
                 .expect(&format!("no user with uid {} when saving?", uid))
                 .clone();
 
+            // pubkey can be None if we're doing a dryrun
+            let pubkey = match p.pubkey.as_ref() {
+                None => vec![],
+                Some(p) => p.as_bytes().to_vec(),
+            };
             let lc = Locator {
                 loc: self.rng.next_u64(),
                 uid: uid.clone(),
                 did: self.tmp_did.expect("No disguise?"),
-                pubkey: p.pubkey.as_ref().unwrap().as_bytes().to_vec(),
+                pubkey: pubkey
             };
             let bag = self.tmp_bags.get(&uid.to_string()).unwrap().clone();
             self.update_bag_at_loc(&lc, &bag, db);
