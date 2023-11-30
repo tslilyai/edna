@@ -72,7 +72,7 @@ pub struct Locator {
     // be used to encrypt
     pub uid: UID,
     pub did: DID,
-    // we need this to reveal deleted principal's data, as they no longer have 
+    // we need this to reveal deleted principal's data, as they no longer have
     // principaldata entries
     pub pubkey: Vec<u8>,
 }
@@ -86,7 +86,6 @@ pub struct RecordCtrler {
     enc_map: HashMap<Loc, EncData>,
 
     shares_map: HashMap<Index, ShareStore>,
-
 
     // Note: this acts also as the "deleted principals" table referenced
     // by the paper, indexed via a hash of the user's password
@@ -260,7 +259,7 @@ impl RecordCtrler {
                 loc: self.rng.next_u64(),
                 uid: uid.clone(),
                 did: self.tmp_did.expect("No disguise?"),
-                pubkey: pubkey
+                pubkey: pubkey,
             };
             let bag = self.tmp_bags.get(&uid.to_string()).unwrap().clone();
             self.update_bag_at_loc(&lc, &bag, db);
@@ -611,11 +610,13 @@ impl RecordCtrler {
      */
     // encrypts bag contents and inserts it
     fn update_bag_at_loc<Q: Queryable>(&mut self, lc: &Locator, bag: &Bag, db: &mut Q) {
-        let popt = self
-            .principal_data
-            .get(&lc.uid);
+        let popt = self.principal_data.get(&lc.uid);
         let pubkey = if popt.is_none() {
-            warn!("UpdateBagAtLoc: no user with uid {} found, bag had {} sfrs", lc.uid, bag.ownrecs.len());
+            warn!(
+                "UpdateBagAtLoc: no user with uid {} found, bag had {} sfrs",
+                lc.uid,
+                bag.ownrecs.len()
+            );
             Some(PublicKey::from(get_pk_bytes(lc.pubkey.clone())))
         } else {
             popt.unwrap().pubkey.clone()
@@ -961,7 +962,11 @@ impl RecordCtrler {
                 start.elapsed().as_micros(),
             );
             if records.is_empty() || records[0].did == did {
-                info!("EdnaCleanup: Removed {} sf records uid {}", records.len(), lc.uid);
+                info!(
+                    "EdnaCleanup: Removed {} sf records uid {}",
+                    records.len(),
+                    lc.uid
+                );
                 no_owns_at_loc = true;
                 bag.ownrecs = vec![];
                 changed |= !records.is_empty();
