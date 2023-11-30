@@ -83,6 +83,12 @@ The graphs produced correspond to Figures 6-10 in the paper.
 8. Go to `localhost:3000` on your computer to access the Lobsters app
       * Create accounts, post content, and see what happens when you disguise it!
       * Note: Lobsters initializes an admin account with username `test` and password `test`, but you can't perform any disguises on this account because it hasn't been registered with Edna.
+  
+   You can also generate some fake data by invoking:
+   ```
+   docker exec -ti docker-lobsters-edna_app_1 /bin/bash
+   ./bin/rails fake_data
+   ```
 
 
 ### E2E WebSubmit
