@@ -1,17 +1,19 @@
-use crate::UID;
+use crate::*;
+use crate::{UID};
 use log::debug;
 use serde::{Deserialize, Serialize};
+//use std::mem::size_of_val;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub struct PrivkeyRecord {
+pub struct SFChainRecord {
     pub old_uid: UID,
     pub new_uid: UID,
     pub priv_key: Vec<u8>,
 }
 
 pub fn find_old_uid(
-    map: &HashMap<UID, Vec<PrivkeyRecord>>,
+    map: &HashMap<UID, Vec<SFChainRecord>>,
     from: &UID,
     recorrelated: &HashSet<UID>,
 ) -> Option<UID> {
@@ -34,7 +36,7 @@ pub fn find_old_uid(
     return None;
 }
 
-pub fn find_path_to(map: &HashMap<UID, Vec<PrivkeyRecord>>, to: &UID) -> Vec<PrivkeyRecord> {
+pub fn find_path_to(map: &HashMap<UID, Vec<SFChainRecord>>, to: &UID) -> Vec<SFChainRecord> {
     let mut path = vec![];
     let mut q = VecDeque::new();
     q.push_back(to);
@@ -51,14 +53,16 @@ pub fn find_path_to(map: &HashMap<UID, Vec<PrivkeyRecord>>, to: &UID) -> Vec<Pri
     return path;
 }
 
-pub fn privkey_record_from_bytes(bytes: &Vec<u8>) -> PrivkeyRecord {
+pub fn sfchain_record_from_bytes(bytes: &Vec<u8>) -> SFChainRecord {
     bincode::deserialize(bytes).unwrap()
 }
-pub fn privkey_records_from_bytes(bytes: &Vec<u8>) -> Vec<PrivkeyRecord> {
+
+pub fn sfchain_records_from_bytes(bytes: &Vec<u8>) -> Vec<SFChainRecord> {
     bincode::deserialize(bytes).unwrap()
 }
-pub fn new_privkey_record(old_uid: UID, new_uid: UID, priv_key: Vec<u8>) -> PrivkeyRecord {
-    let mut record: PrivkeyRecord = Default::default();
+
+pub fn new_sfchain_record(old_uid: UID, new_uid: UID, priv_key: Vec<u8>) -> SFChainRecord {
+    let mut record: SFChainRecord = Default::default();
     record.old_uid = old_uid;
     record.new_uid = new_uid;
     record.priv_key = priv_key;

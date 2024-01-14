@@ -24,9 +24,9 @@ impl LowLevelAPI {
     }
 
     // gets number of bytes in principaldata as well as encrypted store
-    pub fn get_sizes(&self, dbname: &str) -> (usize, usize) {
+    pub fn get_space_overhead(&self, dbname: &str) -> (usize, usize) {
         self.record_ctrler
-            .get_sizes(&mut self.pool.get_conn().unwrap(), dbname)
+            .get_space_overhead(&mut self.pool.get_conn().unwrap(), dbname)
     }
 
     pub fn get_priv_key(
@@ -80,9 +80,9 @@ impl LowLevelAPI {
         );
     }
 
-    //-----------------------------------------------------------------------------
+    //----------------------------------------------------------------------------
     // To register and end a disguise (and get the corresponding capabilities)
-    //-----------------------------------------------------------------------------
+    //----------------------------------------------------------------------------
     pub fn start_disguise(&mut self, invoking_user: Option<UID>) -> DID {
         self.record_ctrler.start_disguise(invoking_user)
     }
@@ -103,12 +103,11 @@ impl LowLevelAPI {
             .save_and_clear_reveal(&mut self.pool.get_conn().unwrap());
     }
 
-    //-----------------------------------------------------------------------------
-    // Get all records of a particular disguise
+    //----------------------------------------------------------------------------// Get all records of a particular disguise
     // returns all the diff records and all the speaksfor record blobs
     // Additional function to get and mark records revealed (if records are retrieved for the
     // purpose of reversal)
-    //-----------------------------------------------------------------------------
+    //----------------------------------------------------------------------------
     pub fn get_locators(&mut self, pk: &DecryptCap) -> Vec<records::Locator> {
         self.record_ctrler.get_locators(&pk)
     }
@@ -116,18 +115,14 @@ impl LowLevelAPI {
     pub fn get_records(
         &mut self,
         decrypt_cap: &records::DecryptCap,
-    ) -> (Vec<Vec<u8>>, Vec<Vec<u8>>, HashMap<UID, PrivkeyRecord>) {
-        let (diff_records, sf_records, pk_records) = self.get_recs_and_privkeys(&decrypt_cap);
+    ) -> (Vec<Vec<u8>>, HashMap<UID, SFChainRecord>) {
+        let (diff_records, sfchain_records) = self.get_recs_and_privkeys(&decrypt_cap);
         (
             diff_records
                 .iter()
                 .map(|wrapper| wrapper.record_data.clone())
                 .collect(),
-            sf_records
-                .iter()
-                .map(|wrapper| wrapper.record_data.clone())
-                .collect(),
-            pk_records,
+            sfchain_records,
         )
     }
 
@@ -136,82 +131,68 @@ impl LowLevelAPI {
         decrypt_cap: &records::DecryptCap,
     ) -> (
         Vec<DiffRecordWrapper>,
-        Vec<SpeaksForRecordWrapper>,
-        HashMap<UID, PrivkeyRecord>,
+        HashMap<UID, SFChainRecord>,
     ) {
         let mut diff_records = vec![];
-        let mut sf_records = vec![];
-        let mut pk_records = HashMap::new();
+        let mut sfchain_records = HashMap::new();
         if decrypt_cap.is_empty() {
-            return (diff_records, sf_records, pk_records);
+            return (diff_records, sfchain_records);
         }
         let locators = self.record_ctrler.get_locators(&decrypt_cap);
         for lc in &locators {
-            let (dts, ots, pks) = self.record_ctrler.get_user_records(&decrypt_cap, &lc);
+            let (dts, pks) = self.record_ctrler.get_user_records(&decrypt_cap, &lc);
             diff_records.extend(dts.iter().cloned());
-            sf_records.extend(ots.iter().cloned());
             for (new_uid, pk) in &pks {
-                pk_records.insert(new_uid.clone(), pk.clone());
+                sfchain_records.insert(new_uid.clone(), pk.clone());
             }
         }
-        (diff_records, sf_records, pk_records)
+        (diff_records, sfchain_records)
     }
 
     pub fn cleanup_records_of_disguise(
         &mut self,
         did: DID,
         decrypt_cap: &records::DecryptCap,
-        seen_pps: &mut HashSet<UID>,
     ) {
         let mut db = self.pool.get_conn().unwrap();
         let locators = self.record_ctrler.get_locators(decrypt_cap);
         for lc in locators {
             self.record_ctrler
-                .cleanup_user_records(did, decrypt_cap, &lc, seen_pps, &mut db);
+                .cleanup_user_records(did, decrypt_cap, &lc, &mut db);
         }
     }
 
-    //-----------------------------------------------------------------------------
+    //----------------------------------------------------------------------------
     // Save arbitrary diffs performed by the disguise for the purpose of later
     // restoring.
-    //-----------------------------------------------------------------------------
+    //----------------------------------------------------------------------------
     pub fn save_diff_record(&mut self, uid: UID, did: DID, data: Vec<u8>) {
         let tok = records::new_generic_diff_record_wrapper(&uid, did, data);
-        self.record_ctrler.insert_user_diff_record_wrapper(&tok);
+        self.record_ctrler.insert_diff_record_wrapper(&tok);
     }
 
-    //-----------------------------------------------------------------------------
+    //----------------------------------------------------------------------------
     // Save information about decorrelation/speaksfor
-    //-----------------------------------------------------------------------------
+    //----------------------------------------------------------------------------
     pub fn forget_principal(&mut self, uid: &UID, did: DID) {
         self.record_ctrler.mark_principal_to_forget(uid, did);
     }
 
-    pub fn register_and_save_pseudoprincipal_record(
-        &mut self,
-        did: DID,
-        old_uid: &UID,
-        new_uid: &UID,
-        record_bytes: Vec<u8>,
-    ) {
-        self.register_pseudoprincipal(did, old_uid, new_uid);
-        self.insert_speaksfor_record(did, old_uid, new_uid, record_bytes);
+    pub fn register_pseudoprincipal(&mut self, did: DID, old_uid: &UID, new_uid: &UID, pp: TableRow) {
+        self.record_ctrler
+            .register_pseudoprincipal(old_uid, new_uid, pp, did);
     }
 
-    pub fn register_pseudoprincipal(&mut self, did: DID, old_uid: &UID, new_uid: &UID) {
-        self.record_ctrler
-            .register_anon_principal(&old_uid, &new_uid, did);
-    }
-
-    pub fn insert_speaksfor_record(
+    pub fn insert_decor_record(
         &mut self,
+        np_uid: UID,
+        old_child: TableRow,
+        new_child: TableRow,
         did: DID,
-        old_uid: &UID,
-        new_uid: &UID,
-        record_bytes: Vec<u8>,
     ) {
-        self.record_ctrler
-            .insert_speaksfor_record(&old_uid, &new_uid, did, record_bytes);
+        let drec = new_decor_record(old_child, new_child);
+        let data =  edna_diff_record_to_bytes(&drec);
+        self.save_diff_record(np_uid, did, data);
     }
 
     pub fn get_pseudoprincipals(

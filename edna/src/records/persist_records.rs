@@ -59,7 +59,7 @@ impl RecordPersister {
         ENCLOCSTABLE)).unwrap();
     }
 
-    pub fn get_sizes(db: &mut mysql::PooledConn, dbname: &str) -> usize {
+    pub fn get_space_overhead(db: &mut mysql::PooledConn, dbname: &str) -> usize {
         // principaldata
         let rows = get_query_rows_str(
             &format!(

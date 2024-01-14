@@ -14,13 +14,14 @@ use std::sync::{Arc, Mutex};
 use std::*;
 
 pub mod crypto;
+pub mod disguiser;
 pub mod gen_value;
 pub mod helpers;
-pub mod highlevel_api;
 pub mod lowlevel_api;
 pub mod predicate;
 pub mod proxy;
 pub mod records;
+pub mod revealer;
 
 /// disguise ID
 pub type DID = u64;
@@ -31,7 +32,7 @@ pub type TableName = String;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseudoprincipalGenerator {
-    pub name: TableName,
+    pub table: TableName,
     pub id_col: ColName,
     pub cols: Vec<String>,
     pub val_generation: Vec<gen_value::GenValue>,
@@ -59,12 +60,19 @@ impl PseudoprincipalGenerator {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ForeignKey {
+    to_table: TableName,
+    to_col: ColName,
+    from_table: TableName,
+    from_col: ColName,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TableInfo {
     pub name: TableName,
     pub id_cols: Vec<ColName>,
-    pub owner_fk_cols: Vec<ColName>,
-    // table, referenced_column, fk column
-    pub other_fk_cols: Vec<(TableName, ColName, ColName)>,
+    pub owner_fks: Vec<ForeignKey>,
+    pub other_fks: Vec<ForeignKey>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -84,9 +92,9 @@ pub enum Transformation {
         // how to generate a modified value
         gen_value: gen_value::GenValue,
     },
-    // decorrelates all ownership columns of items matching the predicate
-    // if there is an invoking UID, this only decorrelates columns correlating to the invoking UID
-    // otherwise, this decorrelates all columns if no user is invoking the disguise
+    // decorrelates all ownership of items matching the predicate
+    // if there is an invoking UID, this only decorrelates pointers to the invoking UID
+    // otherwise, this decorrelates all pointers to any user
     Decor {
         pred: String,
         // which table/joined tables to select from
@@ -98,9 +106,9 @@ pub enum Transformation {
     },
 }
 
-pub type DisguiseSpec = HashMap<String, Vec<Transformation>>;
+pub type DisguiseSpec = HashMap<TableName, Vec<Transformation>>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum RevealPPType {
     Delete,
     Restore,
@@ -130,10 +138,17 @@ impl RowVal {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+pub struct TableRow {
+    pub row: Vec<RowVal>,
+    pub table: TableName,
+}
+
 pub struct EdnaClient {
     pub in_memory: bool,
     pub pool: mysql::Pool,
-    pub hlapi: highlevel_api::HighLevelAPI,
+    pub disguiser: disguiser::Disguiser,
+    pub revealer: revealer::Revealer,
     pub llapi: Arc<Mutex<lowlevel_api::LowLevelAPI>>,
 }
 
@@ -163,34 +178,41 @@ impl EdnaClient {
         EdnaClient {
             pool: pool.clone(),
             in_memory: in_memory,
-            hlapi: highlevel_api::HighLevelAPI::new(
+            disguiser: disguiser::Disguiser::new(
                 llapi.clone(),
                 pool.clone(),
                 in_memory,
                 true, // reset each time for now
             ),
+            revealer: revealer::Revealer::new(
+                llapi.clone(),
+                pool.clone(),
+            ),
             llapi: llapi,
         }
     }
 
-    pub fn get_sizes(&self, dbname: &str) -> (usize, usize) {
+    pub fn get_space_overhead(&self, dbname: &str) -> (usize, usize) {
         let locked_llapi = self.llapi.lock().unwrap();
-        let bytes = locked_llapi.get_sizes(dbname);
+        let bytes = locked_llapi.get_space_overhead(dbname);
         drop(locked_llapi);
         error!("RCTRLER MEMORY BYTES\t {}", bytes.0);
         error!("RCTRLER PERSISTED BYTES\t {}", bytes.1);
-        let hlapi_bytes = self.hlapi.get_sizes(dbname);
+
+        // TODO
+        /*let hlapi_bytes = self.hlapi.get_space_overhead(dbname);
         error!(
             "HLAPI BYTES\t MEM {}, PERSIST {}",
             hlapi_bytes.0, hlapi_bytes.1
-        );
+        );*/
         bytes
     }
-    //-----------------------------------------------------------------------------
-    // Necessary to make Edna aware of all principals in the system
-    // so Edna can link these to pseudoprincipals/do crypto stuff
-    // UID is the foreign-key ID of the principal
-    //-----------------------------------------------------------------------------
+
+    ///-----------------------------------------------------------------------------
+    /// Necessary to make Edna aware of all principals in the system
+    /// so Edna can link these to pseudoprincipals/do crypto stuff
+    /// UID is the foreign-key ID of the principal
+    ///-----------------------------------------------------------------------------
     pub fn register_principal(&mut self, uid: &UID, password: String) -> records::UserData {
         let mut locked_llapi = self.llapi.lock().unwrap();
         let user_share = locked_llapi.register_principal(uid, password);
@@ -208,9 +230,9 @@ impl EdnaClient {
         privkey
     }
 
-    //-----------------------------------------------------------------------------
-    // To register and end a disguise (and get the corresponding capabilities)
-    //-----------------------------------------------------------------------------
+    ///-----------------------------------------------------------------------------
+    /// To register and end a disguise (and get the corresponding capabilities)
+    ///-----------------------------------------------------------------------------
     pub fn start_disguise(&self, invoking_user: Option<UID>) -> DID {
         let mut locked_llapi = self.llapi.lock().unwrap();
         locked_llapi.start_disguise(invoking_user)
@@ -232,16 +254,17 @@ impl EdnaClient {
         locked_llapi.end_reveal(did);
     }
 
-    //-----------------------------------------------------------------------------
-    /// Get all records of a particular disguise
-    /// returns all the diff records and all the speaksfor record blobs
-    /// Additional function to get and mark records revealed (if records are retrieved for the
+    ///-----------------------------------------------------------------------------
+    /// cleanup_records_of_disguise
+    /// - Get all records of a particular disguise
+    /// - Returns all the diff records and all the speaksfor record blobs
+    /// - Additional function to get and mark records revealed (if records are retrieved for the
     /// purpose of reversal)
     ///-----------------------------------------------------------------------------
-    /// note that this does not interface with the HLAPI's ability to track produced pps
+    /// note that this does not interface with the disguiser's ability to track produced pps
     pub fn cleanup_records_of_disguise(&self, did: DID, decrypt_cap: &records::DecryptCap) {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.cleanup_records_of_disguise(did, &decrypt_cap, &mut HashSet::new());
+        locked_llapi.cleanup_records_of_disguise(did, &decrypt_cap);
         drop(locked_llapi);
     }
 
@@ -251,8 +274,7 @@ impl EdnaClient {
         decrypt_cap: &records::DecryptCap,
     ) -> (
         Vec<Vec<u8>>,
-        Vec<Vec<u8>>,
-        HashMap<UID, records::PrivkeyRecord>,
+        HashMap<UID, records::SFChainRecord>,
     ) {
         let mut locked_llapi = self.llapi.lock().unwrap();
         let res = locked_llapi.get_records(decrypt_cap);
@@ -260,10 +282,10 @@ impl EdnaClient {
         res
     }
 
-    //-----------------------------------------------------------------------------
-    // Save arbitrary diffs performed by the disguise for the purpose of later
-    // restoring.
-    //-----------------------------------------------------------------------------
+    ///-----------------------------------------------------------------------------
+    /// Save arbitrary diffs performed by the disguise for the purpose of later
+    /// restoring.
+    ///-----------------------------------------------------------------------------
     pub fn save_diff_record(&self, uid: UID, did: DID, data: Vec<u8>) {
         let mut locked_llapi = self.llapi.lock().unwrap();
         locked_llapi.save_diff_record(uid, did, data);
@@ -279,19 +301,19 @@ impl EdnaClient {
         drop(locked_llapi);
     }
 
-    pub fn register_and_save_pseudoprincipal_record(
+    pub fn register_pseudoprincipal(
         &self,
         did: DID,
         old_uid: &UID,
         new_uid: &UID,
-        record_bytes: &Vec<u8>,
+        pp: TableRow,
     ) {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.register_and_save_pseudoprincipal_record(
+        locked_llapi.register_pseudoprincipal(
             did,
             old_uid,
             new_uid,
-            record_bytes.clone(),
+            pp
         );
         drop(locked_llapi);
     }
@@ -340,7 +362,7 @@ impl EdnaClient {
             let txopts = TxOpts::default();
             txopts.set_isolation_level(Some(Serializable));
             let mut txn = db.start_transaction(txopts)?;
-            let res = self.hlapi.apply(
+            let res = self.disguiser.apply(
                 &disguise,
                 &table_infos,
                 &guise_gen,
@@ -351,7 +373,7 @@ impl EdnaClient {
             txn.commit()?;
             return res;
         } else {
-            return self.hlapi.apply(
+            return self.disguiser.apply(
                 &disguise,
                 &table_infos,
                 &guise_gen,
@@ -384,7 +406,7 @@ impl EdnaClient {
             let txopts = TxOpts::default();
             txopts.set_isolation_level(Some(Serializable));
             let mut txn = db.start_transaction(txopts)?;
-            self.hlapi.reveal(
+            self.revealer.reveal(
                 user,
                 did,
                 &table_infos,
@@ -396,7 +418,7 @@ impl EdnaClient {
             )?;
             txn.commit()?;
         } else {
-            self.hlapi.reveal(
+            self.revealer.reveal(
                 user,
                 did,
                 &table_infos,
@@ -408,5 +430,12 @@ impl EdnaClient {
             )?;
         }
         Ok(())
+    }
+
+    pub fn record_update<F>(&mut self, f: F)
+    where
+        F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static,
+    {
+        self.revealer.record_update(Box::new(f));
     }
 }

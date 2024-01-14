@@ -105,14 +105,14 @@ pub fn str_select_statement(table: &str, from: &str, selection: &str) -> String 
     s
 }
 
-pub fn get_select_of_ids_str(tinfo: &TableInfo, ids: &Vec<String>) -> String {
-    let cols = &tinfo.id_cols;
+pub fn get_select_of_ids_str(ids: &Vec<RowVal>) -> String {
     let mut parts = vec!["true".to_string()];
-    for (i, id) in ids.iter().enumerate() {
-        if is_string_numeric(id) || id == "true" || id == "false" {
-            parts.push(format!("{} = {}", cols[i], id))
+    for id in ids {
+        let val = &id.value();
+        if is_string_numeric(val) || val == "true" || val == "false" {
+            parts.push(format!("{} = {}", id.column(), val))
         } else {
-            parts.push(format!("{} = '{}'", cols[i], id))
+            parts.push(format!("{} = '{}'", id.column(), val))
         }
     }
     parts.join(" AND ")
