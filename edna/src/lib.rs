@@ -69,7 +69,7 @@ pub struct ForeignKey {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TableInfo {
-    pub name: TableName,
+    pub table: TableName,
     pub id_cols: Vec<ColName>,
     pub owner_fks: Vec<ForeignKey>,
     pub other_fks: Vec<ForeignKey>,
@@ -138,7 +138,7 @@ impl RowVal {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq, Hash)]
 pub struct TableRow {
     pub row: Vec<RowVal>,
     pub table: TableName,
@@ -184,10 +184,7 @@ impl EdnaClient {
                 in_memory,
                 true, // reset each time for now
             ),
-            revealer: revealer::Revealer::new(
-                llapi.clone(),
-                pool.clone(),
-            ),
+            revealer: revealer::Revealer::new(llapi.clone(), pool.clone()),
             llapi: llapi,
         }
     }
@@ -272,10 +269,7 @@ impl EdnaClient {
         &self,
         _did: DID,
         decrypt_cap: &records::DecryptCap,
-    ) -> (
-        Vec<Vec<u8>>,
-        HashMap<UID, records::SFChainRecord>,
-    ) {
+    ) -> (Vec<Vec<u8>>, HashMap<UID, records::SFChainRecord>) {
         let mut locked_llapi = self.llapi.lock().unwrap();
         let res = locked_llapi.get_records(decrypt_cap);
         drop(locked_llapi);
@@ -301,20 +295,9 @@ impl EdnaClient {
         drop(locked_llapi);
     }
 
-    pub fn register_pseudoprincipal(
-        &self,
-        did: DID,
-        old_uid: &UID,
-        new_uid: &UID,
-        pp: TableRow,
-    ) {
+    pub fn register_pseudoprincipal(&self, did: DID, old_uid: &UID, new_uid: &UID, pp: TableRow) {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.register_pseudoprincipal(
-            did,
-            old_uid,
-            new_uid,
-            pp
-        );
+        locked_llapi.register_pseudoprincipal(did, old_uid, new_uid, pp);
         drop(locked_llapi);
     }
 

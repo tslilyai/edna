@@ -181,7 +181,9 @@ fn test_app_rev_anon_disguise() {
             let username = helpers::mysql_val_to_string(&vals[1]);
             assert_eq!(username.len(), 30);
         }
-        // add another story that refers to this pseudoprincipal
+
+        // NEW! add another story that refers to this pseudoprincipal to check pseudoprincipal
+        // retention policies
         db.query_drop(format!(r"INSERT INTO stories (user_id) VALUES ({});", u))
             .unwrap();
     }
@@ -213,7 +215,8 @@ fn test_app_rev_anon_disguise() {
             let id = helpers::mysql_val_to_string(&vals[0]);
             results.push(id);
         }
-        assert!(results.len() > NSTORIES as usize);
+        // additional story added for pp recorrelation!
+        assert_eq!(results.len(), NSTORIES as usize + 1);
 
         // moderations recorrelated
         let mut results = vec![];
@@ -241,7 +244,11 @@ fn test_app_rev_anon_disguise() {
         let vals = row.unwrap().unwrap();
         assert_eq!(vals.len(), 1);
         let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-        assert!(user_id < USER_ITERS + 1, "{}", user_id);
+        assert!(
+            user_id < USER_ITERS + 1,
+            "story user is still a pseudoprincipal: {}",
+            user_id
+        );
         stories_results.push(user_id);
     }
     assert!(stories_results.len() as u64 > USER_ITERS * NSTORIES);
@@ -1190,7 +1197,11 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
         for row in res {
             let vals = row.unwrap().unwrap();
             let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-            assert!(user_id >= USER_ITERS + 1);
+            assert!(
+                user_id >= USER_ITERS + 1,
+                "user id is still a np? {}",
+                user_id
+            );
             pseudoprincipals.insert(user_id);
             stories_results.push(1);
         }

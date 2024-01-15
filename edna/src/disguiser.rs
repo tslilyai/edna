@@ -108,6 +108,7 @@ impl Disguiser {
         }
         (rsobytes, pbytes)
     }
+
     pub fn apply<Q: Queryable>(
         &mut self,
         disguise: &Disguise,
@@ -147,11 +148,11 @@ impl Disguiser {
         let mut llapi = self.llapi.lock().unwrap();
         let disg_start = time::Instant::now();
         let did = llapi.start_disguise(disguise.user.clone());
-        warn!("Edna: start disguise: {}", disg_start.elapsed().as_micros());
+        warn!("Edna: start disguise: {}mus", disg_start.elapsed().as_micros());
 
         let get_rec_start = time::Instant::now();
         let (_, sfchain) = llapi.get_recs_and_privkeys(&decrypt_cap);
-        warn!("Edna: get records: {}", get_rec_start.elapsed().as_micros());
+        warn!("Edna: get records: {}mus", get_rec_start.elapsed().as_micros());
         drop(llapi);
 
         let sfchain_records: Vec<&SFChainRecord> = sfchain.iter().map(|(_k, v)| v).collect();
@@ -163,7 +164,7 @@ impl Disguiser {
         let drop_me_later =
             self.execute_removes(did, disguise, table_info, pp_gen, &sfchain_records, conn);
         warn!(
-            "Edna: Execute removes total: {}",
+            "Edna: Execute removes total: {}mus",
             remove_start.elapsed().as_micros()
         );
 
@@ -208,7 +209,7 @@ impl Disguiser {
                             selected_rows.len(),
                             selection
                         );
-                        Self::modify_items(
+                        Self::execute_modify(
                             did,
                             &mut llapi,
                             &table,
@@ -255,7 +256,7 @@ impl Disguiser {
                             selection
                         );
 
-                        Self::decor_items(
+                        Self::execute_decor(
                             disguise.user.clone(),
                             did,
                             &mut llapi,
@@ -274,14 +275,14 @@ impl Disguiser {
             }
         }
         warn!(
-            "Edna: Execute modify/decor total: {}",
+            "Edna: Execute modify/decor total: {}mus",
             decor_start.elapsed().as_micros()
         );
 
         for delstmt in drop_me_later {
             let start = time::Instant::now();
             conn.query_drop(delstmt.to_string()).unwrap();
-            warn!("{}: {}", delstmt, start.elapsed().as_micros());
+            warn!("{}: {}mus", delstmt, start.elapsed().as_micros());
         }
 
         drop(llapi);
@@ -347,7 +348,7 @@ impl Disguiser {
                     if curtable_info.owner_fks.len() == 1 {
                         for i in &pred_items {
                             for fk in &curtable_info.owner_fks {
-                                let curuid = get_value_of_col(&i, &fk.to_col).unwrap();
+                                let curuid = get_value_of_col(&i, &fk.from_col).unwrap();
 
                                 // save the current object (we don't need to save the anonymized object)
                                 let obj_diff_record = new_delete_record(TableRow {
@@ -409,7 +410,7 @@ impl Disguiser {
                             &mut llapi,
                             &curtable_info,
                             pp_gen,
-                            &mut self.seen_pps, 
+                            &mut self.seen_pps,
                             &pred_items,
                             db,
                         );
@@ -454,13 +455,13 @@ impl Disguiser {
             // (2) remove those principals' mapping
             // (3) actually update the persistent database object
             let obj = Object {
-                table: curtable_info.name.clone(),
+                table: curtable_info.table.clone(),
                 row: i.clone(),
             };
             if let Some(shared_diff_record) = removed_shared_objs.get_mut(&obj) {
                 for fk in &curtable_info.owner_fks {
                     let mut remove_mapping = false;
-                    let np_uid = get_value_of_col(&i, &fk.to_col).unwrap();
+                    let np_uid = get_value_of_col(&i, &fk.from_col).unwrap();
                     // if the user has an existing mapping... (e.g., is not a
                     // pp that has been removed before)
                     if let Some(pp) = shared_diff_record.np_to_pp.get(&np_uid) {
@@ -490,7 +491,7 @@ impl Disguiser {
                             llapi.insert_decor_record(
                                 np_uid.clone(),
                                 TableRow {
-                                    table: curtable_info.name.clone(),
+                                    table: curtable_info.table.clone(),
                                     row: i.clone(),
                                 },
                                 i_with_pps,
@@ -529,7 +530,7 @@ impl Disguiser {
                 let mut i_with_pps = i.clone();
                 let mut pps = vec![];
                 for fk in &curtable_info.owner_fks {
-                    let curuid = get_value_of_col(&i, &fk.to_col).unwrap();
+                    let curuid = get_value_of_col(&i, &fk.from_col).unwrap();
 
                     // skip pseudoprincipals
                     if llapi.principal_is_anon(&curuid) {
@@ -589,12 +590,12 @@ impl Disguiser {
                 // otherwise, store the diff for the user
                 assert!(get_ids(&curtable_info.id_cols, &i_with_pps) == ids);
                 let i_with_pps_diff_record = new_delete_record(TableRow {
-                    table: curtable_info.name.to_string(),
+                    table: curtable_info.table.to_string(),
                     row: i_with_pps.to_vec(),
                 });
 
                 for (ix, fk) in curtable_info.owner_fks.iter().enumerate() {
-                    let curuid = get_value_of_col(&i, &fk.to_col).unwrap();
+                    let curuid = get_value_of_col(&i, &fk.from_col).unwrap();
                     let newuid = pps[ix].0.clone();
                     let pp = pps[ix].1.clone();
                     // update with the pp value if we want to persist the
@@ -609,7 +610,7 @@ impl Disguiser {
                             curuid, newuid
                         );
                         match removed_shared_objs.get_mut(&Object {
-                            table: curtable_info.name.clone(),
+                            table: curtable_info.table.clone(),
                             row: i.clone(),
                         }) {
                             Some(shared_diff_record) => {
@@ -619,7 +620,7 @@ impl Disguiser {
                                         newuid,
                                         pp,
                                         TableRow {
-                                            table: curtable_info.name.clone(),
+                                            table: curtable_info.table.clone(),
                                             row: i_with_pps.clone(),
                                         },
                                     ),
@@ -633,14 +634,14 @@ impl Disguiser {
                                         newuid,
                                         pp,
                                         TableRow {
-                                            table: curtable_info.name.clone(),
+                                            table: curtable_info.table.clone(),
                                             row: i_with_pps.clone(),
                                         },
                                     ),
                                 );
                                 removed_shared_objs.insert(
                                     Object {
-                                        table: curtable_info.name.clone(),
+                                        table: curtable_info.table.clone(),
                                         row: i.clone(),
                                     },
                                     SharedDiffRecord {
@@ -660,10 +661,14 @@ impl Disguiser {
 
             // make sure to persist the metadata mapping update
             if updated_mapping {
-                Self::persist_removed_shared_obj_update(&Object {
-                    table: curtable_info.name.clone(),
-                    row: i.clone(),
-                }, removed_shared_objs, db);
+                Self::persist_removed_shared_obj_update(
+                    &Object {
+                        table: curtable_info.table.clone(),
+                        row: i.clone(),
+                    },
+                    removed_shared_objs,
+                    db,
+                );
             }
 
             // REGARDLESS OF WHETHER WE REMOVED THIS BEFORE
@@ -672,17 +677,21 @@ impl Disguiser {
             let selection = get_select_of_ids(&ids);
             if should_remove {
                 let start = time::Instant::now();
-                let delstmt = format!("DELETE FROM {} WHERE {}", curtable_info.name, selection);
+                let delstmt = format!("DELETE FROM {} WHERE {}", curtable_info.table, selection);
                 db.query_drop(delstmt.to_string()).unwrap();
                 warn!("{}: {}", delstmt, start.elapsed().as_micros());
                 // remove from Edna map too (and persist)
                 removed_shared_objs.remove(&Object {
-                    table: curtable_info.name.clone(),
+                    table: curtable_info.table.clone(),
                     row: i.clone(),
                 });
-                Self::persist_removed_shared_obj_delete(&Object {
-                    table: curtable_info.name.clone(), 
-                    row: ids.clone()}, db);
+                Self::persist_removed_shared_obj_delete(
+                    &Object {
+                        table: curtable_info.table.clone(),
+                        row: ids.clone(),
+                    },
+                    db,
+                );
             } else {
                 if i_updates.is_empty() {
                     continue;
@@ -694,7 +703,7 @@ impl Disguiser {
                     .join(", ");
                 let updatestmt = format!(
                     "UPDATE {} SET {} WHERE {}",
-                    curtable_info.name, updates, selection
+                    curtable_info.table, updates, selection
                 );
                 let start = time::Instant::now();
                 db.query_drop(updatestmt.to_string()).unwrap();
@@ -703,9 +712,12 @@ impl Disguiser {
         }
     }
 
-    fn persist_removed_shared_obj_update<Q: Queryable>(rvs: &Object, removed_shared_objs:
-    &HashMap<Object, SharedDiffRecord>, db: &mut Q) {
-    // must exist because we only persist after inserting something
+    fn persist_removed_shared_obj_update<Q: Queryable>(
+        rvs: &Object,
+        removed_shared_objs: &HashMap<Object, SharedDiffRecord>,
+        db: &mut Q,
+    ) {
+        // must exist because we only persist after inserting something
         let data = removed_shared_objs.get(rvs).unwrap();
         let insert_q = format!(
             "INSERT INTO {} (object, data) \
@@ -726,7 +738,7 @@ impl Disguiser {
         .unwrap();
     }
 
-    fn decor_items<Q: Queryable>(
+    fn execute_decor<Q: Queryable>(
         uid: Option<UID>,
         did: DID,
         llapi: &mut LowLevelAPI,
@@ -854,7 +866,7 @@ impl Disguiser {
                     if uid.is_none() || valid_owners.contains(&old_uid) {
                         info!(
                             "decor_obj {}: Creating pseudoprincipal for old uid {} col {}",
-                            child_tableinfo.name, old_uid, user_fk_col
+                            child_tableinfo.table, old_uid, user_fk_col
                         );
                         let (new_uid, pp) = &pseudoprincipals[index];
                         let new_uid = new_uid.replace("\'", "");
@@ -875,11 +887,11 @@ impl Disguiser {
                             llapi.insert_decor_record(
                                 old_uid.clone(),
                                 TableRow {
-                                    table: child_tableinfo.name.clone(),
+                                    table: child_tableinfo.table.clone(),
                                     row: i.clone(),
                                 },
                                 TableRow {
-                                    table: child_tableinfo.name.to_string(),
+                                    table: child_tableinfo.table.to_string(),
                                     row: i_with_pps,
                                 },
                                 did,
@@ -897,7 +909,7 @@ impl Disguiser {
                             let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
                             let q = format!(
                                 "UPDATE {} SET {} = '{}' WHERE {}",
-                                child_tableinfo.name, user_fk_col, new_uid, i_select
+                                child_tableinfo.table, user_fk_col, new_uid, i_select
                             );
                             db.query_drop(&q).unwrap();
                             warn!("{}: {}mus", q, start.elapsed().as_micros());
@@ -908,7 +920,7 @@ impl Disguiser {
         }
     }
 
-    fn modify_items<Q: Queryable>(
+    fn execute_modify<Q: Queryable>(
         did: DID,
         llapi: &mut LowLevelAPI,
         table: &str,
@@ -954,7 +966,7 @@ impl Disguiser {
             );
 
             for fk in &table_info.owner_fks {
-                let owner_uid = get_value_of_col(&i, &fk.to_col).unwrap();
+                let owner_uid = get_value_of_col(&i, &fk.from_col).unwrap();
                 let bytes = edna_diff_record_to_bytes(&update_record);
                 llapi.save_diff_record(owner_uid, did, bytes);
             }

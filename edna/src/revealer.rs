@@ -16,10 +16,7 @@ pub struct Revealer {
 }
 
 impl Revealer {
-    pub fn new(
-        llapi: Arc<Mutex<LowLevelAPI>>,
-        pool: mysql::Pool,
-    ) -> Revealer {
+    pub fn new(llapi: Arc<Mutex<LowLevelAPI>>, pool: mysql::Pool) -> Revealer {
         let revealer = Revealer {
             llapi: llapi,
             pool: pool,
@@ -114,7 +111,7 @@ impl Revealer {
         // columns that are fks to the users table that have since been
         // decorrelated (would need to check all possible pps as fks)
         let start = time::Instant::now();
-        let (dts, pks) = self
+        let (drws, pks) = self
             .llapi
             .lock()
             .unwrap()
@@ -124,24 +121,26 @@ impl Revealer {
             start.elapsed().as_micros()
         );
         let reveal_pps = reveal_pps.unwrap_or(RevealPPType::Restore);
+        let drs: Vec<EdnaDiffRecordWrapper> = drws
+            .iter()
+            .map(|drw| EdnaDiffRecordWrapper {
+                did: drw.did,
+                uid: drw.uid.clone(),
+                record: edna_diff_record_from_bytes(&drw.record_data),
+            })
+            .collect();
 
         // Invariant: any pps that have been recorrelated so far, but still have
         // existing data (meaning their disguises haven't yet been reverted, or
         // they were further decorrelated) will have a matching private key, but
-        // no direct speaks-for record pointing to them
+        // no direct diff record recording their data row
         let mut recorrelated_pps: HashSet<UID> = pks.keys().cloned().collect();
         warn!("Recorrelated pps pre-pruning: {:?}", recorrelated_pps);
-        
-        // remove pseudoprincipals 
-        for drw in &dts {
-            let d = edna_diff_record_from_bytes(&drw.record_data);
-            if d.typ == DECOR {
-                for nv in d.new_values {
-                    if nv.table == pp_gen.table {
-                        let ids = helpers::get_ids(&table_info.get(&pp_gen.table).unwrap().id_cols, &nv.row);
-                        recorrelated_pps.remove(&ids[0].value());
-                    }
-                }
+
+        // remove pseudoprincipals that haven't been recorrelated yet
+        for dr in &drs {
+            if dr.record.typ == NEW_PP {
+                recorrelated_pps.remove(&dr.record.new_uid);
             }
         }
         // construct the graph of sf-relationships between principals
@@ -159,22 +158,21 @@ impl Revealer {
         let mut failed = false;
         let mut llapi = self.llapi.lock().unwrap();
         llapi.start_reveal(did);
-        for dwrapper in &dts {
-            let d = edna_diff_record_from_bytes(&dwrapper.record_data);
-            if dwrapper.did == did && d.typ == REMOVE_PRINCIPAL {
-                info!("Reversing principal remove record {:?}\n", d);
-                if recorrelated_pps.contains(&dwrapper.uid) {
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == REMOVE_PRINCIPAL {
+                info!("Reversing principal remove record {:?}\n", dr.record);
+                if recorrelated_pps.contains(&dr.uid) {
                     info!(
                         "Not reinserting removed and then recorrelated principal {}\n",
-                        dwrapper.uid
+                        dr.uid
                     );
                 }
-                let revealed = d.reveal(
+                let revealed = dr.record.reveal(
                     &table_info,
                     &pp_gen,
                     &recorrelated_pps,
                     &edges,
-                    &dwrapper.uid,
+                    &dr.uid,
                     did,
                     reveal_pps,
                     &mut llapi,
@@ -196,15 +194,14 @@ impl Revealer {
         // construct the graph of tables with removed items
         let mut remove_diffs_for_table: HashMap<String, Vec<(String, EdnaDiffRecord)>> =
             HashMap::new();
-        for dwrapper in &dts {
-            let d = edna_diff_record_from_bytes(&dwrapper.record_data);
-            if dwrapper.did == did && d.typ == REMOVE {
-                let table = &d.old_values[0].table;
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == REMOVE {
+                let table = &dr.record.old_values[0].table;
                 match remove_diffs_for_table.get_mut(table) {
-                    Some(ds) => ds.push((dwrapper.uid.clone(), d)),
+                    Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
                     None => {
                         remove_diffs_for_table
-                            .insert(table.clone(), vec![(dwrapper.uid.clone(), d.clone())]);
+                            .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
                     }
                 }
             }
@@ -260,27 +257,26 @@ impl Revealer {
                 &recorrelated_pps,
                 &edges,
                 table_info,
-                did, 
+                did,
                 reveal_pps,
                 &mut llapi,
                 db,
             )?;
             removed_revealed.insert(table.clone());
         }
-        
+
         // reveal all modify diff records
-        for dwrapper in &dts {
-            let d = edna_diff_record_from_bytes(&dwrapper.record_data);
-            if dwrapper.did == did && d.typ == MODIFY {
-                info!("Reversing modify record {:?}\n", d);
-                let revealed = d.reveal(
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == MODIFY {
+                info!("Reversing modify record {:?}\n", dr.record);
+                let revealed = dr.record.reveal(
                     &table_info,
                     &pp_gen,
                     &recorrelated_pps,
                     &edges,
-                    &dwrapper.uid,
+                    &dr.uid,
                     did,
-                    reveal_pps.clone(), 
+                    reveal_pps.clone(),
                     &mut llapi,
                     db,
                 )?;
@@ -293,17 +289,17 @@ impl Revealer {
             }
         }
 
-        // NOTE: had rewriting of path to newest UID here. no need, we do it upon reveal?
-        for dwrapper in &dts {
-            let d = edna_diff_record_from_bytes(&dwrapper.record_data);
-            if dwrapper.did == did && d.typ == DECOR {
-                info!("Reversing decor record {:?}\n", d);
-                let revealed = d.reveal(
+        // NOTE: used to rewrite of path to correct oldest UID here. no need, since we do it upon
+        // reveal?
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == DECOR {
+                info!("Reversing decor record {:?}\n", dr.record);
+                let revealed = dr.record.reveal(
                     &table_info,
                     &pp_gen,
                     &recorrelated_pps,
                     &edges,
-                    &dwrapper.uid,
+                    &dr.uid,
                     did,
                     reveal_pps.clone(),
                     &mut llapi,
@@ -317,6 +313,31 @@ impl Revealer {
                 }
             }
         }
+
+        // finally, remove the PPs created by the disguise (decorrelated objects should already
+        // be restored to the NP)
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == NEW_PP {
+                info!("Reversing new_pp record {:?}\n", dr.record);
+                let revealed = dr.record.reveal(
+                    &table_info,
+                    &pp_gen,
+                    &recorrelated_pps,
+                    &edges,
+                    &dr.uid,
+                    did,
+                    reveal_pps.clone(),
+                    &mut llapi,
+                    db,
+                )?;
+                if revealed {
+                    info!("NewPP Record revealed!\n");
+                } else {
+                    failed = true;
+                    info!("Failed to reveal new_pp record");
+                }
+            }
+        }
         llapi.cleanup_records_of_disguise(did, &decrypt_cap);
         if failed {
             warn!("Reveal records failed, clearing anyways");
@@ -327,6 +348,7 @@ impl Revealer {
     }
 
     pub fn record_update(&mut self, f: UpdateFn) {
-        self.updates.push((self.start.elapsed().as_secs(), Box::new(f)));
+        self.updates
+            .push((self.start.elapsed().as_secs(), Box::new(f)));
     }
 }

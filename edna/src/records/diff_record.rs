@@ -5,11 +5,11 @@ use crate::*;
 use crate::{PseudoprincipalGenerator, RevealPPType, TableInfo, TableName, TableRow, DID, UID};
 use crypto_box::PublicKey;
 use log::{debug, warn};
+use mysql::from_value;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time;
-use mysql::from_value;
 //use std::mem::size_of_val;
 
 pub const REMOVE: u8 = 0;
@@ -17,6 +17,13 @@ pub const DECOR: u8 = 1;
 pub const NEW_PP: u8 = 2;
 pub const MODIFY: u8 = 3;
 pub const REMOVE_PRINCIPAL: u8 = 5;
+
+#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct EdnaDiffRecordWrapper {
+    pub did: DID,
+    pub uid: UID,
+    pub record: EdnaDiffRecord,
+}
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DiffRecordWrapper {
@@ -74,12 +81,7 @@ pub fn new_generic_diff_record_wrapper(uid: &UID, did: DID, data: Vec<u8>) -> Di
 }
 
 // create diff record for removing a principal
-pub fn new_remove_principal_record(uid: &UID, did: DID, pdata: &PrincipalData) -> EdnaDiffRecord {
-    let mut record: DiffRecordWrapper = Default::default();
-    record.nonce = thread_rng().gen();
-    record.uid = uid.to_string();
-    record.did = did;
-
+pub fn new_remove_principal_record(pdata: &PrincipalData) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
     edna_record.pubkey = match &pdata.pubkey {
         Some(pk) => pk.as_bytes().to_vec(),
@@ -106,11 +108,7 @@ pub fn new_modify_record(old_value: TableRow, new_value: TableRow) -> EdnaDiffRe
     edna_record
 }
 
-pub fn new_pseudoprincipal_record(
-    pp: TableRow,
-    old_uid: UID,
-    new_uid: UID,
-) -> EdnaDiffRecord {
+pub fn new_pseudoprincipal_record(pp: TableRow, old_uid: UID, new_uid: UID) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
     edna_record.typ = NEW_PP;
     edna_record.old_uid = old_uid;
@@ -119,10 +117,7 @@ pub fn new_pseudoprincipal_record(
     edna_record.new_values = vec![pp];
     edna_record
 }
-pub fn new_decor_record(
-    old_child: TableRow,
-    new_child: TableRow,
-) -> EdnaDiffRecord {
+pub fn new_decor_record(old_child: TableRow, new_child: TableRow) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
     edna_record.typ = DECOR;
     edna_record.old_values = vec![old_child];
@@ -178,8 +173,12 @@ impl EdnaDiffRecord {
             _ => {
                 // remove rows before we reinsert old ones to avoid false
                 // duplicates
+                let mut restored_old_values = HashSet::new();
                 let mut failed = EdnaDiffRecord::remove_new_values(
                     &self.new_values,
+                    &self.old_values,
+                    &mut restored_old_values,
+                    &self.old_uid,
                     &self.new_uid,
                     timap,
                     pp_gen,
@@ -190,6 +189,7 @@ impl EdnaDiffRecord {
                 )?;
                 failed &= EdnaDiffRecord::restore_old_values(
                     &self.old_values,
+                    &mut restored_old_values,
                     timap,
                     pp_gen,
                     recorrelated_pps,
@@ -210,17 +210,22 @@ impl EdnaDiffRecord {
         let selection = tinfo
             .owner_fks
             .iter()
-            .map(|c| format!("`{}` = {}", c.to_col, new_fk_value))
+            .map(|c| format!("`{}` = {}", c.from_col, new_fk_value))
             .collect::<Vec<String>>()
             .join(" OR ");
 
-        let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.name, selection);
+        let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, selection);
         let res = db.query_iter(checkstmt.clone()).unwrap();
         let mut count: u64 = 0;
         for row in res {
             count = from_value(row.unwrap().unwrap()[0].clone());
             break;
         }
+        warn!(
+            "{} children of table {} point to id {}",
+            count, tinfo.table, new_fk_value,
+        );
+
         return Ok(count);
     }
 
@@ -240,16 +245,16 @@ impl EdnaDiffRecord {
             let selection = tinfo
                 .owner_fks
                 .iter()
-                .map(|c| format!("`{}` = {}", c.to_col, pp_uid))
+                .map(|c| format!("`{}` = {}", c.from_col, pp_uid))
                 .collect::<Vec<String>>()
                 .join(" OR ");
 
             let update_stmt = if delete {
-                format!("DELETE FROM {} WHERE {}", tinfo.name, selection)
+                format!("DELETE FROM {} WHERE {}", tinfo.table, selection)
             } else {
                 // if only one owner col, skip the case
                 let updates = if tinfo.owner_fks.len() == 1 {
-                    format!("{} = {}", tinfo.owner_fks[0].to_col, old_uid)
+                    format!("{} = {}", tinfo.owner_fks[0].from_col, old_uid)
                 } else {
                     tinfo
                         .owner_fks
@@ -257,16 +262,16 @@ impl EdnaDiffRecord {
                         .map(|fk| {
                             format!(
                                 "{} = (SELECT CASE WHEN `{}` = {} THEN {} ELSE `{}` END)",
-                                fk.to_col, fk.to_col, pp_uid, old_uid, fk.to_col
+                                fk.from_col, fk.from_col, pp_uid, old_uid, fk.from_col
                             )
                         })
                         .collect::<Vec<String>>()
                         .join(", ")
                 };
-                format!("UPDATE {} SET {} WHERE {}", tinfo.name, updates, selection)
+                format!("UPDATE {} SET {} WHERE {}", tinfo.table, updates, selection)
             };
             debug!(
-                "updating pp {} to original owner {}: {}",
+                "update or delete pp {} to original owner {}: {}",
                 pp_uid, old_uid, &update_stmt
             );
             db.query_drop(update_stmt).unwrap();
@@ -276,6 +281,7 @@ impl EdnaDiffRecord {
 
     pub fn restore_old_values<Q: Queryable>(
         old_values: &Vec<TableRow>,
+        restored_old_values: &HashSet<TableRow>,
         timap: &HashMap<TableName, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
         recorrelated_pps: &HashSet<UID>,
@@ -288,21 +294,26 @@ impl EdnaDiffRecord {
         }
         let mut failed = false;
         for old_value in old_values {
+            if restored_old_values.contains(old_value) {
+                warn!("Already restored old_value {:?}", old_value);
+                continue;
+            }
             let table = &old_value.table;
             let mut old_value_row = old_value.row.clone();
 
             // get current obj in db
             let table_info = timap.get(table).unwrap();
             let ids = helpers::get_ids(&table_info.id_cols, &old_value_row);
-            let selection = helpers::get_select_of_ids_str(&ids);
+            let item_selection = helpers::get_select_of_ids_str(&ids);
             let selected = helpers::get_query_rows_str_q::<Q>(
-                &helpers::str_select_statement(table, table, &selection.to_string()),
+                &helpers::str_select_statement(table, table, &item_selection.to_string()),
                 db,
             )?;
 
             // CHECK 1: Uniqueness, don't reinsert if the item already exists
             if !selected.is_empty() {
                 failed = true;
+                warn!("restore old objs: found objects for {}", item_selection);
                 continue;
             }
 
@@ -311,6 +322,7 @@ impl EdnaDiffRecord {
                 // if original entity does not exist, do not reveal
                 let curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
                 if curval.to_lowercase() == "null" {
+                    warn!("restore old objs: fk {} curval is null", fk.from_col);
                     continue;
                 }
                 // xxx this might have problems with quotes?
@@ -318,11 +330,11 @@ impl EdnaDiffRecord {
                     "SELECT * FROM {} WHERE {}.{} = {}",
                     fk.from_table, fk.from_table, fk.from_col, curval
                 );
-                warn!("selection: {}", selection.to_string());
+                warn!("other fk selection: {}", selection.to_string());
                 let selected = helpers::get_query_rows_str_q::<Q>(&selection, db)?;
                 if selected.is_empty() {
                     warn!(
-                        "No original entity exists for fk col {} val {}",
+                        "restore old objs: No entity exists for fk col {} val {}",
                         fk.from_col, curval
                     );
                     failed = true;
@@ -353,7 +365,7 @@ impl EdnaDiffRecord {
                         "SELECT * FROM {} WHERE {}.{} = {}",
                         pp_gen.table, pp_gen.table, pp_gen.id_col, curval
                     );
-                    warn!("selection: {}", selection.to_string());
+                    warn!("owner fk selection: {}", selection.to_string());
                     let selected = helpers::get_query_rows_str_q::<Q>(&selection, db)?;
                     if selected.is_empty() {
                         warn!(
@@ -388,13 +400,12 @@ impl EdnaDiffRecord {
                 })
                 .collect();
             let valstr = vals.join(",");
-            db.query_drop(format!(
-                "INSERT INTO {} ({}) VALUES ({})",
-                table, colstr, valstr
-            ))?;
+            let insert_q = format!("INSERT INTO {} ({}) VALUES ({})", table, colstr, valstr);
+            warn!("{}", insert_q);
+            db.query_drop(insert_q)?;
         }
         warn!(
-            "Restore {} removed rows for: {}",
+            "Restored {} old removed rows: {}mus",
             old_values.len(),
             start.elapsed().as_micros()
         );
@@ -407,6 +418,9 @@ impl EdnaDiffRecord {
 
     pub fn remove_new_values<Q: Queryable>(
         new_values: &Vec<TableRow>,
+        old_values: &Vec<TableRow>,
+        restored_old_values: &mut HashSet<TableRow>,
+        old_uid: &UID,
         new_uid: &UID,
         timap: &HashMap<TableName, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
@@ -428,6 +442,9 @@ impl EdnaDiffRecord {
         }
         fn helper<Q: Queryable>(
             new_values: &Vec<&TableRow>,
+            old_values: &Vec<TableRow>,
+            restored_old_values: &mut HashSet<TableRow>,
+            old_uid: &UID,
             new_uid: &UID,
             timap: &HashMap<String, TableInfo>,
             pp_gen: &PseudoprincipalGenerator,
@@ -451,6 +468,7 @@ impl EdnaDiffRecord {
 
                 // CHECK 1: Is the item already removed?
                 if selected.is_empty() {
+                    warn!("No new item to remove! {}", selection);
                     continue;
                 }
 
@@ -480,12 +498,8 @@ impl EdnaDiffRecord {
                 * is already recorrelated
                 */
                 if table == &pp_gen.table {
-                    if reveal_pps == RevealPPType::Delete
-                        || reveal_pps == RevealPPType::Restore
-                    {
+                    if reveal_pps == RevealPPType::Delete || reveal_pps == RevealPPType::Restore {
                         // NOTE: Assume only one id used as a foreign key
-                        let pp_uid = ids[0].value();
-
                         // either delete or rewrite pp children to point to
                         // original principal.
                         for (child_table, tinfo) in timap.into_iter() {
@@ -495,7 +509,6 @@ impl EdnaDiffRecord {
                             // we already removed the new value representing the
                             // rewritten child, so we don't have to worry about
                             // rewriting it here
-                            let old_uid = ids[0].value();
                             EdnaDiffRecord::decor_update_or_delete_children(
                                 &old_uid,
                                 &new_uid,
@@ -506,33 +519,110 @@ impl EdnaDiffRecord {
                         }
 
                         // now remove the pseudoprincipal
-                        db.query_drop(format!("DELETE FROM {} WHERE {}", &table, selection))?;
+                        let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
+                        warn!("{}", delete_q);
+                        db.query_drop(delete_q)?;
 
                         // remove PP metadata from the record ctrler (when all
                         // locators are gone) do per new uid because did might
                         // differ NOTE: pps kept for "restore" can never be
                         // reclaimed now
-                        llapi.forget_principal(&pp_uid, did);
+                        llapi.forget_principal(&new_uid, did);
                     }
                 } else {
-                    // retain the pseudoprincipal or a non-pseudoprincipal object
-                    // because things refer to it.
-                    for (_, tinfo) in timap.into_iter() {
-                        if EdnaDiffRecord::get_count_of_children(&ids[0].value(), tinfo, db)? == 0 {
-                            // remove the object if no references
-                            db.query_drop(format!("DELETE FROM {} WHERE {}", &table, selection))?;
-                        } else {
-                            failed = true;
+                    // Update the new value to the old value in place, if we find a matching old
+                    // value
+                    let mut should_delete = true;
+                    for ov in old_values {
+                        let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
+                        if ids == old_ids {
+                            let mut updates = vec![];
+                            for (ix, rv) in ov.row.iter().enumerate() {
+                                if rv.value() != new_value.row[ix].value() {
+                                    updates.push(format!("`{}` = {}", rv.column(), rv.value()));
+                                }
+                            }
+                            // somehow this row exactly matches, we can just keep this row
+                            if updates.len() == 0 {
+                                should_delete = false;
+                                break;
+                            }
+                            // update the relevant columns
+                            let update_q = format!(
+                                "UPDATE {} SET {} WHERE {}",
+                                &table,
+                                updates.join(", "),
+                                selection
+                            );
+                            warn!("{}", update_q);
+                            db.query_drop(update_q)?;
+                            should_delete = false;
+                            restored_old_values.insert(ov.clone());
+                            break;
+                        }
+                    }
+                    if should_delete {
+                        // retain if things refer to it
+                        for (_, tinfo) in timap.into_iter() {
+                            let nchildren =
+                                EdnaDiffRecord::get_count_of_children(&ids[0].value(), tinfo, db)?;
+                            if nchildren == 0 {
+                                let delete_q =
+                                    format!("DELETE FROM {} WHERE {}", &table, selection);
+                                warn!("{}", delete_q);
+                                db.query_drop(delete_q)?;
+                            } else {
+                                failed = true;
+                            }
                         }
                     }
                 }
             }
             Ok(!failed)
         }
-        failed &= helper(&remove_first, new_uid, timap, pp_gen, reveal_pps, llapi, did, db)?;
-        failed &= helper(&remove_last, new_uid, timap, pp_gen, reveal_pps, llapi, did, db)?;
+        failed &= helper(
+            &remove_first,
+            old_values,
+            restored_old_values,
+            old_uid,
+            new_uid,
+            timap,
+            pp_gen,
+            reveal_pps,
+            llapi,
+            did,
+            db,
+        )?;
+        if !failed {
+            warn!(
+                "Removed {} new non-pp rows: {}mus",
+                remove_first.len(),
+                start.elapsed().as_micros()
+            );
+        }
+
+        failed &= helper(
+            &remove_last,
+            old_values,
+            restored_old_values,
+            old_uid,
+            new_uid,
+            timap,
+            pp_gen,
+            reveal_pps,
+            llapi,
+            did,
+            db,
+        )?;
+        if !failed {
+            warn!(
+                "Removed {} new pp rows: {}mus",
+                remove_last.len(),
+                start.elapsed().as_micros()
+            );
+        }
         warn!(
-            "Removed {} new rows: {}",
+            "Try remove {} new rows: {}mus",
             new_values.len(),
             start.elapsed().as_micros()
         );

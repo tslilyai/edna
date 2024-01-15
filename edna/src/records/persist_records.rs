@@ -5,7 +5,7 @@ use crate::UID;
 use base64;
 use bincode;
 use crypto_box::PublicKey;
-use log::{debug, error, info};
+use log::{error};
 use mysql::prelude::*;
 use num_bigint::BigInt;
 use std::collections::HashSet;
@@ -213,7 +213,7 @@ impl RecordPersister {
     }
 
     pub fn persist_share<Q: Queryable>(shares_to_insert: &Vec<(Loc, ShareStore)>, db: &mut Q) {
-        let start = time::Instant::now();
+        let _start = time::Instant::now();
         let mut values = vec![];
         for (loc, share_store) in shares_to_insert {
             let edna_share_x_val = share_store.share[0].to_string();
@@ -234,18 +234,18 @@ impl RecordPersister {
         );
         //debug!("Persist Principals insert q {}", insert_q);
         db.query_drop(&insert_q).unwrap();
-        debug!(
-            "Edna persist {} shares: {}",
-            shares_to_insert.len(),
-            start.elapsed().as_micros()
-        );
+        //debug!(
+        //"Edna persist {} shares: {}",
+        //shares_to_insert.len(),
+        //start.elapsed().as_micros()
+        //);
     }
 
     pub fn persist_inserted_principals<Q: Queryable>(
         principals_to_insert: &Vec<(UID, PrincipalData)>,
         db: &mut Q,
     ) {
-        let start = time::Instant::now();
+        let _start = time::Instant::now();
         let mut values = vec![];
         for (uid, pdata) in principals_to_insert {
             let pubkey_vec = match &pdata.pubkey {
@@ -275,18 +275,18 @@ impl RecordPersister {
         );
         //debug!("Persist Principals insert q {}", insert_q);
         db.query_drop(&insert_q).unwrap();
-        debug!(
-            "Edna persist {} principals: {}",
-            principals_to_insert.len(),
-            start.elapsed().as_micros()
-        );
+        //debug!(
+        //"Edna persist {} principals: {}",
+        //principals_to_insert.len(),
+        //start.elapsed().as_micros()
+        //);
     }
 
     pub fn remove_principals<Q: Queryable>(uids: &HashSet<String>, db: &mut Q) {
         if uids.is_empty() {
             return;
         }
-        let start = time::Instant::now();
+        let _start = time::Instant::now();
         let stmt = format!(
             "DELETE FROM {} WHERE {} IN ({})",
             PRINCIPAL_TABLE,
@@ -297,11 +297,11 @@ impl RecordPersister {
                 .join(",")
         );
         db.query_drop(stmt.clone()).unwrap();
-        info!("{} total: {}", stmt, start.elapsed().as_micros());
+        //info!("{} total: {}", stmt, start.elapsed().as_micros());
     }
 
     pub fn update_enc_bag_at_loc<Q: Queryable>(loc: u64, encbag: &EncData, db: &mut Q) {
-        let start = time::Instant::now();
+        let _start = time::Instant::now();
         let bytes = base64::encode(&bincode::serialize(encbag).unwrap());
         let val = format!("({}, \'{}\')", loc, bytes);
 
@@ -310,9 +310,9 @@ impl RecordPersister {
                VALUES {} ON DUPLICATE KEY UPDATE encbag = VALUES(encbag);",
             BAGTABLE, val
         );
-        info!("Insert encbag {}", insert_q);
+        //info!("Insert encbag {}", insert_q);
         db.query_drop(&insert_q).unwrap();
-        info!("{} total: {}", insert_q, start.elapsed().as_micros());
+        //info!("{} total: {}", insert_q, start.elapsed().as_micros());
     }
 
     pub fn update_enc_locs_at_index<Q: Queryable>(
@@ -320,7 +320,7 @@ impl RecordPersister {
         enclocs: &HashSet<EncData>,
         db: &mut Q,
     ) {
-        let start = time::Instant::now();
+        let _start = time::Instant::now();
         let insert_q = format!(
             "INSERT INTO {} (id, enclocs) \
                VALUES ({}, \'{}\') ON DUPLICATE KEY UPDATE enclocs = VALUES(enclocs);",
@@ -329,22 +329,22 @@ impl RecordPersister {
             base64::encode(&bincode::serialize(enclocs).unwrap()),
         );
         db.query_drop(&insert_q).unwrap();
-        info!("{} total: {}", insert_q, start.elapsed().as_micros());
+        //info!("{} total: {}", insert_q, start.elapsed().as_micros());
     }
 
     pub fn remove_enc_bag_at_loc<Q: Queryable>(loc: u64, db: &mut Q) {
-        let start = time::Instant::now();
+        let _start = time::Instant::now();
         db.query_drop(format!("DELETE FROM {} WHERE loc = {}", BAGTABLE, loc))
             .unwrap();
-        info!(
-            "EncBag delete {} total: {}",
-            loc,
-            start.elapsed().as_micros()
-        );
+        //info!(
+        //  "EncBag delete {} total: {}",
+        // loc,
+        //start.elapsed().as_micros()
+        //);
     }
 
     pub fn remove_enc_locs_at_index<Q: Queryable>(index: u64, db: &mut Q) {
-        debug!("Remove encloc at {}", index);
+        //debug!("Remove encloc at {}", index);
         db.query_drop(format!("DELETE FROM {} WHERE id = {}", ENCLOCSTABLE, index))
             .unwrap();
     }

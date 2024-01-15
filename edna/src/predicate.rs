@@ -166,7 +166,7 @@ pub fn owner_filter_pred(
             let mut init_pred = vec![];
             for fk in owner_cols {
                 init_pred.push(PredSpec::Eq {
-                    col: format!("{}.{}", fk.to_table, fk.to_col),
+                    col: format!("{}.{}", fk.from_table, fk.from_col),
                     val: uid.clone(),
                 });
             }
@@ -224,7 +224,7 @@ fn predspec_to_owned_pred(
             let mut found = false;
             let col_end = col.split(".").last().unwrap();
             for fk in owner_cols {
-                if col_end == fk.to_col {
+                if col_end == fk.from_col {
                     found = true;
                     new_owners.append(
                         &mut sfc_records

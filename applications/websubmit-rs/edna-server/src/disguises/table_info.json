@@ -2,25 +2,25 @@
     "users": {
         "name": "users",
         "id_cols": ["email"],
-        "other_fk_cols": [],
-        "owner_fk_cols": ["email"]
+        "other_fks": [],
+        "owner_fks": ["email"]
     },
     "lectures": {
         "name": "lectures",
         "id_cols": ["id"],
-        "other_fk_cols": [],
-        "owner_fk_cols": []
+        "other_fks": [],
+        "owner_fks": []
     },
     "questions": {
         "name": "questions",
         "id_cols": ["lec", "q"],
-        "other_fk_cols": [["lectures", "id", "lec"]],
-        "owner_fk_cols": []
+        "other_fks": [["lectures", "id", "lec"]],
+        "owner_fks": []
     },
     "answers": {
         "name": "answers",
         "id_cols": ["email", "lec", "q"],
-        "other_fk_cols": [["lectures", "id", "lec"], ["questions", "q", "q"]],
-        "owner_fk_cols": ["email"]
+        "other_fks": [["lectures", "id", "lec"], ["questions", "q", "q"]],
+        "owner_fks": ["email"]
     }
 }
