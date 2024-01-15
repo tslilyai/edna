@@ -1038,7 +1038,7 @@ impl RecordCtrler {
     }
 }
 
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{helpers, EdnaClient, RowVal};
@@ -1066,8 +1066,7 @@ mod tests {
         let mut db = pool.get_conn().unwrap();
         let mut ctrler = RecordCtrler::new(&mut db, true, true, false);
 
-        let pseudoprincipal_name = "guise".to_string();
-        let pseudoprincipal_ids = vec![];
+        let pseudoprincipal_name = "user".to_string();
         let old_fk_value = 5;
         let fk_col = "fk_col".to_string();
 
@@ -1083,19 +1082,20 @@ mod tests {
 
             for _ in 1..iters {
                 let d = ctrler.start_disguise(Some(u.to_string()));
-                /*for i in 0..iters {
-                    let mut remove_record = new_delete_record_wrapper(
-                        d as u64,
-                        TableRow {
-                            table: pseudoprincipal_name.clone(),
-                        row: vec![RowVal::new(
-                            fk_col.clone(),
-                            (old_fk_value + (i as u64)).to_string(),
-                        )]},
-                    );
+                for i in 0..iters {
+                    let mut remove_record = 
+                    new_generic_diff_record_wrapper(&u.to_string(), d,
+                        edna_diff_record_to_bytes(&new_delete_record(
+                            TableRow {
+                                table: pseudoprincipal_name.clone(),
+                            row: vec![RowVal::new(
+                                fk_col.clone(),
+                                (old_fk_value + (i as u64)).to_string(),
+                            )]},
+                        )));
                     remove_record.uid = u.to_string();
-                    ctrler.insert_user_diff_record_wrapper(&mut remove_record);
-                }*/
+                    ctrler.insert_diff_record_wrapper(&mut remove_record);
+                }
                 ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
             }
         }
@@ -1116,7 +1116,7 @@ mod tests {
             for i in 0..iters {
                 let dt = edna_diff_record_from_bytes(&diff_records[i].record_data);
                 assert_eq!(
-                    dt.old_value[0].value(),
+                    dt.old_values[0].row[0].value(),
                     (old_fk_value + (i as u64)).to_string()
                 );
             }
@@ -1135,9 +1135,7 @@ mod tests {
         let mut db = pool.get_conn().unwrap();
         let mut ctrler = RecordCtrler::new(&mut db, true, true, false);
 
-        let pseudoprincipal_name = "guise".to_string();
-        //let pseudoprincipal_ids = vec![];
-        let referenced_name = "referenced".to_string();
+        let pseudoprincipal_name = "user".to_string();
         let old_fk_value = 5;
         let fk_col = "fk_col".to_string();
 
@@ -1152,33 +1150,34 @@ mod tests {
             );
             user_shares.push(user_data.clone());
 
-            /*for _ in 1..iters {
+            for i in 1..iters {
                 let d = ctrler.start_disguise(Some(u.to_string()));
-                let mut remove_record = new_delete_record_wrapper(
-                    d as u64,
-                        TableRow {
-                            table: pseudoprincipal_name.clone(),
-                        row: vec![RowVal::new(
-                            fk_col.clone(),
-                            (old_fk_value + (i as u64)).to_string(),
-                        )]},
-                );
-                remove_record.uid = u.to_string();
-                ctrler.insert_user_diff_record_wrapper(&mut remove_record);
+                let mut remove_record = new_generic_diff_record_wrapper(&u.to_string(), d,
+                        edna_diff_record_to_bytes(&new_delete_record(
+                            TableRow {
+                                table: pseudoprincipal_name.clone(),
+                            row: vec![RowVal::new(
+                                fk_col.clone(),
+                                (old_fk_value + (i as u64)).to_string(),
+                            )]},
+                        )));
+                ctrler.insert_diff_record_wrapper(&mut remove_record);
 
                 let anon_uid: u64 = rng.next_u64();
                 // create an anonymous user
                 // and insert some record for the anon user
-                ctrler.register_pseudoprincipal(&u.to_string(), &anon_uid.to_string(), d as u64);
+                let pp = TableRow {
+                    table: pseudoprincipal_name.clone(),
+                    row: vec![
+                        RowVal::new("uid".to_string(), anon_uid.to_string()),
+                    ]
+                };
+                ctrler.register_pseudoprincipal(&u.to_string(), &anon_uid.to_string(), pp, d);
                 // TODO
                 //ctrler.insert_sfchain_record(
-                    //&u.to_string(),
-                    //&anon_uid.to_string(),
-                    //d as u64,
-                    //sf_record_bytes,
-                //);
                 ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
-            }*/
+            }
+
             // check principal data
             ctrler
                 .principal_data
@@ -1244,4 +1243,3 @@ fn test_default_hasher() {
     println!("{}", uid_pw_hash1);
     println!("{}", uid_pw_hash2);
 }
-*/
