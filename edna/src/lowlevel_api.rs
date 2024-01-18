@@ -183,7 +183,7 @@ impl LowLevelAPI {
             .register_pseudoprincipal(old_uid, new_uid, pp, did);
     }
 
-    pub fn insert_decor_record(
+    pub fn save_decor_record(
         &mut self,
         np_uid: UID,
         old_child: TableRow,

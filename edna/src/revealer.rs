@@ -8,6 +8,17 @@ use std::time::Instant;
 
 pub type UpdateFn = Box<dyn Fn(Vec<TableRow>) -> Vec<TableRow>>;
 
+pub struct RevealArgs<'a, Q: Queryable> {
+    pub timap: &'a HashMap<String, TableInfo>,
+    pub pp_gen: &'a PseudoprincipalGenerator,
+    pub recorrelated_pps: &'a HashSet<UID>,
+    pub edges: &'a HashMap<UID, Vec<SFChainRecord>>,
+    pub uid: UID,
+    pub did: DID,
+    pub reveal_pps: RevealPPType,
+    pub llapi: &'a mut LowLevelAPI,
+    pub db: &'a mut Q,
+}
 pub struct Revealer {
     pub llapi: Arc<Mutex<LowLevelAPI>>,
     pub pool: mysql::Pool,
@@ -30,38 +41,31 @@ impl Revealer {
         &self,
         table: &str,
         dsmap: &HashMap<String, Vec<(String, EdnaDiffRecord)>>,
-        ppgen: &PseudoprincipalGenerator,
-        recorrelated_pps: &HashSet<UID>,
-        edges: &HashMap<UID, Vec<SFChainRecord>>,
-        table_info: &HashMap<String, TableInfo>,
-        did: DID,
-        reveal_pps: RevealPPType,
-        llapi: &mut LowLevelAPI,
-        db: &mut Q,
+        args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
         match dsmap.get(table) {
             Some(ds) => {
+                let mut success = true;
                 for (uid, d) in ds {
+                    // don't restore deleted pseudoprincipals that have been recorrelated!
+                    if args.recorrelated_pps.contains(uid) && &d.new_uid == uid {
+                        info!(
+                            "Skipping restoration of deleted recorrelated pp {}, table {}!",
+                            uid, table
+                        );
+                        continue;
+                    }
                     info!("Reversing remove record {:?}\n", d);
-                    let revealed = d.reveal(
-                        &table_info,
-                        ppgen,
-                        recorrelated_pps,
-                        edges,
-                        &uid,
-                        did,
-                        reveal_pps.clone(),
-                        llapi,
-                        db,
-                    )?;
+                    args.uid = uid.clone();
+                    let revealed = d.reveal(args)?;
                     if revealed {
                         info!("Remove Record revealed!\n");
                     } else {
                         info!("Failed to reveal remove record");
-                        return Ok(false);
                     }
+                    success &= revealed;
                 }
-                Ok(true)
+                Ok(success)
             }
             None => Ok(true),
         }
@@ -121,7 +125,7 @@ impl Revealer {
             start.elapsed().as_micros()
         );
         let reveal_pps = reveal_pps.unwrap_or(RevealPPType::Restore);
-        let drs: Vec<EdnaDiffRecordWrapper> = drws
+        let drs: HashSet<EdnaDiffRecordWrapper> = drws
             .iter()
             .map(|drw| EdnaDiffRecordWrapper {
                 did: drw.did,
@@ -138,8 +142,11 @@ impl Revealer {
         warn!("Recorrelated pps pre-pruning: {:?}", recorrelated_pps);
 
         // remove pseudoprincipals that haven't been recorrelated yet
-        for dr in &drs {
-            if dr.record.typ == NEW_PP {
+        for dr in drs.clone() {
+            if dr.record.typ == REMOVE
+                && dr.record.new_values.len() > 0
+                && dr.record.new_values[0].table == pp_gen.table
+            {
                 recorrelated_pps.remove(&dr.record.new_uid);
             }
         }
@@ -155,9 +162,21 @@ impl Revealer {
         }
         warn!("Recorrelated pps: {:?}", recorrelated_pps);
 
-        let mut failed = false;
         let mut llapi = self.llapi.lock().unwrap();
         llapi.start_reveal(did);
+        let mut reveal_args = RevealArgs {
+            timap: &table_info,
+            pp_gen: &pp_gen,
+            recorrelated_pps: &recorrelated_pps,
+            edges: &edges,
+            uid: String::new(),
+            did: did,
+            reveal_pps: reveal_pps,
+            llapi: &mut llapi,
+            db: db,
+        };
+
+        let mut success = true;
         for dr in &drs {
             if dr.did == did && dr.record.typ == REMOVE_PRINCIPAL {
                 info!("Reversing principal remove record {:?}\n", dr.record);
@@ -166,23 +185,15 @@ impl Revealer {
                         "Not reinserting removed and then recorrelated principal {}\n",
                         dr.uid
                     );
+                    continue;
                 }
-                let revealed = dr.record.reveal(
-                    &table_info,
-                    &pp_gen,
-                    &recorrelated_pps,
-                    &edges,
-                    &dr.uid,
-                    did,
-                    reveal_pps,
-                    &mut llapi,
-                    db,
-                )?;
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
                 if revealed {
                     info!("Principal Remove Record revealed!\n");
                 } else {
-                    failed = true;
-                    info!("Failed to reveal remove record");
+                    success = false;
+                    info!("Failed to reveal principal remove record");
                 }
             }
         }
@@ -196,7 +207,11 @@ impl Revealer {
             HashMap::new();
         for dr in &drs {
             if dr.did == did && dr.record.typ == REMOVE {
-                let table = &dr.record.old_values[0].table;
+                let table = if dr.record.old_values.len() > 0 {
+                    &dr.record.old_values[0].table
+                } else {
+                    &dr.record.new_values[0].table
+                };
                 match remove_diffs_for_table.get_mut(table) {
                     Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
                     None => {
@@ -212,14 +227,7 @@ impl Revealer {
         self.reveal_remove_diffs_of_table(
             &pp_gen.table,
             &remove_diffs_for_table,
-            &pp_gen,
-            &recorrelated_pps,
-            &edges,
-            table_info,
-            did,
-            reveal_pps.clone(),
-            &mut llapi,
-            db,
+            &mut reveal_args,
         )?;
         removed_revealed.insert(pp_gen.table.clone());
 
@@ -238,30 +246,12 @@ impl Revealer {
                 self.reveal_remove_diffs_of_table(
                     reftab,
                     &remove_diffs_for_table,
-                    &pp_gen,
-                    &recorrelated_pps,
-                    &edges,
-                    table_info,
-                    did,
-                    reveal_pps,
-                    &mut llapi,
-                    db,
+                    &mut reveal_args,
                 )?;
                 removed_revealed.insert(reftab.clone());
             }
             // then reveal this one
-            self.reveal_remove_diffs_of_table(
-                table,
-                &remove_diffs_for_table,
-                &pp_gen,
-                &recorrelated_pps,
-                &edges,
-                table_info,
-                did,
-                reveal_pps,
-                &mut llapi,
-                db,
-            )?;
+            self.reveal_remove_diffs_of_table(table, &remove_diffs_for_table, &mut reveal_args)?;
             removed_revealed.insert(table.clone());
         }
 
@@ -269,21 +259,12 @@ impl Revealer {
         for dr in &drs {
             if dr.did == did && dr.record.typ == MODIFY {
                 info!("Reversing modify record {:?}\n", dr.record);
-                let revealed = dr.record.reveal(
-                    &table_info,
-                    &pp_gen,
-                    &recorrelated_pps,
-                    &edges,
-                    &dr.uid,
-                    did,
-                    reveal_pps.clone(),
-                    &mut llapi,
-                    db,
-                )?;
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
                 if revealed {
                     info!("Modify Diff Record revealed!\n");
                 } else {
-                    failed = true;
+                    success = false;
                     info!("Failed to reveal modify record");
                 }
             }
@@ -294,52 +275,19 @@ impl Revealer {
         for dr in &drs {
             if dr.did == did && dr.record.typ == DECOR {
                 info!("Reversing decor record {:?}\n", dr.record);
-                let revealed = dr.record.reveal(
-                    &table_info,
-                    &pp_gen,
-                    &recorrelated_pps,
-                    &edges,
-                    &dr.uid,
-                    did,
-                    reveal_pps.clone(),
-                    &mut llapi,
-                    db,
-                )?;
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
                 if revealed {
                     info!("Decor Record revealed!\n");
                 } else {
-                    failed = true;
+                    success = false;
                     info!("Failed to reveal decor record");
                 }
             }
         }
 
-        // finally, remove the PPs created by the disguise (decorrelated objects should already
-        // be restored to the NP)
-        for dr in &drs {
-            if dr.did == did && dr.record.typ == NEW_PP {
-                info!("Reversing new_pp record {:?}\n", dr.record);
-                let revealed = dr.record.reveal(
-                    &table_info,
-                    &pp_gen,
-                    &recorrelated_pps,
-                    &edges,
-                    &dr.uid,
-                    did,
-                    reveal_pps.clone(),
-                    &mut llapi,
-                    db,
-                )?;
-                if revealed {
-                    info!("NewPP Record revealed!\n");
-                } else {
-                    failed = true;
-                    info!("Failed to reveal new_pp record");
-                }
-            }
-        }
         llapi.cleanup_records_of_disguise(did, &decrypt_cap);
-        if failed {
+        if !success {
             warn!("Reveal records failed, clearing anyways");
         }
         llapi.end_reveal(did);

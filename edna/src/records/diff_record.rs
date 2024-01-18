@@ -1,14 +1,14 @@
 use crate::crypto::*;
 use crate::lowlevel_api::*;
 use crate::records::*;
+use crate::revealer::RevealArgs;
 use crate::*;
-use crate::{PseudoprincipalGenerator, RevealPPType, TableInfo, TableName, TableRow, DID, UID};
+use crate::{RevealPPType, TableInfo, TableRow, DID, UID};
 use crypto_box::PublicKey;
 use log::{debug, warn};
 use mysql::from_value;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 use std::time;
 //use std::mem::size_of_val;
 
@@ -18,7 +18,13 @@ pub const NEW_PP: u8 = 2;
 pub const MODIFY: u8 = 3;
 pub const REMOVE_PRINCIPAL: u8 = 5;
 
-#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub enum RestoreOrUpdate {
+    RESTORE = 1,
+    UPDATE = 2,
+}
+
+#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub struct EdnaDiffRecordWrapper {
     pub did: DID,
     pub uid: UID,
@@ -36,7 +42,7 @@ pub struct DiffRecordWrapper {
     pub nonce: u64,
 }
 
-#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub struct EdnaDiffRecord {
     // metadata set by Edna
     pub typ: u8,
@@ -110,7 +116,7 @@ pub fn new_modify_record(old_value: TableRow, new_value: TableRow) -> EdnaDiffRe
 
 pub fn new_pseudoprincipal_record(pp: TableRow, old_uid: UID, new_uid: UID) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
-    edna_record.typ = NEW_PP;
+    edna_record.typ = REMOVE;
     edna_record.old_uid = old_uid;
     edna_record.new_uid = new_uid;
     edna_record.old_values = vec![];
@@ -126,7 +132,7 @@ pub fn new_decor_record(old_child: TableRow, new_child: TableRow) -> EdnaDiffRec
 }
 
 impl EdnaDiffRecord {
-    fn reveal_natural_principal(
+    fn reveal_removed_principal(
         &self,
         uid: &UID,
         llapi: &mut LowLevelAPI,
@@ -150,53 +156,63 @@ impl EdnaDiffRecord {
             self.enc_locators_index,
             true,
         );
-        warn!("Reveal natural principal: {}", start.elapsed().as_micros());
+        warn!("Reveal removed principal: {}", start.elapsed().as_micros());
         return Ok(true);
     }
 
-    pub fn reveal<Q: Queryable>(
-        &self,
-        timap: &HashMap<String, TableInfo>,
-        pp_gen: &PseudoprincipalGenerator,
-        recorrelated_pps: &HashSet<UID>,
-        edges: &HashMap<UID, Vec<SFChainRecord>>,
-        uid: &UID,
-        did: DID,
-        reveal_pps: RevealPPType,
-        llapi: &mut LowLevelAPI,
-        db: &mut Q,
-    ) -> Result<bool, mysql::Error> {
+    pub fn reveal<Q: Queryable>(&self, args: &mut RevealArgs<Q>) -> Result<bool, mysql::Error> {
         // all diff records should be restoring something
         match self.typ {
             // only ever called for a natural principal
-            REMOVE_PRINCIPAL => self.reveal_natural_principal(uid, llapi),
+            REMOVE_PRINCIPAL => self.reveal_removed_principal(&args.uid, args.llapi),
             _ => {
                 // remove rows before we reinsert old ones to avoid false
                 // duplicates
-                let mut restored_old_values = HashSet::new();
-                let mut failed = EdnaDiffRecord::remove_new_values(
-                    &self.new_values,
-                    &self.old_values,
-                    &mut restored_old_values,
-                    &self.old_uid,
-                    &self.new_uid,
-                    timap,
-                    pp_gen,
-                    reveal_pps,
-                    llapi,
-                    did,
-                    db,
-                )?;
-                failed &= EdnaDiffRecord::restore_old_values(
-                    &self.old_values,
-                    &mut restored_old_values,
-                    timap,
-                    pp_gen,
-                    recorrelated_pps,
-                    edges,
-                    db,
-                )?;
-                Ok(failed)
+                let mut success = true;
+                let mut old_values: HashSet<TableRow> =
+                    self.old_values.iter().map(|ov| ov.clone()).collect();
+                let mut remove_last = vec![];
+                let mut remove_first = vec![];
+                for nv in &self.new_values {
+                    if nv.table == args.pp_gen.table {
+                        remove_last.push(nv);
+                    } else {
+                        remove_first.push(nv)
+                    }
+                }
+                let mut start = time::Instant::now();
+                success &= self.remove_or_update_rows(&remove_first, &mut old_values, args)?;
+                if success {
+                    warn!(
+                        "Removed {} new non-pp rows: {}mus",
+                        remove_first.len(),
+                        start.elapsed().as_micros()
+                    );
+                } else {
+                    warn!("Failed to remove or update non-pp rows");
+                }
+
+                start = time::Instant::now();
+                success &= self.remove_or_update_rows(&remove_last, &mut old_values, args)?;
+                if success {
+                    warn!(
+                        "Removed {} new pp rows: {}mus",
+                        remove_last.len(),
+                        start.elapsed().as_micros()
+                    );
+                } else {
+                    warn!("Failed to remove or update pp rows");
+                }
+                start = time::Instant::now();
+                for ov in &old_values {
+                    success &= self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
+                    if success {
+                        warn!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
+                    } else {
+                        warn!("Failed to restore old_value {:?}", ov);
+                    }
+                }
+                Ok(success)
             }
         }
     }
@@ -279,110 +295,101 @@ impl EdnaDiffRecord {
         }
     }
 
-    pub fn restore_old_values<Q: Queryable>(
-        old_values: &Vec<TableRow>,
-        restored_old_values: &HashSet<TableRow>,
-        timap: &HashMap<TableName, TableInfo>,
-        pp_gen: &PseudoprincipalGenerator,
-        recorrelated_pps: &HashSet<UID>,
-        edges: &HashMap<UID, Vec<SFChainRecord>>,
-        db: &mut Q,
+    pub fn restore_old_value<Q: Queryable>(
+        &self,
+        new_value: Option<&TableRow>,
+        old_value: &TableRow,
+        restore_or_update: RestoreOrUpdate,
+        args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
-        let start = time::Instant::now();
-        if old_values.len() == 0 {
-            return Ok(true);
+        warn!("Try to {:?} old value! {:?}", restore_or_update, old_value);
+        let table = &old_value.table;
+        let mut old_value_row = old_value.row.clone();
+
+        // get current obj in db
+        let table_info = args.timap.get(table).unwrap();
+        let ids = helpers::get_ids(&table_info.id_cols, &old_value_row);
+        let item_selection = helpers::get_select_of_ids_str(&ids);
+        let item_selected = helpers::get_query_rows_str_q::<Q>(
+            &helpers::str_select_statement(table, table, &item_selection.to_string()),
+            args.db,
+        )?;
+
+        // CHECK 1: If we're going to restore, don't reinsert if the item already exists
+        if restore_or_update == RestoreOrUpdate::RESTORE && !item_selected.is_empty() {
+            warn!("restore old objs: found objects for {}", item_selection);
+            return Ok(false);
         }
-        let mut failed = false;
-        for old_value in old_values {
-            if restored_old_values.contains(old_value) {
-                warn!("Already restored old_value {:?}", old_value);
-                continue;
+
+        // CHECK 2: Referential integrity to non-owners
+        for fk in &table_info.other_fks {
+            // if original entity does not exist, do not reveal
+            let curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
+            if curval.to_lowercase() == "null" {
+                warn!("restore old objs: fk {} curval is null", fk.from_col);
+                return Ok(false);
             }
-            let table = &old_value.table;
-            let mut old_value_row = old_value.row.clone();
-
-            // get current obj in db
-            let table_info = timap.get(table).unwrap();
-            let ids = helpers::get_ids(&table_info.id_cols, &old_value_row);
-            let item_selection = helpers::get_select_of_ids_str(&ids);
-            let selected = helpers::get_query_rows_str_q::<Q>(
-                &helpers::str_select_statement(table, table, &item_selection.to_string()),
-                db,
-            )?;
-
-            // CHECK 1: Uniqueness, don't reinsert if the item already exists
-            if !selected.is_empty() {
-                failed = true;
-                warn!("restore old objs: found objects for {}", item_selection);
-                continue;
+            // xxx this might have problems with quotes?
+            let selection = format!(
+                "SELECT * FROM {} WHERE {}.{} = {}",
+                fk.from_table, fk.from_table, fk.from_col, curval
+            );
+            warn!("other fk selection: {}", selection.to_string());
+            let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
+            if selected.is_empty() {
+                warn!(
+                    "restore old objs: No entity exists for fk col {} val {}",
+                    fk.from_col, curval
+                );
+                return Ok(false);
             }
+        }
 
-            // CHECK 2: Referential integrity to non-owners
-            for fk in &table_info.other_fks {
-                // if original entity does not exist, do not reveal
-                let curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
-                if curval.to_lowercase() == "null" {
-                    warn!("restore old objs: fk {} curval is null", fk.from_col);
-                    continue;
+        // CHECK 3: Referential integrity to owners
+        // if the original UID doesn't exist, rewrite the object to point to
+        // the latest revealed UID (if exists).  We can reveal as long as
+        // there's some speaks-for path to the stored UID in the diff, and
+        // we rewrite this col to the correct restored UID.
+        if table != &args.pp_gen.table {
+            for fk in &table_info.owner_fks {
+                let mut curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
+                debug!("Table {} refers to user table", table);
+                if args.recorrelated_pps.contains(&curval) {
+                    warn!("Recorrelated pps contained the old_uid {}", curval);
+
+                    // find the most recent UID in the path up to this one
+                    // that should exist in the DB
+                    let old_uid =
+                        sfchain_record::find_old_uid(args.edges, &curval, args.recorrelated_pps);
+                    curval = old_uid.unwrap_or(curval);
+                    helpers::set_value_of_col(&mut old_value_row, &fk.from_col, &curval);
                 }
-                // xxx this might have problems with quotes?
+
+                // select here too
                 let selection = format!(
                     "SELECT * FROM {} WHERE {}.{} = {}",
-                    fk.from_table, fk.from_table, fk.from_col, curval
+                    args.pp_gen.table, args.pp_gen.table, args.pp_gen.id_col, curval
                 );
-                warn!("other fk selection: {}", selection.to_string());
-                let selected = helpers::get_query_rows_str_q::<Q>(&selection, db)?;
+                warn!("owner fk selection: {}", selection.to_string());
+                let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
+
                 if selected.is_empty() {
                     warn!(
-                        "restore old objs: No entity exists for fk col {} val {}",
+                        "No original entity exists for fk col {} val {}",
                         fk.from_col, curval
                     );
-                    failed = true;
+                    return Ok(false);
                 }
             }
-            // CHECK 3: Referential integrity to owners
-            // if the original UID doesn't exist, rewrite the object to point to
-            // the latest revealed UID (if exists).  We can reveal as long as
-            // there's some speaks-for path to the stored UID in the diff, and
-            // we rewrite this col to the correct restored UID.
-            if table != &pp_gen.table {
-                for fk in &table_info.owner_fks {
-                    let mut curval =
-                        helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
-                    debug!("Diff record corresponds to table referring to user");
-                    if recorrelated_pps.contains(&curval) {
-                        warn!("Recorrelated pps contained the old_uid {}", curval);
+            warn!("rewritten old_value_row = {:?}", old_value_row);
+        }
 
-                        // find the most recent UID in the path up to this one
-                        // that should exist in the DB
-                        let old_uid =
-                            sfchain_record::find_old_uid(edges, &curval, recorrelated_pps);
-                        curval = old_uid.unwrap_or(curval);
-                        helpers::set_value_of_col(&mut old_value_row, &fk.from_col, &curval);
-                    }
-                    // select here too
-                    let selection = format!(
-                        "SELECT * FROM {} WHERE {}.{} = {}",
-                        pp_gen.table, pp_gen.table, pp_gen.id_col, curval
-                    );
-                    warn!("owner fk selection: {}", selection.to_string());
-                    let selected = helpers::get_query_rows_str_q::<Q>(&selection, db)?;
-                    if selected.is_empty() {
-                        warn!(
-                            "No original entity exists for fk col {} val {}",
-                            fk.from_col, curval
-                        );
-                        return Ok(false);
-                    }
-                }
-            }
-
-            // We've check for uniqueness and referential integrity; now insert
-            // the old row!
+        // We've check for uniqueness and referential integrity; now either insert or update
+        // the old row!
+        if restore_or_update == RestoreOrUpdate::RESTORE {
             let cols: Vec<String> = old_value_row.iter().map(|rv| rv.column().clone()).collect();
             let colstr = cols.join(",");
-            let vals: Vec<String> = old_value
-                .row
+            let vals: Vec<String> = old_value_row
                 .iter()
                 .map(|rv| {
                     if rv.value().is_empty() {
@@ -402,230 +409,189 @@ impl EdnaDiffRecord {
             let valstr = vals.join(",");
             let insert_q = format!("INSERT INTO {} ({}) VALUES ({})", table, colstr, valstr);
             warn!("{}", insert_q);
-            db.query_drop(insert_q)?;
-        }
-        warn!(
-            "Restored {} old removed rows: {}mus",
-            old_values.len(),
-            start.elapsed().as_micros()
-        );
-        if !failed {
-            return Ok(true);
+            args.db.query_drop(insert_q).unwrap();
+            Ok(true)
         } else {
-            return Ok(false);
+            // update!
+            let new_value = new_value.unwrap();
+            if item_selected.len() < 1 {
+                warn!("No item to update?");
+                return Ok(false);
+            }
+            let item = &item_selected[0];
+            let mut updates = vec![];
+            for (ix, rv) in old_value_row.iter().enumerate() {
+                assert_eq!(rv.column(), item[ix].column());
+                assert_eq!(rv.column(), new_value.row[ix].column());
+                // compare the stripped versions
+                let ov = rv.value().replace("\'", "");
+                let iv = item[ix].value().replace("\'", "");
+                let nv = new_value.row[ix].value().replace("\'", "");
+
+                if nv == iv && ov != nv {
+                    updates.push(format!("`{}` = {}", rv.column(), ov));
+                } else {
+                    // don't update if the item column is different from the value that we changed it to!
+                    debug!(
+                        "Don't update column {}, nv {}, item v {}, ov {}",
+                        rv.column(),
+                        nv,
+                        iv,
+                        ov
+                    )
+                }
+            }
+            // somehow this row exactly matches, we can just keep this row
+            if updates.len() > 0 {
+                // update the relevant columns
+                let update_q = format!(
+                    "UPDATE {} SET {} WHERE {}",
+                    &table,
+                    updates.join(", "),
+                    item_selection
+                );
+                warn!("{}", update_q);
+                args.db.query_drop(update_q)?;
+            }
+            Ok(true)
         }
     }
 
-    pub fn remove_new_values<Q: Queryable>(
-        new_values: &Vec<TableRow>,
-        old_values: &Vec<TableRow>,
-        restored_old_values: &mut HashSet<TableRow>,
-        old_uid: &UID,
-        new_uid: &UID,
-        timap: &HashMap<TableName, TableInfo>,
-        pp_gen: &PseudoprincipalGenerator,
-        reveal_pps: RevealPPType,
-        llapi: &mut LowLevelAPI,
-        did: DID,
-        db: &mut Q,
+    fn remove_or_update_rows<Q: Queryable>(
+        &self,
+        new_values: &Vec<&TableRow>,
+        old_values: &mut HashSet<TableRow>,
+        args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
-        let start = time::Instant::now();
-        let mut failed = false;
-        let mut remove_last = vec![];
-        let mut remove_first = vec![];
-        for nv in new_values {
-            if nv.table == pp_gen.table {
-                remove_last.push(nv);
+        let mut success = true;
+        for new_value in new_values {
+            let table = &new_value.table;
+
+            // get current obj in db
+            let table_info = args.timap.get(table).unwrap();
+            let ids = helpers::get_ids(&table_info.id_cols, &new_value.row);
+            let selection = helpers::get_select_of_ids_str(&ids);
+            let selected = helpers::get_query_rows_str_q::<Q>(
+                &helpers::str_select_statement(table, table, &selection.to_string()),
+                args.db,
+            )?;
+
+            // CHECK 1: Is the item already removed?
+            if selected.is_empty() {
+                warn!("No new item to remove! {}", selection);
+                success = false;
+                continue;
+            }
+
+            /*
+            * CHECK 2: Referential integrity, we need to do something to
+            * rows that refer to this one
+
+            * Note: only need to worry about referential integrity of new
+            * pseudoprincipal rows, because we assume that modified rows
+            * (the only other new row type) keep the same unique
+            * identifiers, and thus any object pointing to the modified row
+            * will also point to the old unmodified row.  We will have to
+            * run new row removal and old row restoration in a transaction
+            * to avoid any period of broken referential integrity.
+
+            * if an object exists that refers to the pseudoprincipal, then
+            * this is because we haven't rewritten it yet to an old object.
+            * we can get rid of this referential loop by removing all new
+            * non-pseudoprincipal objects first (which we do by filtering
+            * out the values prior to calling this helper function.)
+
+            * Note: we could also transfer the principal's records to the
+            * original principal's bag, and reencrypt
+
+            * Note: this will fail if we're one of the modified
+            * pseudoprincipals happens to be in the speaks-for chain, and
+            * is already recorrelated
+            */
+
+            if table == &args.pp_gen.table {
+                if args.reveal_pps == RevealPPType::Delete
+                    || args.reveal_pps == RevealPPType::Restore
+                {
+                    // find the most recent UID in the path up to this one
+                    // that should exist in the DB
+                    let old_uid = sfchain_record::find_old_uid(
+                        args.edges,
+                        &self.new_uid,
+                        args.recorrelated_pps,
+                    );
+                    let old_uid = old_uid.unwrap_or(self.old_uid.clone());
+
+                    // NOTE: Assume only one id used as a foreign key
+                    // either delete or rewrite pp children to point to
+                    // original principal.
+                    for (child_table, tinfo) in args.timap.into_iter() {
+                        if child_table == &args.pp_gen.table {
+                            continue;
+                        }
+                        // we already removed the new value representing the
+                        // rewritten child, so we don't have to worry about
+                        // rewriting it here
+                        EdnaDiffRecord::decor_update_or_delete_children(
+                            &old_uid,
+                            &self.new_uid,
+                            tinfo,
+                            args.reveal_pps == RevealPPType::Delete,
+                            args.db,
+                        )?;
+                    }
+
+                    // now remove the pseudoprincipal
+                    let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
+                    warn!("{}", delete_q);
+                    args.db.query_drop(delete_q)?;
+
+                    // remove PP metadata from the record ctrler (when all
+                    // locators are gone) do per new uid because did might
+                    // differ NOTE: pps kept for "restore" can never be
+                    // reclaimed now
+                    args.llapi.forget_principal(&self.new_uid, args.did);
+                }
             } else {
-                remove_first.push(nv)
-            }
-        }
-        fn helper<Q: Queryable>(
-            new_values: &Vec<&TableRow>,
-            old_values: &Vec<TableRow>,
-            restored_old_values: &mut HashSet<TableRow>,
-            old_uid: &UID,
-            new_uid: &UID,
-            timap: &HashMap<String, TableInfo>,
-            pp_gen: &PseudoprincipalGenerator,
-            reveal_pps: RevealPPType,
-            llapi: &mut LowLevelAPI,
-            did: DID,
-            db: &mut Q,
-        ) -> Result<bool, mysql::Error> {
-            let mut failed = false;
-            for new_value in new_values {
-                let table = &new_value.table;
-
-                // get current obj in db
-                let table_info = timap.get(table).unwrap();
-                let ids = helpers::get_ids(&table_info.id_cols, &new_value.row);
-                let selection = helpers::get_select_of_ids_str(&ids);
-                let selected = helpers::get_query_rows_str_q::<Q>(
-                    &helpers::str_select_statement(table, table, &selection.to_string()),
-                    db,
-                )?;
-
-                // CHECK 1: Is the item already removed?
-                if selected.is_empty() {
-                    warn!("No new item to remove! {}", selection);
-                    continue;
+                // Update the new value to the old value in place, if we find a matching old
+                // value
+                let mut should_delete = true;
+                for ov in &old_values.clone() {
+                    let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
+                    if ids == old_ids {
+                        // we found a match, make sure not to delete this item even if we fail to restore it since we're updating the old value here!
+                        should_delete = false;
+                        if self.restore_old_value(
+                            Some(new_value),
+                            &ov,
+                            RestoreOrUpdate::UPDATE,
+                            args,
+                        )? {
+                            old_values.remove(&ov);
+                        }
+                        break;
+                    }
                 }
-
-                /*
-                * CHECK 2: Referential integrity, we need to do something to
-                * rows that refer to this one
-
-                * Note: only need to worry about referential integrity of new
-                * pseudoprincipal rows, because we assume that modified rows
-                * (the only other new row type) keep the same unique
-                * identifiers, and thus any object pointing to the modified row
-                * will also point to the old unmodified row.  We will have to
-                * run new row removal and old row restoration in a transaction
-                * to avoid any period of broken referential integrity.
-
-                * if an object exists that refers to the pseudoprincipal, then
-                * this is because we haven't rewritten it yet to an old object.
-                * we can get rid of this referential loop by removing all new
-                * non-pseudoprincipal objects first (which we do by filtering
-                * out the values prior to calling this helper function.)
-
-                * Note: we could also transfer the principal's records to the
-                * original principal's bag, and reencrypt
-
-                * Note: this will fail if we're one of the modified
-                * pseudoprincipals happens to be in the speaks-for chain, and
-                * is already recorrelated
-                */
-                if table == &pp_gen.table {
-                    if reveal_pps == RevealPPType::Delete || reveal_pps == RevealPPType::Restore {
-                        // NOTE: Assume only one id used as a foreign key
-                        // either delete or rewrite pp children to point to
-                        // original principal.
-                        for (child_table, tinfo) in timap.into_iter() {
-                            if child_table == &pp_gen.table {
-                                continue;
-                            }
-                            // we already removed the new value representing the
-                            // rewritten child, so we don't have to worry about
-                            // rewriting it here
-                            EdnaDiffRecord::decor_update_or_delete_children(
-                                &old_uid,
-                                &new_uid,
-                                tinfo,
-                                reveal_pps == RevealPPType::Delete,
-                                db,
-                            )?;
-                        }
-
-                        // now remove the pseudoprincipal
-                        let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
-                        warn!("{}", delete_q);
-                        db.query_drop(delete_q)?;
-
-                        // remove PP metadata from the record ctrler (when all
-                        // locators are gone) do per new uid because did might
-                        // differ NOTE: pps kept for "restore" can never be
-                        // reclaimed now
-                        llapi.forget_principal(&new_uid, did);
-                    }
-                } else {
-                    // Update the new value to the old value in place, if we find a matching old
-                    // value
-                    let mut should_delete = true;
-                    for ov in old_values {
-                        let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
-                        if ids == old_ids {
-                            let mut updates = vec![];
-                            for (ix, rv) in ov.row.iter().enumerate() {
-                                if rv.value() != new_value.row[ix].value() {
-                                    updates.push(format!("`{}` = {}", rv.column(), rv.value()));
-                                }
-                            }
-                            // somehow this row exactly matches, we can just keep this row
-                            if updates.len() == 0 {
-                                should_delete = false;
-                                break;
-                            }
-                            // update the relevant columns
-                            let update_q = format!(
-                                "UPDATE {} SET {} WHERE {}",
-                                &table,
-                                updates.join(", "),
-                                selection
-                            );
-                            warn!("{}", update_q);
-                            db.query_drop(update_q)?;
-                            should_delete = false;
-                            restored_old_values.insert(ov.clone());
-                            break;
-                        }
-                    }
-                    if should_delete {
-                        // retain if things refer to it
-                        for (_, tinfo) in timap.into_iter() {
-                            let nchildren =
-                                EdnaDiffRecord::get_count_of_children(&ids[0].value(), tinfo, db)?;
-                            if nchildren == 0 {
-                                let delete_q =
-                                    format!("DELETE FROM {} WHERE {}", &table, selection);
-                                warn!("{}", delete_q);
-                                db.query_drop(delete_q)?;
-                            } else {
-                                failed = true;
-                            }
+                // we can delete the item only if there's no matching old value
+                // that we've already tried to rewrite the new value to
+                // otherwise, we'll fail to update to the old value on future
+                // compositions
+                if should_delete {
+                    // retain if things refer to it
+                    for (_, tinfo) in args.timap.into_iter() {
+                        let nchildren =
+                            EdnaDiffRecord::get_count_of_children(&ids[0].value(), tinfo, args.db)?;
+                        if nchildren == 0 {
+                            let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
+                            warn!("{}", delete_q);
+                            args.db.query_drop(delete_q)?;
+                        } else {
+                            success = false;
                         }
                     }
                 }
             }
-            Ok(!failed)
         }
-        failed &= helper(
-            &remove_first,
-            old_values,
-            restored_old_values,
-            old_uid,
-            new_uid,
-            timap,
-            pp_gen,
-            reveal_pps,
-            llapi,
-            did,
-            db,
-        )?;
-        if !failed {
-            warn!(
-                "Removed {} new non-pp rows: {}mus",
-                remove_first.len(),
-                start.elapsed().as_micros()
-            );
-        }
-
-        failed &= helper(
-            &remove_last,
-            old_values,
-            restored_old_values,
-            old_uid,
-            new_uid,
-            timap,
-            pp_gen,
-            reveal_pps,
-            llapi,
-            did,
-            db,
-        )?;
-        if !failed {
-            warn!(
-                "Removed {} new pp rows: {}mus",
-                remove_last.len(),
-                start.elapsed().as_micros()
-            );
-        }
-        warn!(
-            "Try remove {} new rows: {}mus",
-            new_values.len(),
-            start.elapsed().as_micros()
-        );
-        return Ok(!failed);
+        Ok(success)
     }
 }

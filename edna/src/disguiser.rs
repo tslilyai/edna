@@ -148,11 +148,17 @@ impl Disguiser {
         let mut llapi = self.llapi.lock().unwrap();
         let disg_start = time::Instant::now();
         let did = llapi.start_disguise(disguise.user.clone());
-        warn!("Edna: start disguise: {}mus", disg_start.elapsed().as_micros());
+        warn!(
+            "Edna: start disguise: {}mus",
+            disg_start.elapsed().as_micros()
+        );
 
         let get_rec_start = time::Instant::now();
         let (_, sfchain) = llapi.get_recs_and_privkeys(&decrypt_cap);
-        warn!("Edna: get records: {}mus", get_rec_start.elapsed().as_micros());
+        warn!(
+            "Edna: get records: {}mus",
+            get_rec_start.elapsed().as_micros()
+        );
         drop(llapi);
 
         let sfchain_records: Vec<&SFChainRecord> = sfchain.iter().map(|(_k, v)| v).collect();
@@ -488,7 +494,7 @@ impl Disguiser {
                             llapi.register_pseudoprincipal(did, &np_uid, &ppuid, pprow);
 
                             // (3) insert a diff record for the decor state change
-                            llapi.insert_decor_record(
+                            llapi.save_decor_record(
                                 np_uid.clone(),
                                 TableRow {
                                     table: curtable_info.table.clone(),
@@ -884,7 +890,7 @@ impl Disguiser {
                             i_with_pps[ix] = RowVal::new(i[ix].column(), new_uid.clone());
                             // note that we may have multiple decor records for
                             // each pp, since the pp may own multiple items
-                            llapi.insert_decor_record(
+                            llapi.save_decor_record(
                                 old_uid.clone(),
                                 TableRow {
                                     table: child_tableinfo.table.clone(),

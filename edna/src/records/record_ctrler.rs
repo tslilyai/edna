@@ -720,10 +720,10 @@ impl RecordCtrler {
             }
             let mut bag: Bag = bincode::deserialize(&plaintext).unwrap();
 
-            // remove if we found a matching record for the disguise
+            // we found a matching record for the disguise
             diff_records.append(&mut bag.diffrecs);
             info!(
-                "Edna: Decrypted diff, own, pk records added {}, {}: {}mus",
+                "Edna: Decrypted diff, pk records added {}, {}: {}mus",
                 bag.diffrecs.len(),
                 bag.chainrecs.len(),
                 start.elapsed().as_micros(),
@@ -919,10 +919,8 @@ impl RecordCtrler {
                 };
                 if let Some(encls) = self.enc_locators_map.get(&pk_hash) {
                     info!(
-                        "Cleanup: Getting records of pseudoprincipal {} with data {}, {:?}",
+                        "Cleanup: Getting records of pseudoprincipal {}", 
                         new_uid,
-                        pkt.priv_key.len(),
-                        encls,
                     );
                     let mut empty = false;
                     for enclc in encls.clone() {

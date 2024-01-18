@@ -1,6 +1,6 @@
 use crate::RowVal;
 use crate::*;
-use log::{debug, warn};
+use log::warn;
 use mysql::Opts;
 use std::str::FromStr;
 
@@ -101,7 +101,6 @@ pub fn str_select_statement(table: &str, from: &str, selection: &str) -> String 
     } else {
         format!("SELECT {}.* FROM {} WHERE {}", table, from, selection)
     };
-    debug!("{}", s);
     s
 }
 
