@@ -512,7 +512,8 @@ impl RecordCtrler {
 
         // persist share info at share_loc
         self.shares_map.insert(uid_pw_hash, perm_share.clone());
-        info!("user share: {:?}", perm_share.share);
+        info!("edna-stored user share: {:?}", perm_share.share);
+        info!("user-stored user share: {:?}", (&all_shares[2], uid_pw_hash));
         RecordPersister::persist_share(&vec![(uid_pw_hash, perm_share.clone())], db);
 
         (all_shares[2].clone(), uid_pw_hash)
@@ -589,7 +590,8 @@ impl RecordCtrler {
     }
 
     // forget metadata as soon as all locators are gone.
-    // do this even for pseudoprincipals
+    // do this even for pseudoprincipals, because pseudoprincipals can be restored
+    // from recursive disguising!
     pub fn mark_principal_to_forget(&mut self, uid: &UID, did: DID) {
         let start = time::Instant::now();
         let p = self.principal_data.get_mut(uid).unwrap();
@@ -758,6 +760,7 @@ impl RecordCtrler {
         password: Option<String>,
         user_data: Option<UserData>,
     ) -> Option<DecryptCap> {
+        info!("get_priv_key: user {} user share: {:?}", uid, user_data);
         if self.dryrun {
             if user_data != None {
                 panic!("Oops can't use this in dryrun");
@@ -832,7 +835,7 @@ impl RecordCtrler {
         };
         let priv_key = sss.reconstruct(&shares);
         let pkbytes = get_pk_bytes(priv_key.to_bytes_le().1);
-        info!("SSS reconstruct: {}mus", start.elapsed().as_micros());
+        info!("SSS reconstruct {}: {}mus", uid, start.elapsed().as_micros());
         return Some(pkbytes.to_vec());
     }
 

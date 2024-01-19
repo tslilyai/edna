@@ -129,10 +129,7 @@ impl LowLevelAPI {
     pub fn get_recs_and_privkeys(
         &mut self,
         decrypt_cap: &records::DecryptCap,
-    ) -> (
-        Vec<DiffRecordWrapper>,
-        HashMap<UID, SFChainRecord>,
-    ) {
+    ) -> (Vec<DiffRecordWrapper>, HashMap<UID, SFChainRecord>) {
         let mut diff_records = vec![];
         let mut sfchain_records = HashMap::new();
         if decrypt_cap.is_empty() {
@@ -149,11 +146,7 @@ impl LowLevelAPI {
         (diff_records, sfchain_records)
     }
 
-    pub fn cleanup_records_of_disguise(
-        &mut self,
-        did: DID,
-        decrypt_cap: &records::DecryptCap,
-    ) {
+    pub fn cleanup_records_of_disguise(&mut self, did: DID, decrypt_cap: &records::DecryptCap) {
         let mut db = self.pool.get_conn().unwrap();
         let locators = self.record_ctrler.get_locators(decrypt_cap);
         for lc in locators {
@@ -178,7 +171,13 @@ impl LowLevelAPI {
         self.record_ctrler.mark_principal_to_forget(uid, did);
     }
 
-    pub fn register_pseudoprincipal(&mut self, did: DID, old_uid: &UID, new_uid: &UID, pp: TableRow) {
+    pub fn register_pseudoprincipal(
+        &mut self,
+        did: DID,
+        old_uid: &UID,
+        new_uid: &UID,
+        pp: TableRow,
+    ) {
         self.record_ctrler
             .register_pseudoprincipal(old_uid, new_uid, pp, did);
     }
@@ -191,7 +190,7 @@ impl LowLevelAPI {
         did: DID,
     ) {
         let drec = new_decor_record(old_child, new_child);
-        let data =  edna_diff_record_to_bytes(&drec);
+        let data = edna_diff_record_to_bytes(&drec);
         self.save_diff_record(np_uid, did, data);
     }
 

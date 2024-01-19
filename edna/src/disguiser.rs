@@ -14,7 +14,7 @@ const REMOVED_SHARED_TABLE: &'static str = "EdnaRemovedSharedObjects";
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Object {
     table: TableName,
-    row: Vec<RowVal>,
+    row_ids: Vec<RowVal>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,7 +100,7 @@ impl Disguiser {
         rsobytes += size_of_val(&self.removed_shared_objs);
         for (obj, rso) in self.removed_shared_objs.iter() {
             rsobytes += size_of_val(&obj);
-            for rv in &obj.row {
+            for rv in &obj.row_ids {
                 rsobytes += size_of_val(rv);
             }
             rsobytes += size_of_val(rso);
@@ -462,7 +462,7 @@ impl Disguiser {
             // (3) actually update the persistent database object
             let obj = Object {
                 table: curtable_info.table.clone(),
-                row: i.clone(),
+                row_ids: ids.clone(),
             };
             if let Some(shared_diff_record) = removed_shared_objs.get_mut(&obj) {
                 for fk in &curtable_info.owner_fks {
@@ -481,7 +481,7 @@ impl Disguiser {
                                 ppuid, np_uid
                             );
 
-                            let ix = i.iter().position(|r| &r.column() == &fk.to_col).unwrap();
+                            let ix = i.iter().position(|r| &r.column() == &fk.from_col).unwrap();
 
                             // (1) store diff token for data to remove
                             llapi.save_diff_record(
@@ -534,26 +534,36 @@ impl Disguiser {
                 //     and save items to rewrite in diffs and database
                 info!("Found shared obj to remove, hasn't been removed yet");
                 let mut i_with_pps = i.clone();
+                let mut is_with_one_np = vec![];
                 let mut pps = vec![];
                 for fk in &curtable_info.owner_fks {
                     let curuid = get_value_of_col(&i, &fk.from_col).unwrap();
 
-                    // skip pseudoprincipals
-                    if llapi.principal_is_anon(&curuid) {
-                        continue;
-                    }
+                    // don't skip pseudoprincipals!! for composition reasons
+                    //if llapi.principal_is_anon(&curuid) {
+                    //continue;
+                    //}
 
                     // create pseudoprincipal for this owner
                     let pp = Self::create_new_pseudoprincipal(seen_pps, pp_gen);
                     pps.push(pp.clone());
 
                     // we want to store the diff of an item with the pp as the new owner/fk
-                    let ix = i.iter().position(|r| &r.column() == &fk.to_col).unwrap();
+                    let ix = i.iter().position(|r| &r.column() == &fk.from_col).unwrap();
                     i_with_pps[ix] = RowVal::new(i[ix].column(), pp.0.clone());
 
                     if disguise.user.is_some() && disguise.user.as_ref().unwrap() != &curuid {
                         should_remove = false;
                     }
+                }
+
+                // to allow users to recorrelate one single column, without
+                // storing (in decorrelate diff) all the original owners
+                for fk in &curtable_info.owner_fks {
+                    let ix = i.iter().position(|r| &r.column() == &fk.from_col).unwrap();
+                    let mut i_with_one_np = i_with_pps.clone();
+                    i_with_one_np[ix] = i[ix].clone();
+                    is_with_one_np.push(i_with_one_np);
                 }
 
                 // (1) insert new pseudoprincipals into the DB
@@ -594,7 +604,12 @@ impl Disguiser {
                 // (2) if we're not actually removing this object, put it into our
                 // saved map for all principals that might remove it later
                 // otherwise, store the diff for the user
-                assert!(get_ids(&curtable_info.id_cols, &i_with_pps) == ids);
+                assert!(
+                    get_ids(&curtable_info.id_cols, &i_with_pps) == ids,
+                    "{:?}, {:?}",
+                    ids,
+                    get_ids(&curtable_info.id_cols, &i_with_pps)
+                );
                 let i_with_pps_diff_record = new_delete_record(TableRow {
                     table: curtable_info.table.to_string(),
                     row: i_with_pps.to_vec(),
@@ -610,14 +625,41 @@ impl Disguiser {
                     // invoking value
                     if disguise.user.is_none() || disguise.user.as_ref().unwrap() == &curuid {
                         info!("Saving diff record for shared obj to remove for {}", curuid);
+                        // NOTE: this is the same as above, if the user later removes the record
+                        // (1) store diff token for data to remove
+                        llapi.save_diff_record(
+                            curuid.clone(),
+                            did,
+                            edna_diff_record_to_bytes(&i_with_pps_diff_record),
+                        );
+                        // (2) register new pseudoprincipal
+                        //      (storing a sfchain record and pp record)
+                        llapi.register_pseudoprincipal(did, &curuid, &newuid, pp);
+
+                        // (3) insert a diff record for the decor state change
+                        llapi.save_decor_record(
+                            curuid.clone(),
+                            TableRow {
+                                table: curtable_info.table.clone(),
+                                row: is_with_one_np[ix].clone(),
+                            },
+                            TableRow {
+                                table: curtable_info.table.clone(),
+                                row: i_with_pps.clone(),
+                            },
+                            did,
+                        );
+                        i_updates.push((fk.from_col.clone(), newuid.clone()));
                     } else {
+                        // do this even for pseudoprincipals that might now own the data
+                        // due to another disguise
                         info!(
                             "Inserting mapping from {} to {} for shared obj to remove",
                             curuid, newuid
                         );
                         match removed_shared_objs.get_mut(&Object {
                             table: curtable_info.table.clone(),
-                            row: i.clone(),
+                            row_ids: ids.clone(),
                         }) {
                             Some(shared_diff_record) => {
                                 shared_diff_record.np_to_pp.insert(
@@ -648,7 +690,7 @@ impl Disguiser {
                                 removed_shared_objs.insert(
                                     Object {
                                         table: curtable_info.table.clone(),
-                                        row: i.clone(),
+                                        row_ids: ids.clone(),
                                     },
                                     SharedDiffRecord {
                                         diff: i_with_pps_diff_record.clone(),
@@ -670,7 +712,7 @@ impl Disguiser {
                 Self::persist_removed_shared_obj_update(
                     &Object {
                         table: curtable_info.table.clone(),
-                        row: i.clone(),
+                        row_ids: ids.clone(),
                     },
                     removed_shared_objs,
                     db,
@@ -689,12 +731,12 @@ impl Disguiser {
                 // remove from Edna map too (and persist)
                 removed_shared_objs.remove(&Object {
                     table: curtable_info.table.clone(),
-                    row: i.clone(),
+                    row_ids: i.clone(),
                 });
                 Self::persist_removed_shared_obj_delete(
                     &Object {
                         table: curtable_info.table.clone(),
-                        row: ids.clone(),
+                        row_ids: ids.clone(),
                     },
                     db,
                 );

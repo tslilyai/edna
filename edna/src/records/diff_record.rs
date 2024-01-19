@@ -116,7 +116,7 @@ pub fn new_modify_record(old_value: TableRow, new_value: TableRow) -> EdnaDiffRe
 
 pub fn new_pseudoprincipal_record(pp: TableRow, old_uid: UID, new_uid: UID) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
-    edna_record.typ = REMOVE;
+    edna_record.typ = NEW_PP;
     edna_record.old_uid = old_uid;
     edna_record.new_uid = new_uid;
     edna_record.old_values = vec![];
@@ -305,6 +305,7 @@ impl EdnaDiffRecord {
         warn!("Try to {:?} old value! {:?}", restore_or_update, old_value);
         let table = &old_value.table;
         let mut old_value_row = old_value.row.clone();
+        let mut restore_or_update = restore_or_update;
 
         // get current obj in db
         let table_info = args.timap.get(table).unwrap();
@@ -317,8 +318,12 @@ impl EdnaDiffRecord {
 
         // CHECK 1: If we're going to restore, don't reinsert if the item already exists
         if restore_or_update == RestoreOrUpdate::RESTORE && !item_selected.is_empty() {
-            warn!("restore old objs: found objects for {}", item_selection);
-            return Ok(false);
+            warn!(
+                "restore old objs: found objects for {}, going to update instead!",
+                item_selection
+            );
+            restore_or_update = RestoreOrUpdate::UPDATE;
+            //return Ok(false);
         }
 
         // CHECK 2: Referential integrity to non-owners
@@ -332,7 +337,7 @@ impl EdnaDiffRecord {
             // xxx this might have problems with quotes?
             let selection = format!(
                 "SELECT * FROM {} WHERE {}.{} = {}",
-                fk.from_table, fk.from_table, fk.from_col, curval
+                fk.to_table, fk.to_table, fk.to_col, curval
             );
             warn!("other fk selection: {}", selection.to_string());
             let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
@@ -412,8 +417,10 @@ impl EdnaDiffRecord {
             args.db.query_drop(insert_q).unwrap();
             Ok(true)
         } else {
-            // update!
-            let new_value = new_value.unwrap();
+            // update! we either get here because we're updating a new value,
+            // or we had an old value with an existing item in the database that
+            // we want to see if we can update
+            let new_value = new_value.unwrap_or(old_value);
             if item_selected.len() < 1 {
                 warn!("No item to update?");
                 return Ok(false);
@@ -548,7 +555,8 @@ impl EdnaDiffRecord {
 
                     // remove PP metadata from the record ctrler (when all
                     // locators are gone) do per new uid because did might
-                    // differ NOTE: pps kept for "restore" can never be
+                    // differ
+                    // NOTE: pps kept for "restore" can never be
                     // reclaimed now
                     args.llapi.forget_principal(&self.new_uid, args.did);
                 }

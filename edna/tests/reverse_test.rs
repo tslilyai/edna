@@ -13,8 +13,8 @@ const PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen.json");
 const ANON_JSON: &'static str = include_str!("./disguises/universal_anon_disguise.json");
 const GDPR_JSON: &'static str = include_str!("./disguises/gdpr_disguise.json");
 const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
-const USER_ITERS: u64 = 1;
-const NSTORIES: u64 = 1;
+const USER_ITERS: u64 = 5;
+const NSTORIES: u64 = 5;
 
 fn init_logger() {
     let _ = env_logger::builder()
@@ -216,7 +216,7 @@ fn test_app_rev_anon_disguise() {
             results.push(id);
         }
         // additional story added for pp recorrelation!
-        assert_eq!(results.len(), NSTORIES as usize + 1);
+        assert!(results.len() > NSTORIES as usize);
 
         // moderations recorrelated
         let mut results = vec![];

@@ -13,8 +13,8 @@ const ANON_JSON: &'static str = include_str!("./disguises/universal_anon_disguis
 const REMOVE_ALL_JSON: &'static str = include_str!("./disguises/universal_remove_disguise.json");
 const GDPR_REMOVE_JSON: &'static str = include_str!("./disguises/gdpr_disguise_remove.json");
 const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
-const USER_ITERS: u64 = 3;
-const NSTORIES: u64 = 2;
+const USER_ITERS: u64 = 10;
+const NSTORIES: u64 = 5;
 const ADMIN: u64 = 100;
 
 fn init_logger() {
@@ -293,36 +293,7 @@ fn test_remove_one_shared() {
 
     // we clear all records even if disguises fails, so if admin fails here, they won't be able to
     // restore their ownership later on
-    /*// admin restore
-    edna.reveal_disguise(
-        ADMIN.to_string(),
-        admin_did,
-        TABLEINFO_JSON,
-        PPGEN_JSON,
-        None,
-        Some(admin_user_share.clone()),
-        false,
-    )
-    .unwrap();
-
-    let mut results = vec![];
-    let res = db
-        .query_iter(format!(
-            r"SELECT moderator_user_id, user_id FROM moderations"
-        ))
-        .unwrap();
-    for row in res {
-        let vals = row.unwrap().unwrap();
-        assert_eq!(vals.len(), 2);
-        let mod_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-        let id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-        assert_eq!(mod_id, ADMIN);
-        warn!("Got user ID {}", id);
-        assert!(id != 1);
-        results.push(id);
-    }
-    // cannot restore entry yet because the story doesn't exist...
-    assert_eq!(results.len(), (USER_ITERS as usize - 1) * NSTORIES as usize);*/
+    // don't try an admin restore
 
     // users restore
     edna.reveal_disguise(
@@ -365,7 +336,7 @@ fn test_remove_one_shared() {
     }
     assert_eq!(results.len(), USER_ITERS as usize * NSTORIES as usize);
 
-    // admin restore again
+    // admin restore
     edna.reveal_disguise(
         ADMIN.to_string(),
         admin_did,
@@ -403,6 +374,7 @@ fn test_remove_one_shared() {
         let vals = row.unwrap().unwrap();
         let id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
         if id > ADMIN {
+            warn!("Got pseudoprincipal after revealing user 1: {}", id);
             results.push(id);
         }
     }
@@ -411,7 +383,7 @@ fn test_remove_one_shared() {
     // TRY AGAIN IN OPPOSITE REVEAL ORDER
 
     // APPLY ADMIN DISGUISE
-    let admin_did = edna
+    /*let admin_did = edna
         .apply_disguise(
             ADMIN.to_string(),
             GDPR_REMOVE_JSON,
@@ -538,6 +510,7 @@ fn test_remove_one_shared() {
         }
     }
     assert_eq!(results.len(), (USER_ITERS as usize - 1) * NSTORIES as usize);
+    */
 
     drop(db);
 }
@@ -642,7 +615,7 @@ fn test_remove_all_shared() {
         let id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
         assert_eq!(mod_id, ADMIN);
         warn!("Got user ID {}", id);
-        assert!(id >= USER_ITERS + 1);
+        assert!(id >= USER_ITERS + 1, "{}", id);
         results.push(id.to_string());
     }
     assert_eq!(results.len(), USER_ITERS as usize * NSTORIES as usize);

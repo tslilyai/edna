@@ -143,10 +143,7 @@ impl Revealer {
 
         // remove pseudoprincipals that haven't been recorrelated yet
         for dr in drs.clone() {
-            if dr.record.typ == REMOVE
-                && dr.record.new_values.len() > 0
-                && dr.record.new_values[0].table == pp_gen.table
-            {
+            if dr.record.typ == NEW_PP {
                 recorrelated_pps.remove(&dr.record.new_uid);
             }
         }
@@ -270,10 +267,25 @@ impl Revealer {
             }
         }
 
-        // NOTE: used to rewrite of path to correct oldest UID here. no need, since we do it upon
-        // reveal?
         for dr in &drs {
             if dr.did == did && dr.record.typ == DECOR {
+                info!("Reversing decor record {:?}\n", dr.record);
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
+                if revealed {
+                    info!("Decor Record revealed!\n");
+                } else {
+                    success = false;
+                    info!("Failed to reveal decor record");
+                }
+            }
+        }
+
+        // reveal (by deleting) new pseudoprincipals
+        // note that we do this after recorrelation in case a shared data item
+        // introduced a record referring to a pseudoprincipal
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == NEW_PP {
                 info!("Reversing decor record {:?}\n", dr.record);
                 reveal_args.uid = dr.uid.clone();
                 let revealed = dr.record.reveal(&mut reveal_args)?;
