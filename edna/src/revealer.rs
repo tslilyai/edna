@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-pub type UpdateFn = Box<dyn Fn(Vec<TableRow>) -> Vec<TableRow>>;
+pub type UpdateFn = Box<dyn Fn(Vec<TableRow>) -> Vec<TableRow> + Send + Sync>;
 
 pub struct RevealArgs<'a, Q: Queryable> {
     pub timap: &'a HashMap<String, TableInfo>,

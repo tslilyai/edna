@@ -3,78 +3,274 @@
         "name": "ContactInfo",
         "id_cols": ["contactId"],
         "other_fks": [],
-        "owner_fks": ["contactId"]
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "ContactInfo",
+                "from_col": "contactId"
+            }
+        ]
     },
     "PaperWatch": {
         "name": "PaperWatch",
         "id_cols": ["paperWatchId"],
-        "other_fks": [["Paper", "paperId", "paperId"]],
-        "owner_fks": ["contactId"]
+        "other_fks": [
+            {
+                "to_table": "Paper", 
+                "to_col": "paperId", 
+                "from_table": "PaperWatch", 
+                "from_col": "paperId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "PaperWatch",
+                "from_col": "contactId"
+            }
+        ]
     },
     "PaperReviewPreference": {
         "name": "PaperReviewPreference",
         "id_cols": ["paperRevPrefId"],
-        "other_fks": [["Paper", "paperId", "paperId"]],
-        "owner_fks": ["contactId"]
+        "other_fks": [
+            {
+                "to_table": "Paper", 
+                "to_col": "paperId", 
+                "from_table": "PaperReviewPreference", 
+                "from_col": "paperId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "PaperReviewPreference",
+                "from_col": "contactId"
+            }
+        ]
     },
     "Capability": {
         "name": "Capability",
         "id_cols": ["salt"],
         "other_fks": [],
-        "owner_fks": ["contactId"]
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "Capability",
+                "from_col": "contactId"
+            }
+        ]
     },
     "PaperConflict": {
         "name": "PaperConflict",
         "id_cols": ["paperConflictId"],
-        "other_fks": [["Paper", "paperId", "paperId"]],
-        "owner_fks": ["contactId"]
+        "other_fks": [
+            {
+                "to_table": "Paper", 
+                "to_col": "paperId", 
+                "from_table": "PaperConflict", 
+                "from_col": "paperId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "PaperConflict",
+                "from_col": "contactId"
+            }
+        ]
     },
     "TopicInterest": {
         "name": "TopicInterest",
         "id_cols": ["topicInterestId"],
-        "other_fks": [["Topic", "topicId", "topicId"]],
-        "owner_fks": ["contactId"]
+        "other_fks": [
+            {
+                "to_table": "Topic", 
+                "to_col": "topicId", 
+                "from_table": "TopicInterest",
+                "from_col": "topicId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "TopicInterest",
+                "from_col": "contactId"
+            }
+        ]
     },
     "PaperReviewRefused": {
         "name": "PaperReviewRefused",
         "id_cols": ["paperId", "email"],
-        "other_fks": [["Paper", "paperId", "paperId"]],
-        "owner_fks": ["requestedBy", "refusedBy"]
+        "other_fks": [
+            {
+                "to_table": "Paper", 
+                "to_col": "paperId", 
+                "from_table": "PaperReviewRefused", 
+                "from_col": "paperId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "PaperReviewRefused",
+                "from_col": "refusedBy"
+            },
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "PaperReviewRefused",
+                "from_col": "requestedBy"
+            }
+        ]
     },
     "ActionLog": {
         "name": "ActionLog",
         "id_cols": ["logId"],
         "other_fks": [],
-        "owner_fks": ["contactId", "destContactId", "trueContactId"]
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "ActionLog",
+                "from_col": "contactId"
+            },
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "ActionLog",
+                "from_col": "destContactId"
+            },
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "ActionLog",
+                "from_col": "trueContactId"
+            }
+        ]
     },
     "ReviewRating": {
         "name": "ReviewRating",
         "id_cols": ["paperId", "reviewId", "contactId"],
-        "other_fks": [["Paper", "paperId", "paperId"], ["PaperReview", "reviewId", "reviewId"]],
-        "owner_fks": ["contactId"]
+        "other_fks": [
+            {
+                "to_table": "Paper", 
+                "to_col": "paperId", 
+                "from_table": "ReviewRating", 
+                "from_col": "paperId"
+            },
+            {
+                "to_table": "PaperReview", 
+                "to_col": "reviewId", 
+                "from_table": "ReviewRating", 
+                "from_col": "reviewId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "ReviewRating",
+                "from_col": "contactId"
+            }
+        ]
     },
     "ReviewRequest": {
         "name": "ReviewRequest",
         "id_cols": ["paperId", "email"],
-        "other_fks": [["Paper", "paperId", "paperId"]],
-        "owner_fks": ["requestedBy"]
+        "other_fks": [
+            {
+                "to_table": "Paper", 
+                "to_col": "paperId", 
+                "from_table": "ReviewRequest", 
+                "from_col": "paperId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "ReviewRequest",
+                "from_col": "requestedBy"
+            }
+        ]
     },
     "PaperComment": {
         "name": "PaperComment",
         "id_cols": ["commentId"],
-        "other_fks": [["Paper", "paperId", "paperId"]],
-        "owner_fks": ["contactId"]
+        "other_fks": [
+            {
+                "to_table": "Paper", 
+                "to_col": "paperId", 
+                "from_table": "PaperComment", 
+                "from_col": "paperId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "PaperComment",
+                "from_col": "contactId"
+            }
+        ]
     },
     "PaperReview": {
         "name": "PaperReview",
         "id_cols": ["reviewId"],
-        "other_fks": [["Paper", "paperId", "paperId"]],
-        "owner_fks": ["contactId", "requestedBy"]
+        "other_fks": [
+            {
+                "to_table": "Paper", 
+                "to_col": "paperId", 
+                "from_table": "PaperReview", 
+                "from_col": "paperId"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "PaperReview",
+                "from_col": "contactId"
+            },
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "PaperReview",
+                "from_col": "requestedBy"
+            }
+        ]
     },
     "Paper": {
         "name": "Paper",
         "id_cols": ["paperId"],
         "other_fks": [],
-        "owner_fks": ["leadContactId", "managerContactId", "shepherdContactId"]
+        "owner_fks": [
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "Paper",
+                "from_col": "leadContactId"
+            },
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "Paper",
+                "from_col": "managerContactId"
+            },
+            {
+                "to_table": "ContactInfo",
+                "to_col": "contactId",
+                "from_table": "Paper",
+                "from_col": "shepherdContactId"
+            }
+        ]
     }
 }

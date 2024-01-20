@@ -448,7 +448,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
     let mut file = File::create(filename).unwrap();
     let nusers = sampler.nusers();
     let mut rng = rand::thread_rng();
-    let bytes = edna.get_sizes(dbname);
+    let bytes = edna.get_space_overhead(dbname);
     file.write(format!("TOTAL START: {} {}\n", bytes.0, bytes.1).as_bytes())
         .unwrap();
 
@@ -473,7 +473,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
                 .unwrap();
             dids.push(did);
         }
-        let bytes = edna.get_sizes(dbname);
+        let bytes = edna.get_space_overhead(dbname);
         file.write(format!("TOTAL DECOR: {} {}\n", bytes.0, bytes.1).as_bytes())
             .unwrap();
 
@@ -495,7 +495,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
             .unwrap();
         }
 
-        let bytes = edna.get_sizes(dbname);
+        let bytes = edna.get_space_overhead(dbname);
         file.write(format!("TOTAL RESTORE: {} {}\n", bytes.0, bytes.1).as_bytes())
             .unwrap();
         file.flush().unwrap();

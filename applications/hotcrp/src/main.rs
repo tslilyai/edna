@@ -84,11 +84,11 @@ fn get_stats(db: &mut mysql::PooledConn) {
         let mut nobjs = 1;
         let table_infos: HashMap<String, TableInfo> = serde_json::from_str(TABLEINFO_JSON).unwrap();
         for (table, info) in table_infos.iter() {
-            for owner_col in &info.owner_fk_cols {
+            for fk in &info.owner_fks {
                 let res = db
                     .query_iter(format!(
                         r"SELECT COUNT(*) FROM {} WHERE {} = {};",
-                        table, owner_col, u
+                        table, fk.from_col, u
                     ))
                     .unwrap();
                 for row in res {

@@ -61,10 +61,10 @@ impl PseudoprincipalGenerator {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ForeignKey {
-    to_table: TableName,
-    to_col: ColName,
-    from_table: TableName,
-    from_col: ColName,
+    pub to_table: TableName,
+    pub to_col: ColName,
+    pub from_table: TableName,
+    pub from_col: ColName,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -417,7 +417,7 @@ impl EdnaClient {
 
     pub fn record_update<F>(&mut self, f: F)
     where
-        F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static,
+        F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static + Send + Sync,
     {
         self.revealer.record_update(Box::new(f));
     }
