@@ -202,7 +202,6 @@ pub struct GetRecordsOfDisguise {
 #[derive(Serialize, JsonSchema)]
 pub struct GetRecordsOfDisguiseResponse {
     diff_records: Vec<Vec<u8>>,
-    ownership_records: Vec<Vec<u8>>,
 }
 
 #[openapi]
@@ -215,7 +214,6 @@ pub(crate) fn get_records_of_disguise(
     let records = e.get_records_of_disguise(data.did, &data.decrypt_cap);
     return Json(GetRecordsOfDisguiseResponse {
         diff_records: records.0,
-        ownership_records: records.1,
     });
 }
 
@@ -234,28 +232,13 @@ pub(crate) fn cleanup_records_of_disguise(
     e.cleanup_records_of_disguise(data.did, &data.decrypt_cap);
 }
 
-#[derive(Deserialize, JsonSchema)]
+/*#[derive(Deserialize, JsonSchema)]
 pub struct SavePseudoprincipalRecord {
     did: edna::DID,
     old_uid: edna::UID,
     new_uid: edna::UID,
     record_bytes: Vec<u8>,
-}
-
-#[openapi]
-#[post("/save_pp_record", format = "json", data = "<data>")]
-pub(crate) fn save_pseudoprincipal_record(
-    data: Json<SavePseudoprincipalRecord>,
-    edna: &State<Arc<Mutex<EdnaClient>>>,
-) {
-    let e = edna.lock().unwrap();
-    e.register_and_save_pseudoprincipal_record(
-        data.did,
-        &data.old_uid,
-        &data.new_uid,
-        &data.record_bytes,
-    );
-}
+}*/
 
 #[derive(Deserialize, JsonSchema)]
 pub struct SaveDiffRecord {
