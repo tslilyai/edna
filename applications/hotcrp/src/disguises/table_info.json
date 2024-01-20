@@ -1,6 +1,6 @@
 {
     "ContactInfo": {
-        "name": "ContactInfo",
+        "table": "ContactInfo",
         "id_cols": ["contactId"],
         "other_fks": [],
         "owner_fks": [
@@ -13,7 +13,7 @@
         ]
     },
     "PaperWatch": {
-        "name": "PaperWatch",
+        "table": "PaperWatch",
         "id_cols": ["paperWatchId"],
         "other_fks": [
             {
@@ -33,7 +33,7 @@
         ]
     },
     "PaperReviewPreference": {
-        "name": "PaperReviewPreference",
+        "table": "PaperReviewPreference",
         "id_cols": ["paperRevPrefId"],
         "other_fks": [
             {
@@ -53,7 +53,7 @@
         ]
     },
     "Capability": {
-        "name": "Capability",
+        "table": "Capability",
         "id_cols": ["salt"],
         "other_fks": [],
         "owner_fks": [
@@ -66,7 +66,7 @@
         ]
     },
     "PaperConflict": {
-        "name": "PaperConflict",
+        "table": "PaperConflict",
         "id_cols": ["paperConflictId"],
         "other_fks": [
             {
@@ -86,7 +86,7 @@
         ]
     },
     "TopicInterest": {
-        "name": "TopicInterest",
+        "table": "TopicInterest",
         "id_cols": ["topicInterestId"],
         "other_fks": [
             {
@@ -106,7 +106,7 @@
         ]
     },
     "PaperReviewRefused": {
-        "name": "PaperReviewRefused",
+        "table": "PaperReviewRefused",
         "id_cols": ["paperId", "email"],
         "other_fks": [
             {
@@ -132,7 +132,7 @@
         ]
     },
     "ActionLog": {
-        "name": "ActionLog",
+        "table": "ActionLog",
         "id_cols": ["logId"],
         "other_fks": [],
         "owner_fks": [
@@ -157,7 +157,7 @@
         ]
     },
     "ReviewRating": {
-        "name": "ReviewRating",
+        "table": "ReviewRating",
         "id_cols": ["paperId", "reviewId", "contactId"],
         "other_fks": [
             {
@@ -183,7 +183,7 @@
         ]
     },
     "ReviewRequest": {
-        "name": "ReviewRequest",
+        "table": "ReviewRequest",
         "id_cols": ["paperId", "email"],
         "other_fks": [
             {
@@ -203,7 +203,7 @@
         ]
     },
     "PaperComment": {
-        "name": "PaperComment",
+        "table": "PaperComment",
         "id_cols": ["commentId"],
         "other_fks": [
             {
@@ -223,7 +223,7 @@
         ]
     },
     "PaperReview": {
-        "name": "PaperReview",
+        "table": "PaperReview",
         "id_cols": ["reviewId"],
         "other_fks": [
             {
@@ -249,7 +249,7 @@
         ]
     },
     "Paper": {
-        "name": "Paper",
+        "table": "Paper",
         "id_cols": ["paperId"],
         "other_fks": [],
         "owner_fks": [

@@ -1,6 +1,6 @@
 {
     "users": {
-        "name": "users",
+        "table": "users",
         "id_cols": ["email"],
         "other_fks": [],
         "owner_fks": [
@@ -13,13 +13,13 @@
         ]
     },
     "lectures": {
-        "name": "lectures",
+        "table": "lectures",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": []
     },
     "questions": {
-        "name": "questions",
+        "table": "questions",
         "id_cols": ["lec", "q"],
         "other_fks": [
              {
@@ -32,7 +32,7 @@
         "owner_fks": []
     },
     "answers": {
-        "name": "answers",
+        "table": "answers",
         "id_cols": ["email", "lec", "q"],
         "other_fks": [
             {

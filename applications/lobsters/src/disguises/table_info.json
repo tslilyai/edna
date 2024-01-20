@@ -1,6 +1,6 @@
 {
     "comments": {
-        "name": "comments",
+        "table": "comments",
         "id_cols": ["id"],
         "other_fks": [
             {
@@ -20,7 +20,7 @@
         ]
     },
     "hat_requests": {
-        "name": "hat_requests",
+        "table": "hat_requests",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": [
@@ -33,7 +33,7 @@
         ]
     },
     "hats": {
-        "name": "hats",
+        "table": "hats",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": [
@@ -52,7 +52,7 @@
         ]
     },
     "hidden_stories": {
-        "name": "hidden_stories",
+        "table": "hidden_stories",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": [
@@ -65,7 +65,7 @@
         ]
     },
     "invitations": {
-        "name": "invitations",
+        "table": "invitations",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": [
@@ -78,7 +78,7 @@
         ]
     },
     "messages": {
-        "name": "messages",
+        "table": "messages",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": [
@@ -97,7 +97,7 @@
         ]
     },
     "mod_notes": {
-        "name": "mod_notes",
+        "table": "mod_notes",
         "id_cols": ["id"],
         "other_fks": [
             {
@@ -129,7 +129,7 @@
         ]
     },
     "moderations": {
-        "name": "moderations",
+        "table": "moderations",
         "id_cols": ["id"],
         "other_fks": [
             {
@@ -161,7 +161,7 @@
         ]
     },
    "read_ribbons": {
-        "name": "read_ribbons",
+        "table": "read_ribbons",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": [
@@ -174,7 +174,7 @@
         ]
     },
     "saved_stories": {
-        "name": "saved_stories",
+        "table": "saved_stories",
         "id_cols": ["id"],
         "other_fks": [],
           "owner_fks": [
@@ -187,7 +187,7 @@
         ]
     },
     "stories": {
-        "name": "stories",
+        "table": "stories",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": [
@@ -200,7 +200,7 @@
         ]
     },
     "suggested_taggings": {
-        "name": "suggested_taggings",
+        "table": "suggested_taggings",
         "id_cols": ["id"],
         "other_fks": [
            {
@@ -220,7 +220,7 @@
         ]
     },
     "suggested_titles": {
-        "name": "suggested_titles",
+        "table": "suggested_titles",
         "id_cols": ["id"],
         "other_fks": [],
          "owner_fks": [
@@ -233,7 +233,7 @@
         ]
     },
     "tag_filters": {
-        "name": "tag_filters",
+        "table": "tag_filters",
         "id_cols": ["id"],
         "other_fks": [
             {
@@ -259,13 +259,13 @@
         ]
     },
     "users": {
-        "name": "users",
+        "table": "users",
         "id_cols": ["id"],
         "other_fks": [],
         "owner_fks": ["id"]
     },
     "votes": {
-        "name": "votes",
+        "table": "votes",
         "id_cols": ["id"],
         "other_fks": [
             {

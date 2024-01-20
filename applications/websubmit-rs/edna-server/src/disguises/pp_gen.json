@@ -1,5 +1,5 @@
 {
-    "name": "users",
+    "table": "users",
     "id_col": "email",
     "cols": ["email", "apikey", "is_admin", "is_anon"],
     "val_generation": [

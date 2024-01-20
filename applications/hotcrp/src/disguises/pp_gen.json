@@ -1,5 +1,5 @@
 {
-    "name": "ContactInfo",
+    "table": "ContactInfo",
     "id_col": "contactId",
     "cols": [
         "contactId", 
