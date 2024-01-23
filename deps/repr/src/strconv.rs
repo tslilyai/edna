@@ -291,7 +291,10 @@ pub fn parse_timestamptz(s: &str) -> Result<DateTime<Utc>, ParseError> {
                 .from_local_datetime(&date.and_time(time))
                 .earliest()
                 .ok_or_else(|| "invalid timezone conversion".to_owned())?;
-            Ok(DateTime::<Utc>::from_utc(offset.naive_utc(), Utc))
+            Ok(DateTime::<Utc>::from_naive_utc_and_offset(
+                offset.naive_utc(),
+                Utc,
+            ))
         })
         .map_err(|e| ParseError::new("timestamptz", s).with_details(e))
 }

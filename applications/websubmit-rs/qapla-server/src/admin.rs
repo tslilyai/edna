@@ -34,7 +34,7 @@ impl<'r> FromRequest<'r> for Admin {
         } else {
             None
         };
-        res.into_outcome((Status::Unauthorized, AdminError::Unauthorized))
+        res.or_error((Status::Unauthorized, AdminError::Unauthorized))
     }
 }
 
