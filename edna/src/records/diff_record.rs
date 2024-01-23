@@ -315,6 +315,10 @@ impl EdnaDiffRecord {
             &helpers::str_select_statement(table, table, &item_selection.to_string()),
             args.db,
         )?;
+        warn!(
+            "restore old objs: going to restore {:?}",
+            old_value_row 
+        );
 
         // CHECK 1: If we're going to restore, don't reinsert if the item already exists
         if restore_or_update == RestoreOrUpdate::RESTORE && !item_selected.is_empty() {
@@ -331,13 +335,15 @@ impl EdnaDiffRecord {
             // if original entity does not exist, do not reveal
             let curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
             if curval.to_lowercase() == "null" {
-                warn!("restore old objs: fk {} curval is null", fk.from_col);
-                return Ok(false);
+                // can actually legit be null!
+                continue;
+                //warn!("restore old objs: fk {} curval is null", fk.from_col);
+                //return Ok(false);
             }
             // xxx this might have problems with quotes?
             let selection = format!(
                 "SELECT * FROM {} WHERE {}.{} = {}",
-                fk.to_table, fk.to_table, fk.to_col, curval
+                fk.to_table, fk.to_table, fk.to_col, helpers::to_mysql_valstr(&curval)
             );
             warn!("other fk selection: {}", selection.to_string());
             let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
@@ -373,7 +379,7 @@ impl EdnaDiffRecord {
                 // select here too
                 let selection = format!(
                     "SELECT * FROM {} WHERE {}.{} = {}",
-                    args.pp_gen.table, args.pp_gen.table, args.pp_gen.id_col, curval
+                    args.pp_gen.table, args.pp_gen.table, args.pp_gen.id_col, helpers::to_mysql_valstr(&curval)
                 );
                 warn!("owner fk selection: {}", selection.to_string());
                 let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
@@ -436,7 +442,7 @@ impl EdnaDiffRecord {
                 let nv = new_value.row[ix].value().replace("\'", "");
 
                 if nv == iv && ov != nv {
-                    updates.push(format!("`{}` = {}", rv.column(), ov));
+                    updates.push(format!("`{}` = '{}'", rv.column(), rv.value()));
                 } else {
                     // don't update if the item column is different from the value that we changed it to!
                     debug!(
@@ -473,6 +479,7 @@ impl EdnaDiffRecord {
         let mut success = true;
         for new_value in new_values {
             let table = &new_value.table;
+            warn!("Going to try to remove new row! {:?}", new_value);
 
             // get current obj in db
             let table_info = args.timap.get(table).unwrap();

@@ -104,6 +104,14 @@ pub fn str_select_statement(table: &str, from: &str, selection: &str) -> String 
     s
 }
 
+pub fn to_mysql_valstr(val: &str) -> String {
+    if is_string_numeric(val) || val == "true" || val == "false" {
+        val.to_string()
+    } else {
+        format!("'{}'", val)
+    }
+}
+
 pub fn get_select_of_ids_str(ids: &Vec<RowVal>) -> String {
     let mut parts = vec!["true".to_string()];
     for id in ids {

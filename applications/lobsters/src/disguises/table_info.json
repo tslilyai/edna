@@ -262,7 +262,14 @@
         "table": "users",
         "id_cols": ["id"],
         "other_fks": [],
-        "owner_fks": ["id"]
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "users",
+                "from_col": "id"
+            }
+        ]
     },
     "votes": {
         "table": "votes",

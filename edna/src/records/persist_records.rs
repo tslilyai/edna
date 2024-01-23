@@ -50,7 +50,7 @@ impl RecordPersister {
         // create encbags table
         // InnoDB for blobs
         db.query_drop(format!(
-        "CREATE TABLE IF NOT EXISTS {} (loc BIGINT UNSIGNED, encbag MEDIUMBLOB, PRIMARY KEY (loc)) ENGINE = InnoDB;",
+        "CREATE TABLE IF NOT EXISTS {} (loc BIGINT UNSIGNED, encbag LONGBLOB, PRIMARY KEY (loc)) ENGINE = InnoDB;",
         BAGTABLE)).unwrap();
 
         // create enclocss table

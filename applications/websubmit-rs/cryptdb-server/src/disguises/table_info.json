@@ -39,7 +39,7 @@
                 "to_table": "questions",
                 "to_col": "q",
                 "from_table": "answers",
-                "from_col": "a"
+                "from_col": "q"
             },
             {
                 "to_table": "lectures",

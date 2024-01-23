@@ -996,9 +996,9 @@ impl Disguiser {
                 .iter()
                 .map(|rv| {
                     if rv.column() == col {
-                        rv.clone()
+                        RowVal::new(rv.column().to_string(), new_val.clone())
                     } else {
-                        RowVal::new(col.to_string(), new_val.clone())
+                        rv.clone()
                     }
                 })
                 .collect();
