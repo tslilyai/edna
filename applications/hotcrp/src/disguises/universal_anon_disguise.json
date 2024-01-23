@@ -94,14 +94,14 @@
             "Decor" : {
                 "from": "",
                 "pred": "shepherdContactId > 0",
-                "user_fk_cols": ["shepherdContactId"],
+                "user_fk_cols": ["managerContactId", "leadContactId", "shepherdContactId"],
                 "group_by_cols": []
             }
         },
         {
             "Decor" : {
                 "from": "",
-                "pred": "True",
+                "pred": "shepherdContactId = 0",
                 "user_fk_cols": ["managerContactId", "leadContactId"],
                 "group_by_cols": []
             }
