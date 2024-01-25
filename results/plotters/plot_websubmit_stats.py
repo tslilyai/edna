@@ -133,7 +133,8 @@ app = "websubmit"
 filename_baseline='../websubmit_results/disguise_stats_{}lec_{}users_baseline.csv'.format(20,nusers)
 filename_dryrun='../websubmit_results/disguise_stats_{}lec_{}users_dryrun.csv'.format(20,nusers)
 filename_qapla = '../websubmit_results/qapla_stats_{}lec_{}users.csv'.format(20,nusers)
-filename_cryptdb='../websubmit_results/cryptdb_stats_{}lec_{}users_crypto.csv'.format(20,nusers)
+filename_cryptdb ='../websubmit_results/disguise_stats_{}lec_{}users_dryrun.csv'.format(20,nusers)
+#filename_cryptdb='../websubmit_results/cryptdb_stats_{}lec_{}users_crypto.csv'.format(20,nusers)
 #filename_cryptdb_nocrypto='../websubmit_results/cryptdb_stats_{}lec_{}users.csv'.format(20,nusers)
 filename='../websubmit_results/disguise_stats_{}lec_{}users.csv'.format(20,nusers)
 

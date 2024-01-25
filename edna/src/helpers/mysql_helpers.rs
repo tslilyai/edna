@@ -1,6 +1,6 @@
 use crate::RowVal;
 use crate::*;
-use log::warn;
+use log::{info, warn};
 use mysql::Opts;
 use std::str::FromStr;
 
@@ -152,7 +152,7 @@ fn create_schema(db: &mut mysql::Conn, in_memory: bool, schema: &str) -> Result<
     let mut sql = String::new();
     let mut stmt = String::new();
     for line in schema.lines() {
-        warn!("Got line {}", line);
+        info!("Got line {}", line);
         if line.starts_with("--") || line.is_empty() {
             continue;
         }
@@ -162,12 +162,12 @@ fn create_schema(db: &mut mysql::Conn, in_memory: bool, schema: &str) -> Result<
         }
         stmt.push_str(line);
         if stmt.ends_with(';') {
-            warn!("Got stmt {}", stmt);
+            info!("Got stmt {}", stmt);
             // ignore query statements in schema
             if stmt.to_lowercase().contains("create") {
                 if stmt.to_lowercase().contains("table") {
                     let new_stmt = helpers::process_schema_stmt(&stmt, in_memory);
-                    warn!("create_schema issuing new_stmt {}", new_stmt);
+                    info!("create_schema issuing new_stmt {}", new_stmt);
                     db.query_drop(new_stmt.to_string())?;
                 } else {
                     db.query_drop(stmt.to_string())?;
@@ -196,21 +196,18 @@ pub fn init_db(in_memory: bool, user: &str, pass: &str, host: &str, dbname: &str
 /************************************
  * MYSQL HELPERS
  ************************************/
-pub fn query_drop(q: String, conn: &mut mysql::PooledConn) -> Result<(), mysql::Error> {
-    warn!("query_drop: {}\n", q);
-    conn.query_drop(q)
-}
-
-pub fn query_drop_txn(q: String, txn: &mut mysql::Transaction) -> Result<(), mysql::Error> {
-    warn!("query_drop: {}\n", q);
-    txn.query_drop(q)
+pub fn query_drop<Q: Queryable>(q: &str, conn: &mut Q) -> Result<(), mysql::Error> {
+    let start = time::Instant::now();
+    conn.query_drop(q)?;
+    warn!("query_drop: {}: {}mus\n", q, start.elapsed().as_micros());
+    Ok(())
 }
 
 pub fn get_query_rows_str_txn(
     qstr: &str,
     txn: &mut mysql::Transaction,
 ) -> Result<Vec<Vec<RowVal>>, mysql::Error> {
-    warn!("get_query_rows: {}\n", qstr);
+    info!("get_query_rows: {}\n", qstr);
 
     let mut rows = vec![];
     let res = txn.query_iter(qstr)?;
@@ -241,7 +238,8 @@ pub fn get_query_rows_str(
     qstr: &str,
     conn: &mut mysql::PooledConn,
 ) -> Result<Vec<Vec<RowVal>>, mysql::Error> {
-    warn!("get_query_rows: {}\n", qstr);
+    let start = time::Instant::now();
+    info!("get_query_rows: {}\n", qstr);
 
     let mut rows = vec![];
     let res = conn.query_iter(qstr)?;
@@ -265,6 +263,7 @@ pub fn get_query_rows_str(
             .collect();
         rows.push(vals);
     }
+    warn!("{}: {}mus", qstr, start.elapsed().as_micros());
     Ok(rows)
 }
 

@@ -114,6 +114,7 @@ impl Revealer {
         // NOTE: We are currently not trying to reveal items with identifying
         // columns that are fks to the users table that have since been
         // decorrelated (would need to check all possible pps as fks)
+        let fnstart = time::Instant::now();
         let start = time::Instant::now();
         let (drws, pks) = self
             .llapi
@@ -121,7 +122,7 @@ impl Revealer {
             .unwrap()
             .get_recs_and_privkeys(&decrypt_cap);
         warn!(
-            "Edna: Get records for reveal: {}",
+            "Edna: Get records for reveal: {}mus",
             start.elapsed().as_micros()
         );
         let reveal_pps = reveal_pps.unwrap_or(RevealPPType::Restore);
@@ -138,8 +139,9 @@ impl Revealer {
         // existing data (meaning their disguises haven't yet been reverted, or
         // they were further decorrelated) will have a matching private key, but
         // no direct diff record recording their data row
+        let start = time::Instant::now();
         let mut recorrelated_pps: HashSet<UID> = pks.keys().cloned().collect();
-        warn!("Recorrelated pps pre-pruning: {:?}", recorrelated_pps);
+        info!("Recorrelated pps pre-pruning: {:?}", recorrelated_pps);
 
         // remove pseudoprincipals that haven't been recorrelated yet
         for dr in drs.clone() {
@@ -157,7 +159,7 @@ impl Revealer {
                 }
             }
         }
-        warn!("Recorrelated pps: {:?}", recorrelated_pps);
+        warn!("Construct graph and get recorrelated pps: {:?}: {}mus", recorrelated_pps, start.elapsed().as_micros());
 
         let mut llapi = self.llapi.lock().unwrap();
         llapi.start_reveal(did);
@@ -197,9 +199,7 @@ impl Revealer {
 
         // reveal other row removals
         // this must be done in order to properly recorrelate sf_records later
-        let start = time::Instant::now();
-
-        // construct the graph of tables with removed items
+        // first construct the graph of tables with removed items
         let mut remove_diffs_for_table: HashMap<String, Vec<(String, EdnaDiffRecord)>> =
             HashMap::new();
         for dr in &drs {
@@ -300,10 +300,10 @@ impl Revealer {
 
         llapi.cleanup_records_of_disguise(did, &decrypt_cap);
         if !success {
-            warn!("Reveal records failed, clearing anyways");
+            info!("Reveal records failed, clearing anyways: {}mus", fnstart.elapsed().as_micros());
         }
         llapi.end_reveal(did);
-        warn!("Reveal records total: {}", start.elapsed().as_micros());
+        warn!("Reveal records total: {}", fnstart.elapsed().as_micros());
         Ok(())
     }
 
