@@ -163,53 +163,168 @@ impl EdnaDiffRecord {
         return Ok(true);
     }
 
+    // reveals new pps by removing them in batch
+    pub fn reveal_new_pps<Q: Queryable>(records: &Vec<&EdnaDiffRecord>, args: &mut RevealArgs<Q>) -> Result<bool, mysql::Error> {
+        /* Note: only need to worry about referential integrity to new
+        * pseudoprincipal rows, because we assume that modified rows
+        * (the only other new row type) keep the same unique
+        * identifiers, and thus any object pointing to the modified row
+        * will also point to the old unmodified row.  We will have to
+        * run new row removal and old row restoration in a transaction
+        * to avoid any period of broken referential integrity.
+
+        * if an object exists that refers to the pseudoprincipal, then
+        * this is because we haven't rewritten it yet to an old object.
+        * we can get rid of this referential loop by removing all new
+        * non-pseudoprincipal objects first (which we do by filtering
+        * out the values prior to calling this function in the revealer.)
+
+        * Note: we could also transfer the principal's records to the
+        * original principal's bag, and reencrypt
+
+        * Note: this will fail if we're one of the modified
+        * pseudoprincipals happens to be in the speaks-for chain, and
+        * is already recorrelated
+        */
+        let fnstart = time::Instant::now();
+        if args.reveal_pps == RevealPPType::Retain {
+            return Ok(true);
+        }
+
+        let mut old_to_new: HashMap<UID, Vec<UID>> = HashMap::new();
+        for r in records {
+            // all diff records should be removing a new pp 
+            assert_eq!(r.new_values.len(), 1);
+            let table = &r.new_values[0].table;
+            assert_eq!(&args.pp_gen.table, table);
+            
+            // find the most recent UID in the path up to this one
+            // that should exist in the DB
+            let old_uid = sfchain_record::find_old_uid(
+                args.edges,
+                &r.new_uid,
+                args.recorrelated_pps,
+            );
+            let old_uid = old_uid.unwrap_or(r.old_uid.clone());
+            info!("reveal_new_pps: Going to check old {} -> pp {}", old_uid, r.new_uid);
+            match old_to_new.get_mut(&old_uid) {
+                Some(uids) => uids.push(r.new_uid.clone()),
+                None => {
+                    old_to_new.insert(old_uid.clone(), vec![r.new_uid.clone()]);
+                }
+            }
+        }
+
+        // CHECK: if original entities do not exist, do not recorrelate
+        if args.reveal_pps == RevealPPType::Restore {
+            let selection = format!(
+                "{} IN ({})",
+                args.pp_gen.id_col,
+                old_to_new.keys().cloned().collect::<Vec<_>>().join(",")
+            );
+            let selected = helpers::get_query_rows_str_q::<Q>(
+                &helpers::str_select_statement(&args.pp_gen.table, &args.pp_gen.table, &selection),
+                args.db,
+            )?;
+            if selected.len() != old_to_new.keys().len() {
+                debug!(
+                    "NEW_PP Reveal: {} col selection {} != {}\n",
+                    args.pp_gen.id_col,
+                    selected.len(),
+                    old_to_new.keys().len(),
+                );
+                return Ok(false);
+            }
+        }
+
+        // Actually delete or update pp children, if any exist!
+        for (old_uid, new_uids) in old_to_new.iter() {
+            // NOTE: Assume only one id used as a foreign key. 
+            let new_uids_str = new_uids.join(",");
+            for (child_table, tinfo) in args.timap.into_iter() {
+                if child_table == &args.pp_gen.table {
+                    continue;
+                }
+                let selection = if new_uids.len() == 1 {
+                    tinfo
+                    .owner_fks
+                    .iter()
+                    .map(|c| format!("`{}` = {}", c.from_col, new_uids[0]))
+                    .collect::<Vec<String>>()
+                    .join(" OR ")
+                } else {
+                    tinfo
+                    .owner_fks
+                    .iter()
+                    .map(|c| format!("`{}` IN ({})", c.from_col, new_uids_str))
+                    .collect::<Vec<String>>()
+                    .join(" OR ")
+                };
+                let update_stmt = if args.reveal_pps == RevealPPType::Delete {
+                    format!("DELETE FROM {} WHERE {}", tinfo.table, selection)
+                } else {
+                    // if only one owner col, skip the case
+                    let updates = if tinfo.owner_fks.len() == 1 {
+                        format!("{} = {}", tinfo.owner_fks[0].from_col, old_uid)
+                    } else {
+                        tinfo
+                            .owner_fks
+                            .iter()
+                            .map(|fk| {
+                                format!(
+                                    "{} = (SELECT CASE WHEN `{}` IN ({}) THEN {} ELSE `{}` END)",
+                                    fk.from_col, fk.from_col, new_uids_str, old_uid, fk.from_col
+                                )
+                            })
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    };
+                    format!("UPDATE {} SET {} WHERE {}", tinfo.table, updates, selection)
+                };
+                helpers::query_drop(&update_stmt, args.db)?;
+            }
+            for new_uid in new_uids {
+                // remove PP metadata from the record ctrler (when all locators
+                // are gone) do per new uid because did might differ NOTE: pps
+                // kept for "restore" can never be reclaimed now
+                args.llapi.forget_principal(&new_uid, args.did);
+            }
+            // now remove the pseudoprincipals
+            let delete_q = if new_uids.len() == 1 {
+                format!("DELETE FROM {} WHERE {} = {}", args.pp_gen.table, args.pp_gen.id_col, new_uids[0])
+            } else {
+                format!("DELETE FROM {} WHERE {} IN ({})", args.pp_gen.table, args.pp_gen.id_col, new_uids_str)
+            };
+            helpers::query_drop(&delete_q, args.db)?;
+        }
+        warn!("Reveal {} new pps: {}mus", records.len(), fnstart.elapsed().as_micros());
+        Ok(true)
+    }
+
     pub fn reveal<Q: Queryable>(&self, args: &mut RevealArgs<Q>) -> Result<bool, mysql::Error> {
         let fnstart = time::Instant::now();
         // all diff records should be restoring something
         let res = match self.typ {
             // only ever called for a natural principal
             REMOVE_PRINCIPAL => self.reveal_removed_principal(&args.uid, args.llapi),
+            NEW_PP => unimplemented!("no single record reveal of pseudoprincipals!"),
             _ => {
                 // remove rows before we reinsert old ones to avoid false
                 // duplicates
                 let mut success = true;
                 let mut old_values: HashSet<TableRow> =
                     self.old_values.iter().map(|ov| ov.clone()).collect();
-                let mut remove_last = vec![];
-                let mut remove_first = vec![];
-                for nv in &self.new_values {
-                    if nv.table == args.pp_gen.table {
-                        remove_last.push(nv);
-                    } else {
-                        remove_first.push(nv)
-                    }
-                }
                 let mut start = time::Instant::now();
-                success &= self.remove_or_update_rows(&remove_first, &mut old_values, args)?;
+                success &= self.remove_or_update_rows(&self.new_values, &mut old_values, args)?;
                 if success {
                     info!(
                         "Removed {} new non-pp rows: {}mus",
-                        remove_first.len(),
+                        self.new_values.len(),
                         start.elapsed().as_micros()
                     );
                 } else {
                     info!(
                         "Failed to remove or update non-pp rows: {}mus",
-                        start.elapsed().as_micros()
-                    );
-                }
-
-                start = time::Instant::now();
-                success &= self.remove_or_update_rows(&remove_last, &mut old_values, args)?;
-                if success {
-                    info!(
-                        "Removed {} new pp rows: {}mus",
-                        remove_last.len(),
-                        start.elapsed().as_micros()
-                    );
-                } else {
-                    info!(
-                        "Failed to remove or update pp rows: {}mus",
                         start.elapsed().as_micros()
                     );
                 }
@@ -265,61 +380,9 @@ impl EdnaDiffRecord {
         return Ok(count);
     }
 
-    /// decor_update_or_delete_children will either delete the children rows
-    /// belonging to pseudoprincipals, or update them to point to the new user
-    fn decor_update_or_delete_children<Q: Queryable>(
-        old_uid: &UID,
-        pp_uid: &UID,
-        tinfo: &TableInfo,
-        delete: bool,
-        db: &mut Q,
-    ) -> Result<(), mysql::Error> {
-        let fnstart = time::Instant::now();
-        let count = EdnaDiffRecord::get_count_of_children(pp_uid, tinfo, db)?;
-        if count == 0 {
-            warn!(
-                "decor_update_or_delete_children: {}mus",
-                fnstart.elapsed().as_micros()
-            );
-            return Ok(());
-        } else {
-            let selection = tinfo
-                .owner_fks
-                .iter()
-                .map(|c| format!("`{}` = {}", c.from_col, pp_uid))
-                .collect::<Vec<String>>()
-                .join(" OR ");
-            let update_stmt = if delete {
-                format!("DELETE FROM {} WHERE {}", tinfo.table, selection)
-            } else {
-                // if only one owner col, skip the case
-                let updates = if tinfo.owner_fks.len() == 1 {
-                    format!("{} = {}", tinfo.owner_fks[0].from_col, old_uid)
-                } else {
-                    tinfo
-                        .owner_fks
-                        .iter()
-                        .map(|fk| {
-                            format!(
-                                "{} = (SELECT CASE WHEN `{}` = {} THEN {} ELSE `{}` END)",
-                                fk.from_col, fk.from_col, pp_uid, old_uid, fk.from_col
-                            )
-                        })
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                };
-                format!("UPDATE {} SET {} WHERE {}", tinfo.table, updates, selection)
-            };
-            helpers::query_drop(&update_stmt, db)?;
-            warn!(
-                "decor_update_or_delete_children {}: {}mus",
-                update_stmt,
-                fnstart.elapsed().as_micros()
-            );
-            return Ok(());
-        }
-    }
-
+    /// To restore old values (after we've already updated the relevant ones
+    /// using new values). Typically only rows that have been removed, instead
+    /// of decorrelated or modified
     pub fn restore_old_value<Q: Queryable>(
         &self,
         new_value: Option<&TableRow>,
@@ -508,10 +571,12 @@ impl EdnaDiffRecord {
             Ok(true)
         }
     }
-
+    
+    /// To remove new value rows, or update new value rows to the old value (so
+    /// we don't do redundant work)
     fn remove_or_update_rows<Q: Queryable>(
         &self,
-        new_values: &Vec<&TableRow>,
+        new_values: &Vec<TableRow>,
         old_values: &mut HashSet<TableRow>,
         args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
@@ -537,126 +602,47 @@ impl EdnaDiffRecord {
                     selection,
                     fnstart.elapsed().as_micros()
                 );
-                success = false;
+                // this can still succeed!
+                // success = false;
                 continue;
             }
 
             /*
-            * CHECK 2: Referential integrity, we need to do something to
-            * rows that refer to this one
-
-            * Note: only need to worry about referential integrity of new
-            * pseudoprincipal rows, because we assume that modified rows
-            * (the only other new row type) keep the same unique
-            * identifiers, and thus any object pointing to the modified row
-            * will also point to the old unmodified row.  We will have to
-            * run new row removal and old row restoration in a transaction
-            * to avoid any period of broken referential integrity.
-
-            * if an object exists that refers to the pseudoprincipal, then
-            * this is because we haven't rewritten it yet to an old object.
-            * we can get rid of this referential loop by removing all new
-            * non-pseudoprincipal objects first (which we do by filtering
-            * out the values prior to calling this helper function.)
-
-            * Note: we could also transfer the principal's records to the
-            * original principal's bag, and reencrypt
-
-            * Note: this will fail if we're one of the modified
-            * pseudoprincipals happens to be in the speaks-for chain, and
-            * is already recorrelated
+            * CHECK 2: Referential integrity, we need to do something to rows
+            * that refer to this one. Only check for pseudoprincipals (e.g.,
+            * records of type "NEW_PP")
             */
-
-            if table == &args.pp_gen.table {
-                if args.reveal_pps == RevealPPType::Delete
-                    || args.reveal_pps == RevealPPType::Restore
-                {
-                    let start = time::Instant::now();
-                    // find the most recent UID in the path up to this one
-                    // that should exist in the DB
-                    let old_uid = sfchain_record::find_old_uid(
-                        args.edges,
-                        &self.new_uid,
-                        args.recorrelated_pps,
-                    );
-                    let old_uid = old_uid.unwrap_or(self.old_uid.clone());
-
-                    // NOTE: Assume only one id used as a foreign key
-                    // either delete or rewrite pp children to point to
-                    // original principal.
-                    for (child_table, tinfo) in args.timap.into_iter() {
-                        if child_table == &args.pp_gen.table {
-                            continue;
-                        }
-                        // we already removed the new value representing the
-                        // rewritten child, so we don't have to worry about
-                        // rewriting it here
-                        EdnaDiffRecord::decor_update_or_delete_children(
-                            &old_uid,
-                            &self.new_uid,
-                            tinfo,
-                            args.reveal_pps == RevealPPType::Delete,
-                            args.db,
-                        )?;
+            // Update the new value to the old value in place, if we find a matching old
+            // value
+            let mut should_delete = true;
+            for ov in &old_values.clone() {
+                let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
+                if ids == old_ids {
+                    // we found a match, make sure not to delete this item even if we fail to restore it since we're updating the old value here!
+                    should_delete = false;
+                    if self.restore_old_value(
+                        Some(new_value),
+                        &ov,
+                        RestoreOrUpdate::UPDATE,
+                        args,
+                    )? {
+                        old_values.remove(&ov);
                     }
-
-                    // now remove the pseudoprincipal
-                    let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
-                    helpers::query_drop(&delete_q, args.db)?;
-                    info!(
-                        "chain rewrite + {}: {}mus",
-                        delete_q,
-                        start.elapsed().as_micros()
-                    );
-
-                    // remove PP metadata from the record ctrler (when all
-                    // locators are gone) do per new uid because did might
-                    // differ
-                    // NOTE: pps kept for "restore" can never be
-                    // reclaimed now
-                    args.llapi.forget_principal(&self.new_uid, args.did);
+                    break;
                 }
-            } else {
-                // Update the new value to the old value in place, if we find a matching old
-                // value
-                let mut should_delete = true;
-                for ov in &old_values.clone() {
-                    let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
-                    if ids == old_ids {
-                        // we found a match, make sure not to delete this item even if we fail to restore it since we're updating the old value here!
-                        should_delete = false;
-                        if self.restore_old_value(
-                            Some(new_value),
-                            &ov,
-                            RestoreOrUpdate::UPDATE,
-                            args,
-                        )? {
-                            old_values.remove(&ov);
-                        }
-                        break;
-                    }
-                }
-                // we can delete the item only if there's no matching old value
-                // that we've already tried to rewrite the new value to
-                // otherwise, we'll fail to update to the old value on future
-                // compositions
-                if should_delete {
-                    // retain if things refer to it
-                    for (_, tinfo) in args.timap.into_iter() {
-                        let nchildren =
-                            EdnaDiffRecord::get_count_of_children(&ids[0].value(), tinfo, args.db)?;
-                        if nchildren == 0 {
-                            let start = time::Instant::now();
-                            let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
-                            helpers::query_drop(&delete_q, args.db)?;
-                            info!(
-                                "remove_or_update_rows {}: {}mus",
-                                delete_q,
-                                start.elapsed().as_micros()
-                            );
-                        } else {
-                            success = false;
-                        }
+            }
+            // we can delete the item only if there's no matching old value
+            // that we've already tried to rewrite the new value to.
+            if should_delete {
+                // retain if things refer to it
+                for (_, tinfo) in args.timap.into_iter() {
+                    let nchildren =
+                        EdnaDiffRecord::get_count_of_children(&ids[0].value(), tinfo, args.db)?;
+                    if nchildren == 0 {
+                        let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
+                        helpers::query_drop(&delete_q, args.db)?;
+                    } else {
+                        success = false;
                     }
                 }
             }

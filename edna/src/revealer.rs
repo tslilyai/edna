@@ -175,6 +175,7 @@ impl Revealer {
             db: db,
         };
 
+        // first, reveal any removed principals
         let mut success = true;
         for dr in &drs {
             if dr.did == did && dr.record.typ == REMOVE_PRINCIPAL {
@@ -198,7 +199,6 @@ impl Revealer {
         }
 
         // reveal other row removals
-        // this must be done in order to properly recorrelate sf_records later
         // first construct the graph of tables with removed items
         let mut remove_diffs_for_table: HashMap<String, Vec<(String, EdnaDiffRecord)>> =
             HashMap::new();
@@ -228,7 +228,37 @@ impl Revealer {
         )?;
         removed_revealed.insert(pp_gen.table.clone());
 
-        // insert all other removed records
+        // revealing in order of disguising: undo all decor
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == DECOR {
+                info!("Reversing decor record {:?}\n", dr.record);
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
+                if revealed {
+                    info!("Decor Record revealed!\n");
+                } else {
+                    success = false;
+                    info!("Failed to reveal decor record");
+                }
+            }
+        }
+
+        // reveal all modify diff records
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == MODIFY {
+                info!("Reversing modify record {:?}\n", dr.record);
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
+                if revealed {
+                    info!("Modify Diff Record revealed!\n");
+                } else {
+                    success = false;
+                    info!("Failed to reveal modify record");
+                }
+            }
+        }
+
+        // insert all non-user removed records
         for table in remove_diffs_for_table.keys() {
             if removed_revealed.contains(table) {
                 continue;
@@ -252,58 +282,23 @@ impl Revealer {
             removed_revealed.insert(table.clone());
         }
 
-        // reveal all modify diff records
-        for dr in &drs {
-            if dr.did == did && dr.record.typ == MODIFY {
-                info!("Reversing modify record {:?}\n", dr.record);
-                reveal_args.uid = dr.uid.clone();
-                let revealed = dr.record.reveal(&mut reveal_args)?;
-                if revealed {
-                    info!("Modify Diff Record revealed!\n");
-                } else {
-                    success = false;
-                    info!("Failed to reveal modify record");
-                }
-            }
-        }
-
-        for dr in &drs {
-            if dr.did == did && dr.record.typ == DECOR {
-                info!("Reversing decor record {:?}\n", dr.record);
-                reveal_args.uid = dr.uid.clone();
-                let revealed = dr.record.reveal(&mut reveal_args)?;
-                if revealed {
-                    info!("Decor Record revealed!\n");
-                } else {
-                    success = false;
-                    info!("Failed to reveal decor record");
-                }
-            }
-        }
-
         // reveal (by deleting) new pseudoprincipals
         // note that we do this after recorrelation in case a shared data item
         // introduced a record referring to a pseudoprincipal
+        let mut pp_records = vec![];
         for dr in &drs {
             if dr.did == did && dr.record.typ == NEW_PP {
-                info!("Reversing decor record {:?}\n", dr.record);
-                reveal_args.uid = dr.uid.clone();
-                let revealed = dr.record.reveal(&mut reveal_args)?;
-                if revealed {
-                    info!("Decor Record revealed!\n");
-                } else {
-                    success = false;
-                    info!("Failed to reveal decor record");
-                }
+                pp_records.push(&dr.record);
             }
         }
+        success &= EdnaDiffRecord::reveal_new_pps(&pp_records, &mut reveal_args)?;
 
         llapi.cleanup_records_of_disguise(did, &decrypt_cap);
         if !success {
             info!("Reveal records failed, clearing anyways: {}mus", fnstart.elapsed().as_micros());
         }
         llapi.end_reveal(did);
-        warn!("Reveal records total: {}", fnstart.elapsed().as_micros());
+        warn!("Reveal records total: {}mus", fnstart.elapsed().as_micros());
         Ok(())
     }
 

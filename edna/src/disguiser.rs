@@ -166,7 +166,7 @@ impl Disguiser {
         // Any items that would've been modified or decorrelated would've been
         // revealed anyways
         let remove_start = time::Instant::now();
-        let drop_me_later =
+        let drop_users_later =
             self.execute_removes(did, disguise, table_info, pp_gen, &sfchain_records, conn);
         warn!(
             "Edna: Execute removes total: {}mus",
@@ -284,7 +284,7 @@ impl Disguiser {
             decor_start.elapsed().as_micros()
         );
 
-        for delstmt in drop_me_later {
+        for delstmt in drop_users_later {
             helpers::query_drop(&delstmt, conn)?;
         }
 
@@ -314,7 +314,7 @@ impl Disguiser {
             sfc_records.len()
         );
         // saves user objects that should be removed last for ref integrity
-        let mut drop_me_later = vec![];
+        let mut drop_users_later = vec![];
 
         for (table, transforms) in disguise.table_disguises.clone() {
             let curtable_info = table_info.get(&table).unwrap().clone();
@@ -397,7 +397,7 @@ impl Disguiser {
                         );
                         info!("delstmt all: {}", delstmt);
                         if pp_gen.table == table {
-                            drop_me_later.push(delstmt);
+                            drop_users_later.push(delstmt);
                         } else {
                             helpers::query_drop(&delstmt, db).unwrap();
                         }
@@ -424,7 +424,7 @@ impl Disguiser {
                 }
             }
         }
-        return drop_me_later;
+        return drop_users_later;
     }
 
     fn remove_shared_data<Q: Queryable>(
