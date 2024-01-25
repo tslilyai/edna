@@ -222,6 +222,7 @@ impl EdnaDiffRecord {
                 args.pp_gen.id_col,
                 old_to_new.keys().cloned().collect::<Vec<_>>().join(",")
             );
+            debug!("reveal pps selection: {}", selection);
             let selected = helpers::get_query_rows_str_q::<Q>(
                 &helpers::str_select_statement(&args.pp_gen.table, &args.pp_gen.table, &selection),
                 args.db,
@@ -260,6 +261,7 @@ impl EdnaDiffRecord {
                     .collect::<Vec<String>>()
                     .join(" OR ")
                 };
+                debug!("reveal pps selection: {}", selection);
                 let update_stmt = if args.reveal_pps == RevealPPType::Delete {
                     format!("DELETE FROM {} WHERE {}", tinfo.table, selection)
                 } else {
