@@ -187,7 +187,7 @@ impl EdnaDiffRecord {
         * is already recorrelated
         */
         let fnstart = time::Instant::now();
-        if args.reveal_pps == RevealPPType::Retain {
+        if records.len() == 0 || args.reveal_pps == RevealPPType::Retain {
             return Ok(true);
         }
 
