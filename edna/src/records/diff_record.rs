@@ -448,7 +448,7 @@ impl EdnaDiffRecord {
                 .collect();
             let valstr = vals.join(",");
             let insert_q = format!("INSERT INTO {} ({}) VALUES ({})", table, colstr, valstr);
-            args.db.query_drop(&insert_q).unwrap();
+            helpers::query_drop(&insert_q, args.db)?;
             warn!(
                 "restore old objs: {}: {}mus",
                 insert_q,

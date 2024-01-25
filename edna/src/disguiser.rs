@@ -54,19 +54,18 @@ impl Disguiser {
 
     fn init(&mut self, in_memory: bool, reset: bool) {
         let mut db = self.pool.get_conn().unwrap();
-        db.query_drop("SET max_heap_table_size = 4294967295;")
-            .unwrap();
+        helpers::query_drop("SET max_heap_table_size = 4294967295;", &mut db).unwrap();
         let engine = if in_memory { "MEMORY" } else { "InnoDB" };
 
         if reset {
-            db.query_drop(format!("DROP TABLE IF EXISTS {}", REMOVED_SHARED_TABLE))
+            helpers::query_drop(&format!("DROP TABLE IF EXISTS {}", REMOVED_SHARED_TABLE), &mut db)
                 .unwrap();
         }
         // create table
-        db.query_drop(format!(
+        helpers::query_drop(&format!(
             "CREATE TABLE IF NOT EXISTS {} (object varchar(2048), data varchar(2048)) ENGINE = {};",
             REMOVED_SHARED_TABLE, engine
-        ))
+        ), &mut db)
         .unwrap();
 
         let obj_rows =
@@ -286,9 +285,7 @@ impl Disguiser {
         );
 
         for delstmt in drop_me_later {
-            let start = time::Instant::now();
-            conn.query_drop(delstmt.to_string()).unwrap();
-            warn!("{}: {}mus", delstmt, start.elapsed().as_micros());
+            helpers::query_drop(&delstmt, conn)?;
         }
 
         drop(llapi);
@@ -402,9 +399,7 @@ impl Disguiser {
                         if pp_gen.table == table {
                             drop_me_later.push(delstmt);
                         } else {
-                            let start = time::Instant::now();
-                            db.query_drop(delstmt.to_string()).unwrap();
-                            warn!("{}: {}", delstmt, start.elapsed().as_micros());
+                            helpers::query_drop(&delstmt, db).unwrap();
                         }
                     } else {
                         // assert that users are never shared...
@@ -596,9 +591,7 @@ impl Disguiser {
                         cols,
                         vals.join(",")
                     );
-                    let start = time::Instant::now();
-                    db.query_drop(&q).unwrap();
-                    warn!("{}: {}mus", q, start.elapsed().as_micros());
+                    helpers::query_drop(&q, db).unwrap();
                 }
 
                 // (2) if we're not actually removing this object, put it into our
@@ -724,10 +717,8 @@ impl Disguiser {
             //      otherwise, just store the newly updated object
             let selection = get_select_of_ids(&ids);
             if should_remove {
-                let start = time::Instant::now();
                 let delstmt = format!("DELETE FROM {} WHERE {}", curtable_info.table, selection);
-                db.query_drop(delstmt.to_string()).unwrap();
-                warn!("{}: {}", delstmt, start.elapsed().as_micros());
+                helpers::query_drop(&delstmt, db).unwrap();
                 // remove from Edna map too (and persist)
                 removed_shared_objs.remove(&Object {
                     table: curtable_info.table.clone(),
@@ -753,9 +744,7 @@ impl Disguiser {
                     "UPDATE {} SET {} WHERE {}",
                     curtable_info.table, updates, selection
                 );
-                let start = time::Instant::now();
-                db.query_drop(updatestmt.to_string()).unwrap();
-                warn!("{}: {}mus", updatestmt, start.elapsed().as_micros());
+                helpers::query_drop(&updatestmt, db).unwrap();
             }
         }
     }
@@ -774,16 +763,16 @@ impl Disguiser {
             base64::encode(&bincode::serialize(rvs).unwrap()),
             base64::encode(&bincode::serialize(data).unwrap()),
         );
-        db.query_drop(&insert_q).unwrap();
+        helpers::query_drop(&insert_q, db).unwrap();
     }
 
     fn persist_removed_shared_obj_delete<Q: Queryable>(rvs: &Object, db: &mut Q) {
         let bytes = base64::encode(&bincode::serialize(rvs).unwrap());
-        db.query_drop(format!(
+        let stmt = format!(
             "DELETE FROM {} WHERE object = '{}'",
             REMOVED_SHARED_TABLE, bytes
-        ))
-        .unwrap();
+        );
+        helpers::query_drop(&stmt, db).unwrap();
     }
 
     fn execute_decor<Q: Queryable>(
@@ -799,7 +788,6 @@ impl Disguiser {
         seen_pps: &mut HashSet<UID>,
         db: &mut Q,
     ) {
-        let start = time::Instant::now();
         // grouped by (1) owning users, and (2) column attributes
         let mut owner_groups: HashMap<Vec<String>, HashMap<Vec<String>, Vec<Vec<RowVal>>>> =
             HashMap::new();
@@ -895,9 +883,7 @@ impl Disguiser {
             cols,
             vals.join(",")
         );
-        info!("Decor insert pps query: {}", q);
-        db.query_drop(&q).unwrap();
-        warn!("{}: {}mus", q, start.elapsed().as_micros());
+        helpers::query_drop(&q, db).unwrap();
 
         let mut index = 0;
         for (_owners, groups) in &owner_groups {
@@ -953,14 +939,12 @@ impl Disguiser {
                             // sfc_records.push(new_sfchain_record)
 
                             // B. UPDATE CHILD FOREIGN KEY
-                            let start = time::Instant::now();
                             let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
                             let q = format!(
                                 "UPDATE {} SET {} = '{}' WHERE {}",
                                 child_tableinfo.table, user_fk_col, new_uid, i_select
                             );
-                            db.query_drop(&q).unwrap();
-                            warn!("{}: {}mus", q, start.elapsed().as_micros());
+                            helpers::query_drop(&q, db).unwrap();
                         }
                     }
                 }
@@ -986,7 +970,8 @@ impl Disguiser {
             "UPDATE {} SET {} = {} WHERE {}",
             table, col, new_val, selection
         );
-        db.query_drop(&q).unwrap();
+
+        helpers::query_drop(&q, db).unwrap();
         warn!("{}: {}mus", q, start.elapsed().as_micros());
 
         // RECORD INSERT
