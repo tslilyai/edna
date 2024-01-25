@@ -164,7 +164,10 @@ impl EdnaDiffRecord {
     }
 
     // reveals new pps by removing them in batch
-    pub fn reveal_new_pps<Q: Queryable>(records: &Vec<&EdnaDiffRecord>, args: &mut RevealArgs<Q>) -> Result<bool, mysql::Error> {
+    pub fn reveal_new_pps<Q: Queryable>(
+        records: &Vec<&EdnaDiffRecord>,
+        args: &mut RevealArgs<Q>,
+    ) -> Result<bool, mysql::Error> {
         /* Note: only need to worry about referential integrity to new
         * pseudoprincipal rows, because we assume that modified rows
         * (the only other new row type) keep the same unique
@@ -193,20 +196,20 @@ impl EdnaDiffRecord {
 
         let mut old_to_new: HashMap<UID, Vec<UID>> = HashMap::new();
         for r in records {
-            // all diff records should be removing a new pp 
+            // all diff records should be removing a new pp
             assert_eq!(r.new_values.len(), 1);
             let table = &r.new_values[0].table;
             assert_eq!(&args.pp_gen.table, table);
-            
+
             // find the most recent UID in the path up to this one
             // that should exist in the DB
-            let old_uid = sfchain_record::find_old_uid(
-                args.edges,
-                &r.new_uid,
-                args.recorrelated_pps,
-            );
+            let old_uid =
+                sfchain_record::find_old_uid(args.edges, &r.new_uid, args.recorrelated_pps);
             let old_uid = old_uid.unwrap_or(r.old_uid.clone());
-            info!("reveal_new_pps: Going to check old {} -> pp {}", old_uid, r.new_uid);
+            info!(
+                "reveal_new_pps: Going to check old {} -> pp {}",
+                old_uid, r.new_uid
+            );
             match old_to_new.get_mut(&old_uid) {
                 Some(uids) => uids.push(r.new_uid.clone()),
                 None => {
@@ -240,27 +243,24 @@ impl EdnaDiffRecord {
 
         // Actually delete or update pp children, if any exist!
         for (old_uid, new_uids) in old_to_new.iter() {
-            // NOTE: Assume only one id used as a foreign key. 
+            // NOTE: Assume only one id used as a foreign key.
             let new_uids_str = new_uids.join(",");
+            let pp_select = if new_uids.len() == 1 {
+                format!("= {}", new_uids[0])
+            } else {
+                format!("IN ({})", new_uids_str)
+            };
+
             for (child_table, tinfo) in args.timap.into_iter() {
                 if child_table == &args.pp_gen.table {
                     continue;
                 }
-                let selection = if new_uids.len() == 1 {
-                    tinfo
+                let selection = tinfo
                     .owner_fks
                     .iter()
-                    .map(|c| format!("`{}` = {}", c.from_col, new_uids[0]))
+                    .map(|c| format!("`{}` {}", c.from_col, pp_select))
                     .collect::<Vec<String>>()
-                    .join(" OR ")
-                } else {
-                    tinfo
-                    .owner_fks
-                    .iter()
-                    .map(|c| format!("`{}` IN ({})", c.from_col, new_uids_str))
-                    .collect::<Vec<String>>()
-                    .join(" OR ")
-                };
+                    .join(" OR ");
                 debug!("reveal pps selection: {}", selection);
                 let update_stmt = if args.reveal_pps == RevealPPType::Delete {
                     format!("DELETE FROM {} WHERE {}", tinfo.table, selection)
@@ -274,8 +274,8 @@ impl EdnaDiffRecord {
                             .iter()
                             .map(|fk| {
                                 format!(
-                                    "{} = (SELECT CASE WHEN `{}` IN ({}) THEN {} ELSE `{}` END)",
-                                    fk.from_col, fk.from_col, new_uids_str, old_uid, fk.from_col
+                                    "{} = (SELECT CASE WHEN `{}` {} THEN {} ELSE `{}` END)",
+                                    fk.from_col, fk.from_col, pp_select, old_uid, fk.from_col
                                 )
                             })
                             .collect::<Vec<String>>()
@@ -292,14 +292,17 @@ impl EdnaDiffRecord {
                 args.llapi.forget_principal(&new_uid, args.did);
             }
             // now remove the pseudoprincipals
-            let delete_q = if new_uids.len() == 1 {
-                format!("DELETE FROM {} WHERE {} = {}", args.pp_gen.table, args.pp_gen.id_col, new_uids[0])
-            } else {
-                format!("DELETE FROM {} WHERE {} IN ({})", args.pp_gen.table, args.pp_gen.id_col, new_uids_str)
-            };
+            let delete_q = format!(
+                "DELETE FROM {} WHERE {} {}",
+                args.pp_gen.table, args.pp_gen.id_col, pp_select
+            );
             helpers::query_drop(&delete_q, args.db)?;
         }
-        warn!("Reveal {} new pps: {}mus", records.len(), fnstart.elapsed().as_micros());
+        warn!(
+            "Reveal {} new pps: {}mus",
+            records.len(),
+            fnstart.elapsed().as_micros()
+        );
         Ok(true)
     }
 
@@ -566,14 +569,11 @@ impl EdnaDiffRecord {
                 );
                 helpers::query_drop(&update_q, args.db)?;
             }
-            warn!(
-                "restore old objs: {}mus",
-                fnstart.elapsed().as_micros()
-            );
+            warn!("restore old objs: {}mus", fnstart.elapsed().as_micros());
             Ok(true)
         }
     }
-    
+
     /// To remove new value rows, or update new value rows to the old value (so
     /// we don't do redundant work)
     fn remove_or_update_rows<Q: Queryable>(
@@ -610,10 +610,10 @@ impl EdnaDiffRecord {
             }
 
             /*
-            * CHECK 2: Referential integrity, we need to do something to rows
-            * that refer to this one. Only check for pseudoprincipals (e.g.,
-            * records of type "NEW_PP")
-            */
+             * CHECK 2: Referential integrity, we need to do something to rows
+             * that refer to this one. Only check for pseudoprincipals (e.g.,
+             * records of type "NEW_PP")
+             */
             // Update the new value to the old value in place, if we find a matching old
             // value
             let mut should_delete = true;
