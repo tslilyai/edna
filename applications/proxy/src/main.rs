@@ -10,8 +10,8 @@ use std::thread;
 
 fn main() {
     env_logger::init();
-    let crypto = true;
-    let schema = if crypto {
+    let dryrun = false;
+    let schema = if !dryrun{
         std::fs::read_to_string(
             "/data/repository/applications/websubmit-rs/cryptdb-server/src/schema.sql",
         )
@@ -56,7 +56,7 @@ fn main() {
         "pass",
         "myclass_cryptdb",
         encmap,
-        crypto, /*crypto*/
+        dryrun,
     );
     while let Ok((s, _)) = listener.accept() {
         s.set_nodelay(true).expect("Connot disable nagle");
