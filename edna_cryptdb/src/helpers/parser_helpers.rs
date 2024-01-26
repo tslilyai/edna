@@ -1,5 +1,4 @@
 use crate::*;
-use crate::proxy::RowKey;
 use log::{debug, warn};
 use rand;
 use regex::*;
@@ -258,7 +257,8 @@ pub fn get_create_schema_statements(schema: &str, in_memory: bool) -> Vec<Statem
     stmts
 }
 
-pub fn get_single_parsed_stmt(stmt: &str) -> Result<Statement, mysql::Error> {
+pub fn get_single_parsed_stmt(stmt: &String) -> Result<Statement, mysql::Error> {
+    warn!("Parsing stmt {}", stmt);
     let asts = sql_parser::parser::parse_statements(stmt.to_string());
     match asts {
         Err(e) => Err(mysql::Error::IoError(io::Error::new(
@@ -496,11 +496,9 @@ pub fn get_expr_idents(e: &Expr) -> Vec<String> {
 }
 
 pub fn trim_quotes(s: &str) -> &str {
-    let original_s = s;
     let mut s = s.trim_matches('\'');
     s = s.trim_matches('\"');
     s = s.trim_matches('`');
-    debug!("{} trimmed to {}", original_s, s);
     s
 }
 
@@ -664,224 +662,4 @@ pub fn rhs_expr_to_name_or_value(right: &Expr) -> (Option<String>, Option<Value>
         _ => unimplemented!("Bad rhs? {}", right),
     }
     (rname, rval)
-}
-
-pub fn get_tablefactor_name(relation: &TableFactor) -> (TableName, TableName) {
-    match relation {
-        // direct tables referencing user table changes to pp table name
-        TableFactor::Table { name, alias, .. } => match alias {
-            Some(a) => (name.to_string(), a.to_string()),
-            None => (name.to_string(), name.to_string()),
-        },
-        _ => unimplemented!("Unsupported relation"),
-    }
-}
-
-pub fn get_tables_of_twj(twjs: &Vec<TableWithJoins>) -> Vec<(TableName, TableName)> {
-    let mut names = vec![];
-    for twj in twjs {
-        names.push(get_tablefactor_name(&twj.relation));
-        for j in &twj.joins {
-            names.push(get_tablefactor_name(&j.relation));
-        }
-    }
-    names
-}
-
-pub fn get_expr_cols(e: &Expr) -> Vec<String> {
-    let mut vals = vec![];
-    match e {
-        Expr::Identifier(v) => vals.push(trim_quotes(&v[0].to_string()).to_string()),
-        Expr::Value(v) => match v {
-            Value::Boolean(_) => (),
-            _ => vals.push(trim_quotes(&v.to_string()).to_string()),
-        },
-        Expr::IsNull { expr, .. } => vals.append(&mut get_expr_cols(expr)),
-        Expr::InList { expr, .. } => {
-            vals.append(&mut get_expr_cols(expr));
-        }
-        Expr::BinaryOp { left, op, right } => match op {
-            BinaryOperator::Eq | BinaryOperator::NotEq => vals.append(&mut get_expr_cols(left)),
-            BinaryOperator::And | BinaryOperator::Or => {
-                vals.append(&mut get_expr_cols(left));
-                vals.append(&mut get_expr_cols(right));
-            }
-            _ => unimplemented!("Bad binary operator!"),
-        },
-        Expr::Nested(e) => vals.append(&mut get_expr_cols(e)),
-        _ => unimplemented!("No identifier tracking for expr {:?}", e),
-    }
-    vals
-}
-
-pub fn get_expr_values(e: &Expr) -> Vec<String> {
-    let mut vals = vec![];
-    match e {
-        Expr::Identifier(v) => vals.push(trim_quotes(&v[0].to_string()).to_string()),
-        Expr::Value(v) => match v {
-            Value::Boolean(_) => (),
-            _ => vals.push(trim_quotes(&v.to_string()).to_string()),
-        },
-        Expr::IsNull { expr, .. } => vals.append(&mut get_expr_values(expr)),
-        Expr::InList { list, .. } => {
-            for le in list {
-                vals.append(&mut get_expr_values(le));
-            }
-        }
-        Expr::BinaryOp { left, op, right } => match op {
-            BinaryOperator::Eq | BinaryOperator::NotEq => vals.append(&mut get_expr_values(right)),
-            BinaryOperator::And | BinaryOperator::Or => {
-                vals.append(&mut get_expr_values(left));
-                vals.append(&mut get_expr_values(right));
-            }
-            _ => unimplemented!("Bad binary operator!"),
-        },
-        Expr::Nested(e) => vals.append(&mut get_expr_values(e)),
-        _ => unimplemented!("No identifier tracking for expr {:?}", e),
-    }
-    vals
-}
-
-pub fn encrypt_expr_values(
-    e: &Expr,
-    key: &RowKey,
-    iv: &Vec<u8>,
-    enccols: &HashSet<String>,
-) -> Expr {
-    let new_e = match e {
-        // XXX hack, some values are identifiers
-        // TODO huh??????
-        Expr::Identifier(v) => {
-            let val = trim_quotes(&v[0].to_string()).to_string();
-            let cipher = crypto::encrypt_with_aes(&val, &key.symkey, iv);
-            Expr::Value(Value::String(cipher))
-        }
-        Expr::Value(v) => match v {
-            Value::Boolean(..) => e.clone(),
-            _ => {
-                let val = trim_quotes(&v.to_string()).to_string();
-                let cipher = crypto::encrypt_with_aes(&val, &key.symkey, iv);
-                Expr::Value(Value::String(cipher))
-            }
-        },
-        Expr::IsNull { expr, negated } => Expr::IsNull {
-            expr: Box::new(encrypt_expr_values(expr, key, iv, enccols)),
-            negated: *negated,
-        },
-        Expr::InList {
-            expr,
-            list,
-            negated,
-        } => {
-            warn!("inlist: {}", expr);
-            assert!(!negated);
-            let col = expr.to_string();
-            if !enccols.contains(&col) {
-                e.clone()
-            } else {
-                let check_index = match col.as_str() {
-                    "email" => 0,
-                    "lec" => 1,
-                    "q" => 2,
-                    "apikey" => 1,
-                    "is_admin" => 2,
-                    _ => {
-                        return e.clone();
-                    }
-                };
-                for id in list {
-                    let strid = id.to_string();
-                    let strid = helpers::trim_quotes(&strid);
-                    info!("col {} id is {}, check index {} is {}", col, strid, check_index, key.row_ids[check_index]);
-                    // we know there has to be a match
-                    if key.row_ids[check_index] == strid {
-                        info!("Found match for key!");
-                        return Expr::BinaryOp {
-                            left: expr.clone(),
-                            op: BinaryOperator::Eq ,
-                            right: Box::new(encrypt_expr_values(id, key, iv, enccols)),
-                        };
-                    }
-                }
-                error!("No matching value to encrypt for key?");
-                e.clone()
-            }
-        }
-        Expr::BinaryOp { left, op, right } => match op {
-            BinaryOperator::Eq | BinaryOperator::NotEq => {
-                if !enccols.contains(&left.to_string()) {
-                    e.clone()
-                } else {
-                    warn!("binop: {}", left);
-                    Expr::BinaryOp {
-                        left: left.clone(),
-                        op: op.clone(),
-                        right: Box::new(encrypt_expr_values(right, key, iv, enccols)),
-                    }
-                }
-            }
-            BinaryOperator::And | BinaryOperator::Or => Expr::BinaryOp {
-                left: Box::new(encrypt_expr_values(left, key, iv, enccols)),
-                op: op.clone(),
-                right: Box::new(encrypt_expr_values(right, key, iv, enccols)),
-            },
-            _ => unimplemented!("Bad binary operator!"),
-        },
-        Expr::Nested(e) => Expr::Nested(Box::new(encrypt_expr_values(e, key, iv, enccols))),
-        /*Expr::UnaryOp { op, expr} => {}*/
-        _ => unimplemented!("No identifier tracking for expr {:?}", e),
-    };
-    debug!(
-        "Encrypting expr value
-        \t{} -> {}
-        \t key/iv {}/{}",
-        e,
-        new_e,
-        base64::encode(&key.symkey),
-        base64::encode(iv)
-    );
-    new_e
-}
-
-pub fn decrypt_expr_values(e: &Expr, key: &Vec<u8>) -> Expr {
-    //info!("Decrypting expr {}", e);
-    match e {
-        Expr::Identifier(v) => {
-            let val = trim_quotes(&v[0].to_string()).to_string();
-            let (_, cipher) = crypto::decrypt_with_aes(&val, key);
-            Expr::Value(Value::String(cipher))
-        }
-        Expr::Value(v) => match v {
-            Value::Boolean(_) => e.clone(),
-            _ => {
-                let val = trim_quotes(&v.to_string()).to_string();
-                let (_, cipher) = crypto::decrypt_with_aes(&val, key);
-                Expr::Value(Value::String(cipher))
-            }
-        },
-        Expr::IsNull { expr, negated } => Expr::IsNull {
-            expr: Box::new(decrypt_expr_values(expr, key)),
-            negated: *negated,
-        },
-        Expr::InList {
-            expr,
-            list,
-            negated,
-        } => Expr::InList {
-            expr: Box::new(decrypt_expr_values(expr, key)),
-            list: list.iter().map(|le| decrypt_expr_values(le, key)).collect(),
-            negated: *negated,
-        },
-        Expr::BinaryOp { left, op, right } => match op {
-            BinaryOperator::Eq | BinaryOperator::NotEq => Expr::BinaryOp {
-                left: Box::new(decrypt_expr_values(left, key)),
-                op: op.clone(),
-                right: Box::new(decrypt_expr_values(right, key)),
-            },
-            _ => unimplemented!("Bad binary operator!"),
-        },
-        Expr::Nested(e) => Expr::Nested(Box::new(decrypt_expr_values(e, key))),
-        /*Expr::UnaryOp { op, expr} => {}*/
-        _ => unimplemented!("No identifier tracking for expr {:?}", e),
-    }
 }

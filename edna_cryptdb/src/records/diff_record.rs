@@ -1,22 +1,35 @@
 use crate::crypto::*;
-use crate::helpers::*;
 use crate::lowlevel_api::*;
 use crate::records::*;
-use crate::{RowVal, TableInfo, DID, UID};
+use crate::revealer::RevealArgs;
+use crate::*;
+use crate::{RevealPPType, TableInfo, TableRow, DID, UID};
 use crypto_box::PublicKey;
-use log::warn;
-use mysql::prelude::*;
+use log::{debug, info, warn};
+use mysql::from_value;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::time;
 //use std::mem::size_of_val;
 
-pub const REMOVE_GUISE: u8 = 0;
-pub const DECOR_GUISE: u8 = 1;
-pub const MODIFY_GUISE: u8 = 2;
-pub const INSERT_GUISE: u8 = 3;
+pub const REMOVE: u8 = 0;
+pub const DECOR: u8 = 1;
+pub const NEW_PP: u8 = 2;
+pub const MODIFY: u8 = 3;
 pub const REMOVE_PRINCIPAL: u8 = 5;
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub enum RestoreOrUpdate {
+    RESTORE = 1,
+    UPDATE = 2,
+}
+
+#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub struct EdnaDiffRecordWrapper {
+    pub did: DID,
+    pub uid: UID,
+    pub record: EdnaDiffRecord,
+}
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DiffRecordWrapper {
@@ -29,26 +42,22 @@ pub struct DiffRecordWrapper {
     pub nonce: u64,
 }
 
-#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub struct EdnaDiffRecord {
     // metadata set by Edna
     pub typ: u8,
 
-    // pseudoprincipal information
-    pub table: String,
-    pub tabids: Vec<String>,
-
-    // MODIFY/REMOVE : store old blobs
-    pub old_value: Vec<RowVal>,
-
-    // MODIFY: store new blobs
-    pub col: String,
-    pub old_val: String,
-    pub new_val: String,
+    // old and new rows
+    pub old_values: Vec<TableRow>,
+    pub new_values: Vec<TableRow>,
 
     // REMOVE PRINCIPAL
     pub pubkey: Vec<u8>,
     pub enc_locators_index: Index,
+
+    // NEW_PSEUDOPRINCIPAL
+    pub old_uid: UID,
+    pub new_uid: UID,
 }
 
 pub fn diff_records_from_bytes(bytes: &Vec<u8>) -> Vec<DiffRecordWrapper> {
@@ -78,12 +87,7 @@ pub fn new_generic_diff_record_wrapper(uid: &UID, did: DID, data: Vec<u8>) -> Di
 }
 
 // create diff record for removing a principal
-pub fn new_remove_principal_record(uid: &UID, did: DID, pdata: &PrincipalData) -> EdnaDiffRecord {
-    let mut record: DiffRecordWrapper = Default::default();
-    record.nonce = thread_rng().gen();
-    record.uid = uid.to_string();
-    record.did = did;
-
+pub fn new_remove_principal_record(pdata: &PrincipalData) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
     edna_record.pubkey = match &pdata.pubkey {
         Some(pk) => pk.as_bytes().to_vec(),
@@ -94,380 +98,617 @@ pub fn new_remove_principal_record(uid: &UID, did: DID, pdata: &PrincipalData) -
     edna_record
 }
 
-// create diff record for removing a principal
-pub fn new_remove_principal_record_wrapper(
-    uid: &UID,
-    did: DID,
-    pdata: &PrincipalData,
-) -> DiffRecordWrapper {
-    let mut record: DiffRecordWrapper = Default::default();
-    record.nonce = thread_rng().gen();
-    record.uid = uid.to_string();
-    record.did = did;
-
-    let mut edna_record: EdnaDiffRecord = Default::default();
-    edna_record.pubkey = match &pdata.pubkey {
-        Some(pk) => pk.as_bytes().to_vec(),
-        None => vec![],
-    };
-    edna_record.enc_locators_index = pdata.enc_locators_index;
-    edna_record.typ = REMOVE_PRINCIPAL;
-    record.record_data = edna_diff_record_to_bytes(&edna_record);
-    /*error!("REMOVE PRINC: nonce {}, uid {}, did {}, pubkey {}, tp {}, all: {}",
-        size_of_val(&record.nonce),
-        size_of_val(&*record.uid),
-        size_of_val(&record.did),
-        size_of_val(&*edna_record.pubkey),
-        size_of_val(&edna_record.typ),
-        size_of_val(&record),
-    );*/
-    record
-}
-
 // create diff records about db objects
-pub fn new_delete_record(
-    table: String,
-    tabids: Vec<RowVal>,
-    old_value: Vec<RowVal>,
-) -> EdnaDiffRecord {
+pub fn new_delete_record(old_value: TableRow) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
-    edna_record.typ = REMOVE_GUISE;
-    edna_record.table = table;
-    edna_record.tabids = tabids.iter().map(|rv| rv.value().clone()).collect();
-    edna_record.old_value = old_value;
-
-    // XXX Remove
-    /*let mut old_val_rvs = 0;
-    for v in &edna_record.old_value {
-        old_val_rvs += size_of_val(&*v);
-    }
-    error!("REMOVE DATA: nonce {}, did {}, table {}, tableid {}, tp {}, oldvalblob {}, all: {}",
-        size_of_val(&record.nonce),
-        size_of_val(&record.did),
-        size_of_val(&*edna_record.table),
-        size_of_val(&*edna_record.tabids),
-        size_of_val(&edna_record.typ),
-        size_of_val(&*edna_record.old_value) + old_val_rvs,
-        size_of_val(&record),
-    );*/
+    edna_record.typ = REMOVE;
+    edna_record.old_values = vec![old_value];
     edna_record
 }
 
-// create diff records about db objects
-pub fn new_delete_record_wrapper(
-    did: DID,
-    table: String,
-    tabids: Vec<RowVal>,
-    old_value: Vec<RowVal>,
-) -> DiffRecordWrapper {
-    let mut record: DiffRecordWrapper = Default::default();
-    record.nonce = thread_rng().gen();
-    record.did = did;
-
+pub fn new_modify_record(old_value: TableRow, new_value: TableRow) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
-    edna_record.typ = REMOVE_GUISE;
-    edna_record.table = table;
-    edna_record.tabids = tabids.iter().map(|rv| rv.value().clone()).collect();
-    edna_record.old_value = old_value;
-    record.record_data = edna_diff_record_to_bytes(&edna_record);
-    record
-}
-
-pub fn new_modify_record(
-    table: String,
-    tabids: Vec<RowVal>,
-    old_value: String,
-    new_value: String,
-    col: String,
-) -> EdnaDiffRecord {
-    let mut edna_record: EdnaDiffRecord = Default::default();
-    edna_record.typ = MODIFY_GUISE;
-    edna_record.table = table;
-    edna_record.tabids = tabids.iter().map(|rv| rv.value().clone()).collect();
-    edna_record.col = col;
-    edna_record.old_val = old_value;
-    edna_record.new_val = new_value;
+    edna_record.typ = MODIFY;
+    edna_record.old_values = vec![old_value];
+    edna_record.new_values = vec![new_value];
     edna_record
-
-    /*error!("MODIFY DATA: nonce {}, did {}, table {}, tableids {}, tp {}, col {}, old_col_val {}, newval {}, all: {}",
-        size_of_val(&record.nonce),
-        size_of_val(&record.did),
-        size_of_val(&*edna_record.table),
-        size_of_val(&*edna_record.tabids),
-        size_of_val(&edna_record.typ),
-        size_of_val(&*edna_record.col),
-        size_of_val(&*edna_record.old_val),
-        size_of_val(&*edna_record.new_val),
-        size_of_val(&record),
-    );*/
 }
 
-pub fn new_modify_record_wrapper(
-    did: DID,
-    table: String,
-    tabids: Vec<RowVal>,
-    old_value: String,
-    new_value: String,
-    col: String,
-) -> DiffRecordWrapper {
-    let mut record: DiffRecordWrapper = Default::default();
-    record.nonce = thread_rng().gen();
-    record.did = did;
-
+pub fn new_pseudoprincipal_record(pp: TableRow, old_uid: UID, new_uid: UID) -> EdnaDiffRecord {
     let mut edna_record: EdnaDiffRecord = Default::default();
-    edna_record.typ = MODIFY_GUISE;
-    edna_record.table = table;
-    edna_record.tabids = tabids.iter().map(|rv| rv.value().clone()).collect();
-    edna_record.col = col;
-    edna_record.old_val = old_value;
-    edna_record.new_val = new_value;
-    record.record_data = edna_diff_record_to_bytes(&edna_record);
-
-    /*error!("MODIFY DATA: nonce {}, did {}, table {}, tableids {}, tp {}, col {}, old_col_val {}, newval {}, all: {}",
-        size_of_val(&record.nonce),
-        size_of_val(&record.did),
-        size_of_val(&*edna_record.table),
-        size_of_val(&*edna_record.tabids),
-        size_of_val(&edna_record.typ),
-        size_of_val(&*edna_record.col),
-        size_of_val(&*edna_record.old_val),
-        size_of_val(&*edna_record.new_val),
-        size_of_val(&record),
-    );*/
-    record
+    edna_record.typ = NEW_PP;
+    edna_record.old_uid = old_uid;
+    edna_record.new_uid = new_uid;
+    edna_record.old_values = vec![];
+    edna_record.new_values = vec![pp];
+    edna_record
+}
+pub fn new_decor_record(old_child: TableRow, new_child: TableRow) -> EdnaDiffRecord {
+    let mut edna_record: EdnaDiffRecord = Default::default();
+    edna_record.typ = DECOR;
+    edna_record.old_values = vec![old_child];
+    edna_record.new_values = vec![new_child];
+    edna_record
 }
 
 impl EdnaDiffRecord {
-    pub fn reveal<Q: Queryable>(
+    fn reveal_removed_principal(
         &self,
-        timap: &HashMap<String, TableInfo>,
-        uid: &str,
+        uid: &UID,
         llapi: &mut LowLevelAPI,
-        db: &mut Q,
     ) -> Result<bool, mysql::Error> {
-        match self.typ {
-            // only ever called for a real principal
-            REMOVE_PRINCIPAL => {
-                let start = time::Instant::now();
-                let pubkey = if self.pubkey.is_empty() {
-                    None
-                } else {
-                    Some(PublicKey::from(get_pk_bytes(&self.pubkey)))
-                };
-                let pdata = PrincipalData {
-                    pubkey: pubkey,
-                    is_anon: false,
-                    enc_locators_index: self.enc_locators_index,
-                };
-                warn!("Going to reveal principal {}", uid);
-                llapi.register_saved_principal(
-                    &uid.to_string(),
-                    false,
-                    &pdata.pubkey,
-                    self.enc_locators_index,
-                    true,
-                );
-                warn!("Reveal removed principal: {}", start.elapsed().as_micros());
-            }
+        let start = time::Instant::now();
+        let pubkey = if self.pubkey.is_empty() {
+            None
+        } else {
+            Some(PublicKey::from(get_pk_bytes(self.pubkey.clone())))
+        };
+        let pdata = PrincipalData {
+            pubkey: pubkey,
+            is_anon: false,
+            enc_locators_index: self.enc_locators_index,
+        };
+        info!("Going to reveal principal {}", uid);
+        llapi.register_saved_principal(
+            &uid.to_string(),
+            false,
+            &pdata.pubkey,
+            self.enc_locators_index,
+            true,
+        );
+        warn!(
+            "Reveal removed principal: {}mus",
+            start.elapsed().as_micros()
+        );
+        return Ok(true);
+    }
 
-            INSERT_GUISE => {
-                let start = time::Instant::now();
-                // get current pseudoprincipal in db
-                let table_info = timap.get(&self.table).unwrap();
-                let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
-                let select =
-                    &str_select_statement(&self.table, &self.table, &record_guise_selection);
-                let selected = get_query_rows_str_q::<Q>(select, db)?;
+    // reveals new pps by removing them in batch
+    pub fn reveal_new_pps<Q: Queryable>(
+        records: &Vec<&EdnaDiffRecord>,
+        args: &mut RevealArgs<Q>,
+    ) -> Result<bool, mysql::Error> {
+        /* Note: only need to worry about referential integrity to new
+        * pseudoprincipal rows, because we assume that modified rows
+        * (the only other new row type) keep the same unique
+        * identifiers, and thus any object pointing to the modified row
+        * will also point to the old unmodified row.  We will have to
+        * run new row removal and old row restoration in a transaction
+        * to avoid any period of broken referential integrity.
 
-                // if field hasn't been modified, delete it
-                if selected.is_empty() {
-                    warn!("DiffRecordWrapper Reveal: Modified value no longer exists\n",);
-                }
-                for rv in &selected[0] {
-                    if rv.column() == self.col {
-                        if rv.value() != self.new_val {
-                            warn!(
-                                "DiffRecordWrapper Reveal: Inserted value {:?} not equal to new value {:?}\n",
-                                rv.value(), self.new_val
-                            );
-                            return Ok(false);
-                        }
-                    }
-                }
-                db.query_drop(format!("DELETE FROM {} WHERE {}", self.table, select))?;
-                warn!(
-                    "Reveal inserted data for {}: {}",
-                    self.table,
-                    start.elapsed().as_micros()
-                );
-            }
+        * if an object exists that refers to the pseudoprincipal, then
+        * this is because we haven't rewritten it yet to an old object.
+        * we can get rid of this referential loop by removing all new
+        * non-pseudoprincipal objects first (which we do by filtering
+        * out the values prior to calling this function in the revealer.)
 
-            REMOVE_GUISE => {
-                let start = time::Instant::now();
-                // get current pseudoprincipal in db
-                let table_info = timap.get(&self.table).unwrap();
-                let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
-                let select_q = str_select_statement(
-                    &self.table,
-                    &self.table,
-                    &record_guise_selection.to_string(),
-                );
+        * Note: we could also transfer the principal's records to the
+        * original principal's bag, and reencrypt
 
-                let selected = get_query_rows_str_q::<Q>(&select_q, db)?;
-                warn!(
-                    "Selected removed pseudoprincipals {}: {}mus",
-                    select_q,
-                    start.elapsed().as_micros()
-                );
-
-                // Note: data can be revealed even if it should've been disguised in the interim
-
-                // item has been re-inserted, ignore
-                if !selected.is_empty() {
-                    // true here because it's technically revealed
-                    return Ok(true);
-                }
-
-                // check that all fk columns exist
-                // if one of them that doesn't exist is a UID, rewrite to the latest revealed
-                // UID (if exists)
-                let table_info = timap.get(&self.table).unwrap();
-                for (reftable, refcol, fk_col) in &table_info.other_fk_cols {
-                    // if original entity does not exist, do not reveal
-                    let curval = get_value_of_col(&self.old_value, fk_col).unwrap();
-                    if curval.to_lowercase() == "null" {
-                        continue;
-                    }
-                    // xxx this might have problems with quotes?
-                    let select_start = time::Instant::now();
-                    let selection = format!(
-                        "SELECT * FROM {} WHERE {}.{} = {}",
-                        reftable, reftable, refcol, curval
-                    );
-                    let selected = get_query_rows_str_q::<Q>(&selection, db)?;
-                    warn!(
-                        "selection {}: {}mus",
-                        selection.to_string(),
-                        select_start.elapsed().as_micros()
-                    );
-                    if selected.is_empty() {
-                        warn!(
-                            "No original entity exists for fk col {} val {}",
-                            fk_col, curval
-                        );
-
-                        // TODO handle case where fk_col is pointing to the users table, in which
-                        // we could reveal as long as there's some speaks-for path to the stored
-                        // UID in the diff, and we rewrite this col to the correct restored UID
-                        return Ok(false);
-                    }
-                }
-
-                // otherwise insert it
-                let cols: Vec<String> = self
-                    .old_value
-                    .iter()
-                    .map(|rv| rv.column().clone())
-                    .collect();
-                let colstr = cols.join(",");
-                let vals: Vec<String> = self
-                    .old_value
-                    .iter()
-                    .map(|rv| {
-                        if rv.value().is_empty() {
-                            "\"\"".to_string()
-                        } else if rv.value() == "NULL" {
-                            "NULL".to_string()
-                        } else {
-                            for c in rv.value().chars() {
-                                if !c.is_numeric() {
-                                    return format!("\"{}\"", rv.value().clone());
-                                }
-                            }
-                            rv.value().clone()
-                        }
-                    })
-                    .collect();
-                let valstr = vals.join(",");
-                let q = format!(
-                    "INSERT INTO {} ({}) VALUES ({})",
-                    self.table, colstr, valstr
-                );
-                let insert_start = time::Instant::now();
-                db.query_drop(&q)?;
-                warn!("insertion {}: {}mus", q, insert_start.elapsed().as_micros());
-                warn!(
-                    "Reveal removed data for {}: {}",
-                    self.table,
-                    start.elapsed().as_micros()
-                );
-            }
-            MODIFY_GUISE => {
-                // get current pseudoprincipal in db
-                let table_info = timap.get(&self.table).unwrap();
-                let record_guise_selection = get_select_of_ids_str(&table_info, &self.tabids);
-                let selected = get_query_rows_str_q(
-                    &str_select_statement(
-                        &self.table,
-                        &self.table,
-                        &record_guise_selection.to_string(),
-                    ),
-                    db,
-                )?;
-
-                // if field hasn't been modified, return it to original
-                if selected.is_empty() {
-                    warn!("DiffRecordWrapper Reveal: Modified value no longer exists\n",);
-                }
-                for rv in &selected[0] {
-                    if rv.column() == self.col {
-                        if rv.value() != self.new_val {
-                            warn!(
-                                "DiffRecordWrapper Reveal: Modified value {:?} not equal to new value {:?}\n",
-                                rv.value(), self.new_val
-                            );
-                            return Ok(false);
-                        }
-                    }
-                }
-
-                // If we're revealing an fk cols, check for existence of
-                // referenced obj
-                // Note that this shouldn't run into issues with user foreign keys if the developer
-                // isn't being dumb and using modify instead of decorrelate
-                let table_info = timap.get(&self.table).unwrap();
-                for (reftable, refcol, fk_col) in &table_info.other_fk_cols {
-                    if &self.col == fk_col {
-                        // if original entity does not exist, do not reveal
-                        let curval = get_value_of_col(&self.old_value, fk_col).unwrap();
-                        if curval.to_lowercase() == "null" {
-                            continue;
-                        }
-                        // xxx this might have problems with quotes?
-                        let selection = format!(
-                            "SELECT * FROM {} WHERE {}.{} = {}",
-                            reftable, reftable, refcol, curval
-                        );
-                        warn!("selection: {}", selection.to_string());
-                        let selected = get_query_rows_str_q::<Q>(&selection, db)?;
-                        if selected.is_empty() {
-                            warn!(
-                                "No original entity exists for fk col {} val {}",
-                                fk_col, curval
-                            );
-                            return Ok(false);
-                        }
-                    }
-                }
-
-                // ok, we can actually update this!
-                db.query_drop(format!(
-                    "UPDATE {} SET {} = '{}' WHERE {}",
-                    self.table, self.col, self.old_val, record_guise_selection,
-                ))?;
-            }
-            _ => unimplemented!("Bad diff record update type?"), // do nothing for PRIV_KEY
+        * Note: this will fail if we're one of the modified
+        * pseudoprincipals happens to be in the speaks-for chain, and
+        * is already recorrelated
+        */
+        let fnstart = time::Instant::now();
+        if records.len() == 0 || args.reveal_pps == RevealPPType::Retain {
+            return Ok(true);
         }
+
+        let mut old_to_new: HashMap<UID, Vec<UID>> = HashMap::new();
+        let mut pps_to_delete: Vec<UID> = vec![];
+        for r in records {
+            // all diff records should be removing a new pp
+            assert_eq!(r.new_values.len(), 1);
+            let table = &r.new_values[0].table;
+            assert_eq!(&args.pp_gen.table, table);
+
+            // find the most recent UID in the path up to this one
+            // that should exist in the DB
+            let old_uid =
+                sfchain_record::find_old_uid(args.edges, &r.new_uid, args.recorrelated_pps);
+            let old_uid = old_uid.unwrap_or(r.old_uid.clone());
+            info!(
+                "reveal_new_pps: Going to check old {} -> pp {}",
+                old_uid, r.new_uid
+            );
+            match old_to_new.get_mut(&old_uid) {
+                Some(uids) => uids.push(r.new_uid.clone()),
+                None => {
+                    old_to_new.insert(old_uid.clone(), vec![r.new_uid.clone()]);
+                }
+            }
+            pps_to_delete.push(r.new_uid.clone());
+        }
+        let all_pp_select = if pps_to_delete.len() == 1 {
+            format!("= {}", pps_to_delete[0])
+        } else {
+            format!("IN ({})", pps_to_delete.join(","))
+        };
+
+        if args.reveal_pps == RevealPPType::Restore {
+            // CHECK: if original entities do not exist, do not recorrelate
+            let selection = if old_to_new.len() == 1 {
+                format!(
+                    "{} = {}",
+                    args.pp_gen.id_col,
+                    old_to_new.keys().collect::<Vec<_>>()[0]
+                )
+            } else {
+                format!(
+                    "{} IN ({})",
+                    args.pp_gen.id_col,
+                    old_to_new.keys().cloned().collect::<Vec<_>>().join(",")
+                )
+            };
+            debug!("reveal pps selection: {}", selection);
+            let selected = helpers::get_query_rows_str_q::<Q>(
+                &helpers::str_select_statement(&args.pp_gen.table, &args.pp_gen.table, &selection),
+                args.db,
+            )?;
+            if selected.len() != old_to_new.keys().len() {
+                debug!(
+                    "NEW_PP Reveal: {} col selection {} != {}\n",
+                    args.pp_gen.id_col,
+                    selected.len(),
+                    old_to_new.keys().len(),
+                );
+                return Ok(false);
+            }
+        }
+
+        for (child_table, tinfo) in args.timap.into_iter() {
+            if child_table == &args.pp_gen.table {
+                continue;
+            }
+            // get count of children SO WE DON'T UPDATE if we don't need
+            // to (select is cheaper!)
+            let start = time::Instant::now();
+            let all_select= if tinfo.owner_fks.len() == 1 {
+                    format!("{} {}", tinfo.owner_fks[0].from_col, all_pp_select)
+                } else {
+                    tinfo
+                        .owner_fks
+                        .iter()
+                        .map(|fk| format!("{} {}", fk.from_col, all_pp_select))
+                        .collect::<Vec<String>>()
+                        .join(" OR ")
+                };
+
+            let checkstmt =
+                format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, all_select);
+            let res = args.db.query_iter(checkstmt.clone()).unwrap();
+            let mut count: u64 = 0;
+            for row in res {
+                count = from_value(row.unwrap().unwrap()[0].clone());
+                break;
+            }
+            warn!(
+                "Check count of pseudoprincipals {}: {}mus",
+                checkstmt,
+                start.elapsed().as_micros()
+            );
+            if count == 0 {
+                info!("Don't update, found 0 children");
+                continue;
+            }
+            if args.reveal_pps == RevealPPType::Delete {
+                helpers::query_drop(
+                    &format!("DELETE FROM {} WHERE {}", tinfo.table, all_select),
+                    args.db,
+                )?;
+            } else {
+                // Actually update pp children, if any exist!
+                for (old_uid, new_uids) in old_to_new.iter() {
+                    // NOTE: Assume only one id used as a foreign key.
+                    let new_uids_str = new_uids.join(",");
+                    let pp_select = if new_uids.len() == 1 {
+                        format!("= {}", new_uids[0])
+                    } else {
+                        format!("IN ({})", new_uids_str)
+                    };
+                    
+                    let selection = if tinfo.owner_fks.len() == 1 {
+                        format!("{} {}", tinfo.owner_fks[0].from_col, pp_select)
+                    } else {
+                        tinfo
+                            .owner_fks
+                            .iter()
+                            .map(|fk| format!("{} {}", fk.from_col, pp_select))
+                            .collect::<Vec<String>>()
+                            .join(" OR ")
+                    };
+                
+                    // if only one owner col, skip the case
+                    let updates = if tinfo.owner_fks.len() == 1 {
+                        format!("{} = {}", tinfo.owner_fks[0].from_col, old_uid)
+                    } else {
+                        tinfo
+                            .owner_fks
+                            .iter()
+                            .map(|fk| {
+                                format!(
+                                    "{} = (SELECT CASE WHEN `{}` {} THEN {} ELSE `{}` END)",
+                                    fk.from_col, fk.from_col, pp_select, old_uid, fk.from_col
+                                )
+                            })
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    };
+                    helpers::query_drop(
+                        &format!("UPDATE {} SET {} WHERE {}", tinfo.table, updates, selection),
+                        args.db,
+                    )?;
+                }
+            }
+        }
+        for new_uid in pps_to_delete {
+            // remove PP metadata from the record ctrler (when all locators
+            // are gone) do per new uid because did might differ NOTE: pps
+            // kept for "restore" can never be reclaimed now
+            args.llapi.forget_principal(&new_uid, args.did);
+        }
+
+        // now remove the pseudoprincipals
+        let delete_q = format!(
+            "DELETE FROM {} WHERE {} {}",
+            args.pp_gen.table, args.pp_gen.id_col, all_pp_select
+        );
+        helpers::query_drop(&delete_q, args.db)?;
+        warn!(
+            "Reveal {} new pps: {}mus",
+            records.len(),
+            fnstart.elapsed().as_micros()
+        );
         Ok(true)
+    }
+
+    pub fn reveal<Q: Queryable>(&self, args: &mut RevealArgs<Q>) -> Result<bool, mysql::Error> {
+        let fnstart = time::Instant::now();
+        // all diff records should be restoring something
+        let res = match self.typ {
+            // only ever called for a natural principal
+            REMOVE_PRINCIPAL => self.reveal_removed_principal(&args.uid, args.llapi),
+            NEW_PP => unimplemented!("no single record reveal of pseudoprincipals!"),
+            _ => {
+                // remove rows before we reinsert old ones to avoid false
+                // duplicates
+                let mut success = true;
+                let mut old_values: HashSet<TableRow> =
+                    self.old_values.iter().map(|ov| ov.clone()).collect();
+                let mut start = time::Instant::now();
+                success &= self.remove_or_update_rows(&self.new_values, &mut old_values, args)?;
+                if success {
+                    info!(
+                        "Removed {} new non-pp rows: {}mus",
+                        self.new_values.len(),
+                        start.elapsed().as_micros()
+                    );
+                } else {
+                    info!(
+                        "Failed to remove or update non-pp rows: {}mus",
+                        start.elapsed().as_micros()
+                    );
+                }
+                start = time::Instant::now();
+                for ov in &old_values {
+                    success &= self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
+                    if success {
+                        info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
+                    } else {
+                        info!(
+                            "Failed to restore old_value {:?}: {}mus",
+                            ov,
+                            start.elapsed().as_micros()
+                        );
+                    }
+                }
+                Ok(success)
+            }
+        };
+        warn!("Reveal diff record: {}mus", fnstart.elapsed().as_micros());
+        return res;
+    }
+
+    /// get_count_of_children checks for the number of children of this table referring to this fk.
+    fn get_count_of_children<Q: Queryable>(
+        new_fk_value: &UID,
+        tinfo: &TableInfo,
+        db: &mut Q,
+    ) -> Result<u64, mysql::Error> {
+        let fnstart = time::Instant::now();
+        let selection = tinfo
+            .owner_fks
+            .iter()
+            .map(|c| format!("`{}` = {}", c.from_col, new_fk_value))
+            .collect::<Vec<String>>()
+            .join(" OR ");
+
+        let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, selection);
+        let res = db.query_iter(checkstmt.clone()).unwrap();
+        let mut count: u64 = 0;
+        for row in res {
+            count = from_value(row.unwrap().unwrap()[0].clone());
+            break;
+        }
+        warn!(
+            "get_count_of_children: {} children of table {} point to id {}: {}mus",
+            count,
+            tinfo.table,
+            new_fk_value,
+            fnstart.elapsed().as_micros()
+        );
+
+        return Ok(count);
+    }
+
+    /// To restore old values (after we've already updated the relevant ones
+    /// using new values). Typically only rows that have been removed, instead
+    /// of decorrelated or modified
+    pub fn restore_old_value<Q: Queryable>(
+        &self,
+        new_value: Option<&TableRow>,
+        old_value: &TableRow,
+        restore_or_update: RestoreOrUpdate,
+        args: &mut RevealArgs<Q>,
+    ) -> Result<bool, mysql::Error> {
+        let fnstart = time::Instant::now();
+        info!("Try to {:?} old value! {:?}", restore_or_update, old_value);
+        let table = &old_value.table;
+        let mut old_value_row = old_value.row.clone();
+        let mut restore_or_update = restore_or_update;
+
+        // get current obj in db
+        let table_info = args.timap.get(table).unwrap();
+        let ids = helpers::get_ids(&table_info.id_cols, &old_value_row);
+        let item_selection = helpers::get_select_of_ids_str(&ids);
+        let item_selected = helpers::get_query_rows_str_q::<Q>(
+            &helpers::str_select_statement(table, table, &item_selection.to_string()),
+            args.db,
+        )?;
+        info!("restore old objs: going to restore {:?}", old_value_row);
+
+        // CHECK 1: If we're going to restore, don't reinsert if the item already exists
+        if restore_or_update == RestoreOrUpdate::RESTORE && !item_selected.is_empty() {
+            info!(
+                "restore old objs: found objects for {}, going to update instead!",
+                item_selection
+            );
+            restore_or_update = RestoreOrUpdate::UPDATE;
+        }
+
+        // CHECK 2: Referential integrity to non-owners
+        for fk in &table_info.other_fks {
+            // if original entity does not exist, do not reveal
+            let curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
+            if curval.to_lowercase() == "null" {
+                // can actually legit be null! e.g., votes in lobsters only point to one of
+                // stories or votes
+                continue;
+            }
+            let selection = format!(
+                "SELECT * FROM {} WHERE {}.{} = {}",
+                fk.to_table,
+                fk.to_table,
+                fk.to_col,
+                helpers::to_mysql_valstr(&curval)
+            );
+            info!("other fk selection: {}", selection.to_string());
+            let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
+            if selected.is_empty() {
+                warn!(
+                    "restore old objs: No entity exists for fk col {} val {}: {}mus",
+                    fk.from_col,
+                    curval,
+                    fnstart.elapsed().as_micros()
+                );
+                return Ok(false);
+            }
+        }
+
+        // CHECK 3: Referential integrity to owners
+        // if the original UID doesn't exist, rewrite the object to point to
+        // the latest revealed UID (if exists).  We can reveal as long as
+        // there's some speaks-for path to the stored UID in the diff, and
+        // we rewrite this col to the correct restored UID.
+        if table != &args.pp_gen.table {
+            for fk in &table_info.owner_fks {
+                let mut curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
+                if args.recorrelated_pps.contains(&curval) {
+                    info!("Recorrelated pps contained the old_uid {}", curval);
+
+                    // find the most recent UID in the path up to this one
+                    // that should exist in the DB
+                    let old_uid =
+                        sfchain_record::find_old_uid(args.edges, &curval, args.recorrelated_pps);
+                    curval = old_uid.unwrap_or(curval);
+                    helpers::set_value_of_col(&mut old_value_row, &fk.from_col, &curval);
+                }
+
+                // select here too
+                let selection = format!(
+                    "SELECT * FROM {} WHERE {}.{} = {}",
+                    args.pp_gen.table,
+                    args.pp_gen.table,
+                    args.pp_gen.id_col,
+                    helpers::to_mysql_valstr(&curval)
+                );
+                info!("owner fk selection: {}", selection.to_string());
+                let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
+
+                if selected.is_empty() {
+                    warn!(
+                        "restore old objs: no original entity exists for fk col {} val {}: {}mus",
+                        fk.from_col,
+                        curval,
+                        fnstart.elapsed().as_micros()
+                    );
+                    return Ok(false);
+                }
+            }
+            info!("rewritten old_value_row = {:?}", old_value_row);
+        }
+
+        // We've check for uniqueness and referential integrity; now either insert or update
+        // the old row!
+        if restore_or_update == RestoreOrUpdate::RESTORE {
+            let cols: Vec<String> = old_value_row.iter().map(|rv| rv.column().clone()).collect();
+            let colstr = cols.join(",");
+            let vals: Vec<String> = old_value_row
+                .iter()
+                .map(|rv| {
+                    if rv.value().is_empty() {
+                        "\"\"".to_string()
+                    } else if rv.value() == "NULL" {
+                        "NULL".to_string()
+                    } else {
+                        for c in rv.value().chars() {
+                            if !c.is_numeric() {
+                                return format!("\"{}\"", rv.value().clone());
+                            }
+                        }
+                        rv.value().clone()
+                    }
+                })
+                .collect();
+            let valstr = vals.join(",");
+            let insert_q = format!("INSERT INTO {} ({}) VALUES ({})", table, colstr, valstr);
+            helpers::query_drop(&insert_q, args.db)?;
+            warn!(
+                "restore old objs: {}: {}mus",
+                insert_q,
+                fnstart.elapsed().as_micros()
+            );
+            Ok(true)
+        } else {
+            // update! we either get here because we're updating a new value,
+            // or we had an old value with an existing item in the database that
+            // we want to see if we can update
+            let new_value = new_value.unwrap_or(old_value);
+            if item_selected.len() < 1 {
+                warn!(
+                    "restore old objs: no item to update {}mus",
+                    fnstart.elapsed().as_micros()
+                );
+                return Ok(false);
+            }
+            let item = &item_selected[0];
+            let mut updates = vec![];
+            for (ix, rv) in old_value_row.iter().enumerate() {
+                assert_eq!(rv.column(), item[ix].column());
+                assert_eq!(rv.column(), new_value.row[ix].column());
+                // compare the stripped versions
+                let ov = rv.value().replace("\'", "");
+                let iv = item[ix].value().replace("\'", "");
+                let nv = new_value.row[ix].value().replace("\'", "");
+
+                if nv == iv && ov != nv {
+                    updates.push(format!("`{}` = '{}'", rv.column(), rv.value()));
+                } else {
+                    // don't update if the item column is different from the value that we changed it to!
+                    debug!(
+                        "Don't update column {}, nv {}, item v {}, ov {}",
+                        rv.column(),
+                        nv,
+                        iv,
+                        ov
+                    )
+                }
+            }
+            // somehow this row exactly matches, we can just keep this row
+            if updates.len() > 0 {
+                // update the relevant columns
+                let update_q = format!(
+                    "UPDATE {} SET {} WHERE {}",
+                    &table,
+                    updates.join(", "),
+                    item_selection
+                );
+                helpers::query_drop(&update_q, args.db)?;
+            }
+            warn!("restore old objs: {}mus", fnstart.elapsed().as_micros());
+            Ok(true)
+        }
+    }
+
+    /// To remove new value rows, or update new value rows to the old value (so
+    /// we don't do redundant work)
+    fn remove_or_update_rows<Q: Queryable>(
+        &self,
+        new_values: &Vec<TableRow>,
+        old_values: &mut HashSet<TableRow>,
+        args: &mut RevealArgs<Q>,
+    ) -> Result<bool, mysql::Error> {
+        let fnstart = time::Instant::now();
+        let mut success = true;
+        for new_value in new_values {
+            let table = &new_value.table;
+            info!("Going to try to remove new row! {:?}", new_value);
+
+            // get current obj in db
+            let table_info = args.timap.get(table).unwrap();
+            let ids = helpers::get_ids(&table_info.id_cols, &new_value.row);
+            let selection = helpers::get_select_of_ids_str(&ids);
+            let selected = helpers::get_query_rows_str_q::<Q>(
+                &helpers::str_select_statement(table, table, &selection.to_string()),
+                args.db,
+            )?;
+
+            // CHECK 1: Is the item already removed?
+            if selected.is_empty() {
+                info!(
+                    "remove_or_update_rows: No new item to remove! {}: {}mus",
+                    selection,
+                    fnstart.elapsed().as_micros()
+                );
+                // this can still succeed!
+                // success = false;
+                continue;
+            }
+
+            /*
+             * CHECK 2: Referential integrity, we need to do something to rows
+             * that refer to this one. Only check for pseudoprincipals (e.g.,
+             * records of type "NEW_PP")
+             */
+            // Update the new value to the old value in place, if we find a matching old
+            // value
+            let mut should_delete = true;
+            for ov in &old_values.clone() {
+                let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
+                if ids == old_ids {
+                    // we found a match, make sure not to delete this item even if we fail to restore it since we're updating the old value here!
+                    should_delete = false;
+                    if self.restore_old_value(
+                        Some(new_value),
+                        &ov,
+                        RestoreOrUpdate::UPDATE,
+                        args,
+                    )? {
+                        old_values.remove(&ov);
+                    }
+                    break;
+                }
+            }
+            // we can delete the item only if there's no matching old value
+            // that we've already tried to rewrite the new value to.
+            if should_delete {
+                // retain if things refer to it
+                for (_, tinfo) in args.timap.into_iter() {
+                    let nchildren =
+                        EdnaDiffRecord::get_count_of_children(&ids[0].value(), tinfo, args.db)?;
+                    if nchildren == 0 {
+                        let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
+                        helpers::query_drop(&delete_q, args.db)?;
+                    } else {
+                        success = false;
+                    }
+                }
+            }
+        }
+        warn!(
+            "remove_or_update_rows: {}mus",
+            fnstart.elapsed().as_micros()
+        );
+        Ok(success)
     }
 }

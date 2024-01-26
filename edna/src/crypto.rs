@@ -28,8 +28,8 @@ pub fn get_pk_bytes(bytes: Vec<u8>) -> [u8; 32] {
 /*
  * EncData Functions
  */
-pub fn decrypt_encdata(ed: &EncData, decrypt_cap: &DecryptCap, dryrun: bool) -> (bool, Vec<u8>) {
-    if decrypt_cap.is_empty() {
+pub fn decrypt_encdata(ed: &EncData, privkey: &PrivKey, dryrun: bool) -> (bool, Vec<u8>) {
+    if privkey.is_empty() {
         return (false, vec![]);
     }
 
@@ -40,7 +40,7 @@ pub fn decrypt_encdata(ed: &EncData, decrypt_cap: &DecryptCap, dryrun: bool) -> 
         return ret;
     }
 
-    let secretkey = SecretKey::from(get_pk_bytes(decrypt_cap.clone()));
+    let secretkey = SecretKey::from(get_pk_bytes(privkey.clone()));
     let pubkey = PublicKey::from(get_pk_bytes(ed.pubkey.clone()));
     let salsabox = Box::new(&pubkey, &secretkey);
     match salsabox.decrypt(&GenericArray::from_slice(&ed.nonce), &ed.encdata[..]) {

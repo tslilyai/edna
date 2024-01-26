@@ -1,12 +1,87 @@
-use crate::proxy::TableKeys;
 use crate::RowVal;
 use crate::*;
-use crypto_box::PublicKey;
-use log::{debug, warn};
+use log::{info, debug, warn};
 use mysql::Opts;
 use std::str::FromStr;
 
 pub const NULLSTR: &'static str = "NULL";
+
+pub fn write_mysql_answer_rows<W: io::Write>(
+    results: msql_srv::QueryResultWriter<W>,
+    rows: mysql::Result<mysql::QueryResult<mysql::Text>>,
+) -> Result<(), mysql::Error> {
+    match rows {
+        Ok(rows) => {
+            let cols: Vec<_> = rows
+                .columns()
+                .as_ref()
+                .into_iter()
+                .map(|c| msql_srv::Column {
+                    table: c.table_str().to_string(),
+                    column: c.name_str().to_string(),
+                    coltype: get_msql_srv_coltype(&c.column_type()),
+                    colflags: msql_srv::ColumnFlags::from_bits(c.flags().bits()).unwrap(),
+                })
+                .collect();
+            let mut writer = results.start(&cols)?;
+            for row in rows {
+                let vals = row.unwrap().unwrap();
+                for v in vals {
+                    writer.write_col(mysql_val_to_common_val(&v))?;
+                }
+                writer.end_row()?;
+            }
+            writer.finish()?;
+        }
+        Err(e) => {
+            warn!("{:?}", e);
+            results.error(
+                msql_srv::ErrorKind::ER_BAD_SLAVE,
+                format!("{:?}", e).as_bytes(),
+            )?;
+        }
+    }
+    Ok(())
+}
+pub fn get_msql_srv_coltype(t: &mysql::consts::ColumnType) -> msql_srv::ColumnType {
+    use msql_srv::ColumnType;
+    match t {
+        mysql::consts::ColumnType::MYSQL_TYPE_DECIMAL => ColumnType::MYSQL_TYPE_DECIMAL,
+        mysql::consts::ColumnType::MYSQL_TYPE_TINY => ColumnType::MYSQL_TYPE_TINY,
+        mysql::consts::ColumnType::MYSQL_TYPE_SHORT => ColumnType::MYSQL_TYPE_SHORT,
+        mysql::consts::ColumnType::MYSQL_TYPE_LONG => ColumnType::MYSQL_TYPE_LONG,
+        mysql::consts::ColumnType::MYSQL_TYPE_FLOAT => ColumnType::MYSQL_TYPE_FLOAT,
+        mysql::consts::ColumnType::MYSQL_TYPE_DOUBLE => ColumnType::MYSQL_TYPE_DOUBLE,
+        mysql::consts::ColumnType::MYSQL_TYPE_NULL => ColumnType::MYSQL_TYPE_NULL,
+        mysql::consts::ColumnType::MYSQL_TYPE_TIMESTAMP => ColumnType::MYSQL_TYPE_TIMESTAMP,
+        mysql::consts::ColumnType::MYSQL_TYPE_LONGLONG => ColumnType::MYSQL_TYPE_LONGLONG,
+        mysql::consts::ColumnType::MYSQL_TYPE_INT24 => ColumnType::MYSQL_TYPE_INT24,
+        mysql::consts::ColumnType::MYSQL_TYPE_DATE => ColumnType::MYSQL_TYPE_DATE,
+        mysql::consts::ColumnType::MYSQL_TYPE_TIME => ColumnType::MYSQL_TYPE_TIME,
+        mysql::consts::ColumnType::MYSQL_TYPE_DATETIME => ColumnType::MYSQL_TYPE_DATETIME,
+        mysql::consts::ColumnType::MYSQL_TYPE_YEAR => ColumnType::MYSQL_TYPE_YEAR,
+        mysql::consts::ColumnType::MYSQL_TYPE_NEWDATE => ColumnType::MYSQL_TYPE_NEWDATE,
+        mysql::consts::ColumnType::MYSQL_TYPE_VARCHAR => ColumnType::MYSQL_TYPE_VARCHAR,
+        mysql::consts::ColumnType::MYSQL_TYPE_BIT => ColumnType::MYSQL_TYPE_BIT,
+        mysql::consts::ColumnType::MYSQL_TYPE_TIMESTAMP2 => ColumnType::MYSQL_TYPE_TIMESTAMP2,
+        mysql::consts::ColumnType::MYSQL_TYPE_DATETIME2 => ColumnType::MYSQL_TYPE_DATETIME2,
+        mysql::consts::ColumnType::MYSQL_TYPE_TIME2 => ColumnType::MYSQL_TYPE_TIME2,
+        mysql::consts::ColumnType::MYSQL_TYPE_JSON => ColumnType::MYSQL_TYPE_JSON,
+        mysql::consts::ColumnType::MYSQL_TYPE_NEWDECIMAL => ColumnType::MYSQL_TYPE_NEWDECIMAL,
+        mysql::consts::ColumnType::MYSQL_TYPE_ENUM => ColumnType::MYSQL_TYPE_ENUM,
+        mysql::consts::ColumnType::MYSQL_TYPE_SET => ColumnType::MYSQL_TYPE_SET,
+        mysql::consts::ColumnType::MYSQL_TYPE_TINY_BLOB => ColumnType::MYSQL_TYPE_TINY_BLOB,
+        mysql::consts::ColumnType::MYSQL_TYPE_MEDIUM_BLOB => ColumnType::MYSQL_TYPE_MEDIUM_BLOB,
+        mysql::consts::ColumnType::MYSQL_TYPE_LONG_BLOB => ColumnType::MYSQL_TYPE_LONG_BLOB,
+        mysql::consts::ColumnType::MYSQL_TYPE_BLOB => ColumnType::MYSQL_TYPE_BLOB,
+        mysql::consts::ColumnType::MYSQL_TYPE_VAR_STRING => ColumnType::MYSQL_TYPE_VAR_STRING,
+        mysql::consts::ColumnType::MYSQL_TYPE_STRING => ColumnType::MYSQL_TYPE_STRING,
+        mysql::consts::ColumnType::MYSQL_TYPE_GEOMETRY => ColumnType::MYSQL_TYPE_GEOMETRY,
+        _ => unimplemented!("Unsupported coltype in msql_srv"),
+        //mysql::consts::ColumnType::MYSQL_TYPE_TYPED_ARRAY => ColumnType::MYSQL_TYPE_TYPED_ARRAY,
+        //mysql::consts::ColumnType::MYSQL_TYPE_UNKNOWN => ColumnType::MYSQL_TYPE_UNKNOWN,
+    }
+}
 
 /*****************************************
  * SELECT
@@ -26,18 +101,25 @@ pub fn str_select_statement(table: &str, from: &str, selection: &str) -> String 
     } else {
         format!("SELECT {}.* FROM {} WHERE {}", table, from, selection)
     };
-    debug!("{}", s);
     s
 }
 
-pub fn get_select_of_ids_str(tinfo: &TableInfo, ids: &Vec<String>) -> String {
-    let cols = &tinfo.id_cols;
+pub fn to_mysql_valstr(val: &str) -> String {
+    if is_string_numeric(val) || val == "true" || val == "false" {
+        val.to_string()
+    } else {
+        format!("'{}'", val)
+    }
+}
+
+pub fn get_select_of_ids_str(ids: &Vec<RowVal>) -> String {
     let mut parts = vec!["true".to_string()];
-    for (i, id) in ids.iter().enumerate() {
-        if is_string_numeric(id) || id == "true" || id == "false" {
-            parts.push(format!("{} = {}", cols[i], id))
+    for id in ids {
+        let val = &id.value();
+        if is_string_numeric(val) || val == "true" || val == "false" {
+            parts.push(format!("{} = {}", id.column(), val))
         } else {
-            parts.push(format!("{} = '{}'", cols[i], id))
+            parts.push(format!("{} = '{}'", id.column(), val))
         }
     }
     parts.join(" AND ")
@@ -63,17 +145,14 @@ pub fn get_select_of_row(id_cols: &Vec<String>, row: &Vec<RowVal>) -> String {
 /************************************
  * INITIALIZATION HELPERS
  * **********************************/
-fn create_schema<Q: Queryable>(
-    db: &mut Q,
-    in_memory: bool,
-    schema: &str,
-) -> Result<(), mysql::Error> {
+fn create_schema(db: &mut mysql::Conn, in_memory: bool, schema: &str) -> Result<(), mysql::Error> {
     db.query_drop("SET max_heap_table_size = 4294967295;")?;
 
     /* issue schema statements */
     let mut sql = String::new();
     let mut stmt = String::new();
     for line in schema.lines() {
+        info!("Got line {}", line);
         if line.starts_with("--") || line.is_empty() {
             continue;
         }
@@ -83,15 +162,17 @@ fn create_schema<Q: Queryable>(
         }
         stmt.push_str(line);
         if stmt.ends_with(';') {
+            info!("Got stmt {}", stmt);
             // ignore query statements in schema
-            if !stmt.to_lowercase().contains("create table")
-                || !stmt.to_lowercase().contains("create view")
-            {
-                continue;
+            if stmt.to_lowercase().contains("create") {
+                if stmt.to_lowercase().contains("table") {
+                    let new_stmt = helpers::process_schema_stmt(&stmt, in_memory);
+                    info!("create_schema issuing new_stmt {}", new_stmt);
+                    db.query_drop(new_stmt.to_string())?;
+                } else {
+                    db.query_drop(stmt.to_string())?;
+                }
             }
-            let new_stmt = helpers::process_schema_stmt(&stmt, in_memory);
-            warn!("create_schema issuing new_stmt {}", new_stmt);
-            db.query_drop(new_stmt.to_string())?;
             stmt = String::new();
         }
     }
@@ -102,6 +183,7 @@ pub fn init_db(in_memory: bool, user: &str, pass: &str, host: &str, dbname: &str
     let url = format!("mysql://{}:{}@{}", user, pass, host);
     warn!("Init db {} url {}!", dbname, url);
     let mut db = mysql::Conn::new(Opts::from_url(&url).unwrap()).unwrap();
+    warn!("Priming database");
     db.query_drop(&format!("DROP DATABASE IF EXISTS {};", dbname))
         .unwrap();
     db.query_drop(&format!("CREATE DATABASE {};", dbname))
@@ -114,21 +196,19 @@ pub fn init_db(in_memory: bool, user: &str, pass: &str, host: &str, dbname: &str
 /************************************
  * MYSQL HELPERS
  ************************************/
-pub fn query_drop(q: String, conn: &mut mysql::PooledConn) -> Result<(), mysql::Error> {
-    warn!("query_drop: {}\n", q);
-    conn.query_drop(q)
-}
-
-pub fn query_drop_txn(q: String, txn: &mut mysql::Transaction) -> Result<(), mysql::Error> {
-    warn!("query_drop: {}\n", q);
-    txn.query_drop(q)
+pub fn query_drop<Q: Queryable>(q: &str, conn: &mut Q) -> Result<(), mysql::Error> {
+    let start = time::Instant::now();
+    debug!("query_drop: {}", q);
+    conn.query_drop(q)?;
+    warn!("query_drop: {}: {}mus\n", q, start.elapsed().as_micros());
+    Ok(())
 }
 
 pub fn get_query_rows_str_txn(
     qstr: &str,
     txn: &mut mysql::Transaction,
 ) -> Result<Vec<Vec<RowVal>>, mysql::Error> {
-    warn!("get_query_rows: {}\n", qstr);
+    info!("get_query_rows: {}\n", qstr);
 
     let mut rows = vec![];
     let res = txn.query_iter(qstr)?;
@@ -155,11 +235,13 @@ pub fn get_query_rows_str_txn(
     Ok(rows)
 }
 
-pub fn get_query_rows_str<Q: Queryable>(
+pub fn get_query_rows_str(
     qstr: &str,
-    conn: &mut Q,
+    conn: &mut mysql::PooledConn,
 ) -> Result<Vec<Vec<RowVal>>, mysql::Error> {
     let start = time::Instant::now();
+    info!("get_query_rows: {}\n", qstr);
+
     let mut rows = vec![];
     let res = conn.query_iter(qstr)?;
     let cols: Vec<String> = res
@@ -182,11 +264,7 @@ pub fn get_query_rows_str<Q: Queryable>(
             .collect();
         rows.push(vals);
     }
-    warn!(
-        "get_query_rows {}: {}mus",
-        qstr,
-        start.elapsed().as_micros()
-    );
+    warn!("{}: {}mus", qstr, start.elapsed().as_micros());
     Ok(rows)
 }
 
@@ -197,8 +275,6 @@ pub fn get_query_rows_str_q<Q: Queryable>(
     let start = time::Instant::now();
     let mut rows = vec![];
     let res = conn.query_iter(q)?;
-    warn!("get_query_rows_q {}: {}mus", q, start.elapsed().as_micros());
-    let start = time::Instant::now();
     let cols: Vec<String> = res
         .columns()
         .as_ref()
@@ -219,11 +295,7 @@ pub fn get_query_rows_str_q<Q: Queryable>(
             .collect();
         rows.push(vals);
     }
-    warn!(
-        "parsed get_query_rows_str {}: {}mus",
-        q,
-        start.elapsed().as_micros()
-    );
+    warn!("{}: {}mus", q, start.elapsed().as_micros());
     Ok(rows)
 }
 
@@ -280,21 +352,6 @@ pub fn remove_escaped_chars(s: &str) -> String {
     s = s.replace(":\"}", ":\"\"}");
     s = s.replace("\"\'\"", "\"\'\'\"");
     s
-}
-
-pub fn string_to_common_val(val: &str) -> mysql_common::value::Value {
-    if val.to_lowercase() == "NULL" {
-        mysql_common::value::Value::NULL
-    } else {
-        match val.parse::<i64>() {
-            Ok(i) => mysql_common::value::Value::Int(i),
-            _ => mysql_common::value::Value::Bytes(
-                helpers::trim_quotes(&std::str::from_utf8(&base64::decode(val).unwrap()).unwrap())
-                    .as_bytes()
-                    .to_vec(),
-            ),
-        }
-    }
 }
 
 pub fn mysql_val_to_common_val(val: &mysql::Value) -> mysql_common::value::Value {
@@ -362,202 +419,5 @@ pub fn mysql_val_to_u64(val: &mysql::Value) -> Result<u64, mysql::Error> {
             io::ErrorKind::Other,
             format!("value {:?} is not an int", val),
         ))),
-    }
-}
-
-pub fn write_mysql_answer_rows<W: io::Write>(
-    results: msql_srv::QueryResultWriter<W>,
-    rows: mysql::Result<mysql::QueryResult<mysql::Text>>,
-) -> Result<(), mysql::Error> {
-    match rows {
-        Ok(rows) => {
-            let cols: Vec<_> = rows
-                .columns()
-                .as_ref()
-                .into_iter()
-                .map(|c| msql_srv::Column {
-                    table: c.table_str().to_string(),
-                    column: c.name_str().to_string(),
-                    coltype: get_msql_srv_coltype(&c.column_type()),
-                    colflags: msql_srv::ColumnFlags::from_bits(c.flags().bits()).unwrap(),
-                })
-                .collect();
-            let mut writer = results.start(&cols)?;
-            for row in rows {
-                let vals = row.unwrap().unwrap();
-                for v in vals {
-                    writer.write_col(mysql_val_to_common_val(&v))?;
-                }
-                writer.end_row()?;
-            }
-            writer.finish()?;
-        }
-        Err(e) => {
-            warn!("{:?}", e);
-            results.error(
-                msql_srv::ErrorKind::ER_BAD_SLAVE,
-                format!("{:?}", e).as_bytes(),
-            )?;
-        }
-    }
-    Ok(())
-}
-
-pub fn write_decrypted_mysql_answer_rows<W: io::Write>(
-    q: &str,
-    _qenc: &str,
-    results: msql_srv::QueryResultWriter<W>,
-    logged_in_keys_enc: &HashMap<PublicKey, TableKeys>,
-    table: &str,
-    enccols: &HashSet<String>,
-    rows: mysql::Result<mysql::QueryResult<mysql::Text>>,
-) -> Result<(), mysql::Error> {
-    match rows {
-        Ok(rows) => {
-            let start = time::Instant::now();
-            let cols: Vec<_> = rows
-                .columns()
-                .as_ref()
-                .into_iter()
-                .map(|c| msql_srv::Column {
-                    table: c.table_str().to_string(),
-                    column: c.name_str().to_string(),
-                    coltype: get_msql_srv_coltype(&c.column_type()),
-                    colflags: msql_srv::ColumnFlags::from_bits(c.flags().bits()).unwrap(),
-                })
-                .collect();
-            let strcols = cols.iter().map(|c| c.column.to_string()).collect();
-            let mut writer = results.start(&cols)?;
-            let mut nrows = 0;
-            for row in rows {
-                let vals = row.unwrap().unwrap();
-                let strvals: Vec<String> = vals
-                    .iter()
-                    .map(|v| helpers::trim_quotes(&v.as_sql(false)).to_string())
-                    .collect();
-                let mut ndecrypt = 0;
-                'decrypt_loop: for (_pk, table_keys) in logged_in_keys_enc {
-                    let (uids, index_vals) = proxy::Proxy::get_uid_and_val(&strvals, &strcols);
-                    let keys = proxy::Proxy::get_keys(&table_keys, table, &uids, &index_vals);
-                    'keyloop: for rk in keys {
-                        for (i, id) in strvals.iter().enumerate() {
-                            let col = &cols[i].column.to_string();
-                            let mut check = true;
-                            let (enc, col_index) = match col.as_str() {
-                                "email" => (true, 0),
-                                "lec" => (false, 1),
-                                "q" => (false, 2),
-                                "apikey" => (true, 1),
-                                "is_admin" => (true, 2),
-                                _ => {
-                                    debug!("No match for col {}, skipping ID check", col);
-                                    check = false;
-                                    (false, 3)
-                                }
-                            };
-                            if check {
-                                let rids = if enc { &rk.enc_row_ids } else { &rk.row_ids };
-                                if &rids[col_index] != id {
-                                    debug!(
-                                        "DECRYPT NO MATCH:\n\t col {}:\n\t{}\n\t{}!",
-                                        col, id, rk.enc_row_ids[col_index]
-                                    );
-                                    continue 'keyloop;
-                                } else {
-                                    debug!(
-                                        "DECRYPT MATCH Key rowids:\n\t col {}:\n\t{}\n\t{}!",
-                                        col, id, rk.enc_row_ids[col_index]
-                                    );
-                                }
-                            }
-                        }
-                        // we get here when all the checked IDs matched!
-                        // this means that this key probably encrypted this row, so we can use
-                        // it to decrypt it too
-                        for (i, id) in strvals.iter().enumerate() {
-                            let col = &cols[i].column.to_string();
-                            if enccols.contains(col) {
-                                debug!("Going to decrypt {} col {} with key", id, col);
-                                ndecrypt += 1;
-                                let (success, plainv) = crypto::decrypt_with_aes(&id, &rk.symkey);
-                                if success {
-                                    debug!(
-                                        "Decrypted val (not yet quote-trimmed) to {}",
-                                        std::str::from_utf8(
-                                            &base64::decode(helpers::trim_quotes(&plainv)).unwrap()
-                                        )
-                                        .unwrap()
-                                    );
-                                }
-                                writer.write_col(string_to_common_val(&plainv))?;
-                            } else {
-                                writer.write_col(string_to_common_val(&id))?;
-                            }
-                        }
-                        break 'decrypt_loop;
-                    }
-                    warn!("Decrypt {} cols with keys", ndecrypt);
-                }
-                debug!("Writer finishing row!");
-                nrows += 1;
-                writer.end_row()?;
-            }
-            warn!(
-                "{} returned {} rows with {} cols!: {}mus",
-                q,
-                nrows,
-                cols.len(),
-                start.elapsed().as_micros()
-            );
-            writer.finish()?;
-        }
-        Err(e) => {
-            warn!("{:?}", e);
-            results.error(
-                msql_srv::ErrorKind::ER_BAD_SLAVE,
-                format!("{:?}", e).as_bytes(),
-            )?;
-        }
-    }
-    Ok(())
-}
-
-pub fn get_msql_srv_coltype(t: &mysql::consts::ColumnType) -> msql_srv::ColumnType {
-    use msql_srv::ColumnType;
-    match t {
-        mysql::consts::ColumnType::MYSQL_TYPE_DECIMAL => ColumnType::MYSQL_TYPE_DECIMAL,
-        mysql::consts::ColumnType::MYSQL_TYPE_TINY => ColumnType::MYSQL_TYPE_TINY,
-        mysql::consts::ColumnType::MYSQL_TYPE_SHORT => ColumnType::MYSQL_TYPE_SHORT,
-        mysql::consts::ColumnType::MYSQL_TYPE_LONG => ColumnType::MYSQL_TYPE_LONG,
-        mysql::consts::ColumnType::MYSQL_TYPE_FLOAT => ColumnType::MYSQL_TYPE_FLOAT,
-        mysql::consts::ColumnType::MYSQL_TYPE_DOUBLE => ColumnType::MYSQL_TYPE_DOUBLE,
-        mysql::consts::ColumnType::MYSQL_TYPE_NULL => ColumnType::MYSQL_TYPE_NULL,
-        mysql::consts::ColumnType::MYSQL_TYPE_TIMESTAMP => ColumnType::MYSQL_TYPE_TIMESTAMP,
-        mysql::consts::ColumnType::MYSQL_TYPE_LONGLONG => ColumnType::MYSQL_TYPE_LONGLONG,
-        mysql::consts::ColumnType::MYSQL_TYPE_INT24 => ColumnType::MYSQL_TYPE_INT24,
-        mysql::consts::ColumnType::MYSQL_TYPE_DATE => ColumnType::MYSQL_TYPE_DATE,
-        mysql::consts::ColumnType::MYSQL_TYPE_TIME => ColumnType::MYSQL_TYPE_TIME,
-        mysql::consts::ColumnType::MYSQL_TYPE_DATETIME => ColumnType::MYSQL_TYPE_DATETIME,
-        mysql::consts::ColumnType::MYSQL_TYPE_YEAR => ColumnType::MYSQL_TYPE_YEAR,
-        mysql::consts::ColumnType::MYSQL_TYPE_NEWDATE => ColumnType::MYSQL_TYPE_NEWDATE,
-        mysql::consts::ColumnType::MYSQL_TYPE_VARCHAR => ColumnType::MYSQL_TYPE_VARCHAR,
-        mysql::consts::ColumnType::MYSQL_TYPE_BIT => ColumnType::MYSQL_TYPE_BIT,
-        mysql::consts::ColumnType::MYSQL_TYPE_TIMESTAMP2 => ColumnType::MYSQL_TYPE_TIMESTAMP2,
-        mysql::consts::ColumnType::MYSQL_TYPE_DATETIME2 => ColumnType::MYSQL_TYPE_DATETIME2,
-        mysql::consts::ColumnType::MYSQL_TYPE_TIME2 => ColumnType::MYSQL_TYPE_TIME2,
-        mysql::consts::ColumnType::MYSQL_TYPE_JSON => ColumnType::MYSQL_TYPE_JSON,
-        mysql::consts::ColumnType::MYSQL_TYPE_NEWDECIMAL => ColumnType::MYSQL_TYPE_NEWDECIMAL,
-        mysql::consts::ColumnType::MYSQL_TYPE_ENUM => ColumnType::MYSQL_TYPE_ENUM,
-        mysql::consts::ColumnType::MYSQL_TYPE_SET => ColumnType::MYSQL_TYPE_SET,
-        mysql::consts::ColumnType::MYSQL_TYPE_TINY_BLOB => ColumnType::MYSQL_TYPE_TINY_BLOB,
-        mysql::consts::ColumnType::MYSQL_TYPE_MEDIUM_BLOB => ColumnType::MYSQL_TYPE_MEDIUM_BLOB,
-        mysql::consts::ColumnType::MYSQL_TYPE_LONG_BLOB => ColumnType::MYSQL_TYPE_LONG_BLOB,
-        mysql::consts::ColumnType::MYSQL_TYPE_BLOB => ColumnType::MYSQL_TYPE_BLOB,
-        mysql::consts::ColumnType::MYSQL_TYPE_VAR_STRING => ColumnType::MYSQL_TYPE_VAR_STRING,
-        mysql::consts::ColumnType::MYSQL_TYPE_STRING => ColumnType::MYSQL_TYPE_STRING,
-        mysql::consts::ColumnType::MYSQL_TYPE_GEOMETRY => ColumnType::MYSQL_TYPE_GEOMETRY,
-        _ => unimplemented!("Unsupported coltype in msql_srv"),
-        //mysql::consts::ColumnType::MYSQL_TYPE_TYPED_ARRAY => ColumnType::MYSQL_TYPE_TYPED_ARRAY,
-        //mysql::consts::ColumnType::MYSQL_TYPE_UNKNOWN => ColumnType::MYSQL_TYPE_UNKNOWN,
     }
 }

@@ -24,7 +24,7 @@ use std::time;
 
 pub type Loc = u64; // locator
 pub type Index = u64; // index into shares map, enc locators map
-pub type DecryptCap = Vec<u8>; // decryption capability (e.g., private key)
+pub type PrivKey = Vec<u8>; // decryption capability (e.g., private key)
 pub type Share = [BigInt; 2];
 pub type ShareValue = BigInt;
 pub type UserData = (Share, Index);
@@ -380,7 +380,7 @@ impl RecordCtrler {
         is_anon: bool,
         db: Option<&mut Q>,
         persist: bool,
-    ) -> (DecryptCap, Vec<u8> /*publickey*/) {
+    ) -> (PrivKey, Vec<u8> /*publickey*/) {
         if self.dryrun {
             // pk = uid as bytes
             let pk = get_pk_bytes(uid.as_bytes().to_vec());
@@ -444,7 +444,7 @@ impl RecordCtrler {
         is_anon: bool,
         db: &mut Q,
         persist: bool,
-    ) -> DecryptCap {
+    ) -> PrivKey {
         let (secretkey, _pubkey) = self.register_principal(uid, is_anon, Some(db), persist);
         secretkey
     }
@@ -525,7 +525,7 @@ impl RecordCtrler {
         new_uid: &UID,
         pp: TableRow,
         did: DID,
-    ) {
+    ) -> PrivKey { 
         let start = time::Instant::now();
         let anon_uidstr = new_uid.trim_matches('\'');
         // save the anon principal as a new principal with a public key
@@ -544,7 +544,7 @@ impl RecordCtrler {
 
         // we need to record the pp in the speaksfor chain
         let chain_record =
-            new_sfchain_record(old_uid.to_string(), anon_uidstr.to_string(), secretkey);
+            new_sfchain_record(old_uid.to_string(), anon_uidstr.to_string(), secretkey.clone());
         self.insert_chain_record(old_uid, did, &chain_record);
 
         // we also need to record a diff record for the pp
@@ -567,6 +567,7 @@ impl RecordCtrler {
             "Edna: register anon principal: {}",
             start.elapsed().as_micros()
         );
+        secretkey
     }
 
     pub fn principal_is_anon(&self, uid: &UID) -> bool {
@@ -699,24 +700,24 @@ impl RecordCtrler {
     // this would remove locators regardless of success in revealing
     pub fn get_user_records(
         &mut self,
-        decrypt_cap: &DecryptCap,
+        privkey: &PrivKey,
         lc: &Locator,
     ) -> (Vec<DiffRecordWrapper>, HashMap<UID, SFChainRecord>) {
         let mut diff_records = vec![];
         let mut pk_records = HashMap::new();
-        if decrypt_cap.is_empty() {
+        if privkey.is_empty() {
             return (diff_records, pk_records);
         }
         if let Some(encbag) = self.enc_map.get(&lc.loc) {
             info!("Getting records of user {} with lc {}", lc.uid, lc.loc);
             let start = time::Instant::now();
-            // decrypt record with decrypt_cap provided by client
-            let (succeeded, plaintext) = decrypt_encdata(encbag, decrypt_cap, self.dryrun);
+            // decrypt record with privkey provided by client
+            let (succeeded, plaintext) = decrypt_encdata(encbag, privkey, self.dryrun);
             if !succeeded {
                 info!(
                     "Failed to decrypt bag {} with {}",
                     lc.uid,
-                    decrypt_cap.len()
+                    privkey.len()
                 );
                 return (diff_records, pk_records);
             }
@@ -759,7 +760,7 @@ impl RecordCtrler {
         uid: &UID,
         password: Option<String>,
         user_data: Option<UserData>,
-    ) -> Option<DecryptCap> {
+    ) -> Option<PrivKey> {
         info!("get_priv_key: user {} user share: {:?}", uid, user_data);
         if self.dryrun {
             if user_data != None {
@@ -840,7 +841,7 @@ impl RecordCtrler {
     }
 
     // gets locators given privkey
-    pub fn get_locators(&self, privkey: &DecryptCap) -> Vec<Locator> {
+    pub fn get_locators(&self, privkey: &PrivKey) -> Vec<Locator> {
         let pk_hash = {
             let mut hasher = DefaultHasher::new();
             (base64::encode(privkey)).hash(&mut hasher);
@@ -871,7 +872,7 @@ impl RecordCtrler {
     pub fn cleanup_user_records(
         &mut self,
         did: DID,
-        decrypt_cap: &DecryptCap,
+        privkey: &PrivKey,
         lc: &Locator,
         db: &mut mysql::PooledConn,
     ) -> (bool, bool) {
@@ -880,14 +881,14 @@ impl RecordCtrler {
         let mut no_diffs_at_loc = true;
         let mut no_sfchains_at_loc = true;
         let mut changed = false;
-        if decrypt_cap.is_empty() {
+        if privkey.is_empty() {
             return (false, false);
         }
         if let Some(encbag) = self.enc_map.get(&lc.loc) {
             let start = time::Instant::now();
             no_diffs_at_loc = false;
 
-            let (success, plaintext) = decrypt_encdata(encbag, decrypt_cap, self.dryrun);
+            let (success, plaintext) = decrypt_encdata(encbag, privkey, self.dryrun);
             if !success {
                 info!("Could not decrypt encdata at {:?} with decryptcap", lc);
                 return (false, false);
@@ -986,19 +987,19 @@ impl RecordCtrler {
     // return that set
     pub fn get_user_pseudoprincipals(
         &self,
-        decrypt_cap: &DecryptCap,
+        privkey: &PrivKey,
         locators: &Vec<Locator>,
     ) -> HashSet<UID> {
         let mut uids = HashSet::new();
-        if decrypt_cap.is_empty() {
+        if privkey.is_empty() {
             return uids;
         }
         for lc in locators {
             if let Some(encbag) = self.enc_map.get(&lc.loc) {
                 info!("Getting pps of user");
                 let start = time::Instant::now();
-                // decrypt record with decrypt_cap provided by client
-                let (_, plaintext) = decrypt_encdata(encbag, decrypt_cap, self.dryrun);
+                // decrypt record with privkey provided by client
+                let (_, plaintext) = decrypt_encdata(encbag, privkey, self.dryrun);
                 let bag: Bag = bincode::deserialize(&plaintext).unwrap();
                 let records = bag.chainrecs;
                 let mut new_uids = vec![];

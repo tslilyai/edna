@@ -2,38 +2,37 @@ extern crate base64;
 extern crate mysql;
 extern crate ordered_float;
 
-use crypto_box::SecretKey;
-use log::{error, info, warn};
+use log::{error, warn};
 use mysql::prelude::*;
-use mysql::IsolationLevel;
+use mysql::IsolationLevel::Serializable;
 use mysql::Opts;
 use mysql::TxOpts;
 use serde::{Deserialize, Serialize};
 use sql_parser::ast::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use std::time;
 use std::*;
 
 pub mod crypto;
+pub mod disguiser;
 pub mod gen_value;
 pub mod helpers;
-pub mod highlevel_api;
 pub mod lowlevel_api;
 pub mod predicate;
 pub mod proxy;
 pub mod records;
+pub mod revealer;
 
-// disguise ID
+/// disguise ID
 pub type DID = u64;
-// user ID
+/// user ID
 pub type UID = String;
 pub type ColName = String;
 pub type TableName = String;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseudoprincipalGenerator {
-    pub name: TableName,
+    pub table: TableName,
     pub id_col: ColName,
     pub cols: Vec<String>,
     pub val_generation: Vec<gen_value::GenValue>,
@@ -61,18 +60,25 @@ impl PseudoprincipalGenerator {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ForeignKey {
+    pub to_table: TableName,
+    pub to_col: ColName,
+    pub from_table: TableName,
+    pub from_col: ColName,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TableInfo {
-    pub name: TableName,
+    pub table: TableName,
     pub id_cols: Vec<ColName>,
-    pub owner_fk_cols: Vec<ColName>,
-    // table, referenced_column, fk column
-    pub other_fk_cols: Vec<(TableName, ColName, ColName)>,
+    pub owner_fks: Vec<ForeignKey>,
+    pub other_fks: Vec<ForeignKey>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Transformation {
-    // XXX Note: we don't have a "RemovePermanent" option because this is just SQL. We could add
-    // support for it though.
+    // XXX Note: we don't have a "RemovePermanent" option because this is just
+    // SQL. We could add support for it though.
     Remove {
         pred: String,
         from: String,
@@ -86,9 +92,9 @@ pub enum Transformation {
         // how to generate a modified value
         gen_value: gen_value::GenValue,
     },
-    // decorrelates all ownership columns of items matching the predicate
-    // if there is an invoking UID, this only decorrelates columns correlating to the invoking UID
-    // otherwise, this decorrelates all columns if no user is invoking the disguise
+    // decorrelates all ownership of items matching the predicate
+    // if there is an invoking UID, this only decorrelates pointers to the invoking UID
+    // otherwise, this decorrelates all pointers to any user
     Decor {
         pred: String,
         // which table/joined tables to select from
@@ -100,9 +106,9 @@ pub enum Transformation {
     },
 }
 
-pub type DisguiseSpec = HashMap<String, Vec<Transformation>>;
+pub type DisguiseSpec = HashMap<TableName, Vec<Transformation>>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum RevealPPType {
     Delete,
     Restore,
@@ -127,57 +133,84 @@ impl RowVal {
     pub fn new(c: ColName, r: String) -> RowVal {
         RowVal(c, r)
     }
+    pub fn set_value(&mut self, r: &str) {
+        self.1 = r.to_string();
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq, Hash)]
+pub struct TableRow {
+    pub row: Vec<RowVal>,
+    pub table: TableName,
 }
 
 pub struct EdnaClient {
     pub in_memory: bool,
     pub pool: mysql::Pool,
-    pub hlapi: highlevel_api::HighLevelAPI,
+    pub disguiser: disguiser::Disguiser,
+    pub revealer: revealer::Revealer,
     pub llapi: Arc<Mutex<lowlevel_api::LowLevelAPI>>,
 }
 
 impl EdnaClient {
-    pub fn new(url: &str, in_memory: bool, crypto: bool) -> EdnaClient {
+    pub fn new(
+        user: &str,
+        password: &str,
+        host: &str,
+        dbname: &str,
+        in_memory: bool,
+        proxy: bool,
+        dryrun: bool,
+    ) -> EdnaClient {
+        let url = if proxy {
+            format!("mysql://127.0.0.1:{}", 62292)
+        } else {
+            format!("mysql://{}:{}@{}/{}", user, password, host, dbname)
+        };
         let pool = mysql::Pool::new(Opts::from_url(&url).unwrap()).unwrap();
-        info!("Creating llapi for edna, url {}", url);
+
         let llapi = Arc::new(Mutex::new(lowlevel_api::LowLevelAPI::new(
             pool.clone(),
             in_memory,
             true, // for now, reset encdata each time
+            dryrun,
         )));
-        info!("Created new edna client!");
         EdnaClient {
             pool: pool.clone(),
             in_memory: in_memory,
-            hlapi: highlevel_api::HighLevelAPI::new(
+            disguiser: disguiser::Disguiser::new(
                 llapi.clone(),
                 pool.clone(),
                 in_memory,
                 true, // reset each time for now
-                crypto,
+                !dryrun, 
             ),
+            revealer: revealer::Revealer::new(llapi.clone(), pool.clone(), !dryrun),
             llapi: llapi,
         }
     }
 
-    pub fn get_sizes(&self, dbname: &str) -> (usize, usize) {
+    pub fn get_space_overhead(&self, dbname: &str) -> (usize, usize) {
         let locked_llapi = self.llapi.lock().unwrap();
-        let bytes = locked_llapi.get_sizes(dbname);
+        let bytes = locked_llapi.get_space_overhead(dbname);
         drop(locked_llapi);
         error!("RCTRLER MEMORY BYTES\t {}", bytes.0);
         error!("RCTRLER PERSISTED BYTES\t {}", bytes.1);
-        let hlapi_bytes = self.hlapi.get_sizes(dbname);
+
+        // TODO
+        /*let hlapi_bytes = self.hlapi.get_space_overhead(dbname);
         error!(
             "HLAPI BYTES\t MEM {}, PERSIST {}",
             hlapi_bytes.0, hlapi_bytes.1
-        );
+        );*/
         bytes
     }
-    //-----------------------------------------------------------------------------
-    // Necessary to make Edna aware of all principals in the system
-    // so Edna can link these to pseudoprincipals/do crypto stuff
-    // UID is the foreign-key ID of the principal
-    //-----------------------------------------------------------------------------
+
+    ///-----------------------------------------------------------------------------
+    /// Necessary to make Edna aware of all principals in the system
+    /// so Edna can link these to pseudoprincipals/do crypto stuff
+    /// UID is the foreign-key ID of the principal
+    ///-----------------------------------------------------------------------------
     // TODO sends a request to the db with the private key of the user
     pub fn login_principal(&mut self, uid: &UID, password: &str) {
         let start = time::Instant::now();
@@ -219,35 +252,27 @@ impl EdnaClient {
         let mut db = self.pool.get_conn().unwrap();
         db.query_drop(format!("LOGOUT")).unwrap();
     }
-
-    pub fn register_principal(
-        &mut self,
-        uid: &UID,
-        password: String,
-        send_db: bool,
-    ) -> records::UserData {
-        let start = time::Instant::now();
+    
+    pub fn register_principal(&mut self, uid: &UID, password: String) -> records::UserData {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        let user_share = locked_llapi.register_principal(uid, password, send_db);
+        let user_share = locked_llapi.register_principal(uid, password);
         drop(locked_llapi);
-        warn!("Registered principal: {}mus", start.elapsed().as_micros());
         user_share
     }
 
     pub fn register_principal_without_using_secret_sharing(
         &mut self,
         uid: &UID,
-        crypto: bool,
-    ) -> SecretKey {
+    ) -> records::PrivKey {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        let privkey = locked_llapi.register_principal_without_sharing(uid, crypto);
+        let privkey = locked_llapi.register_principal_without_sharing(uid);
         drop(locked_llapi);
         privkey
     }
 
-    //-----------------------------------------------------------------------------
-    // To register and end a disguise (and get the corresponding capabilities)
-    //-----------------------------------------------------------------------------
+    ///-----------------------------------------------------------------------------
+    /// To register and end a disguise (and get the corresponding capabilities)
+    ///-----------------------------------------------------------------------------
     pub fn start_disguise(&self, invoking_user: Option<UID>) -> DID {
         let mut locked_llapi = self.llapi.lock().unwrap();
         locked_llapi.start_disguise(invoking_user)
@@ -269,37 +294,35 @@ impl EdnaClient {
         locked_llapi.end_reveal(did);
     }
 
-    //-----------------------------------------------------------------------------
-    // Get all records of a particular disguise
-    // returns all the diff records and all the speaksfor record blobs
-    // Additional function to get and mark records revealed (if records are retrieved for the
-    // purpose of reversal)
-    //-----------------------------------------------------------------------------
-    pub fn cleanup_records_of_disguise(&self, did: DID, decrypt_cap: &records::DecryptCap) {
+    ///-----------------------------------------------------------------------------
+    /// cleanup_records_of_disguise
+    /// - Get all records of a particular disguise
+    /// - Returns all the diff records and all the speaksfor record blobs
+    /// - Additional function to get and mark records revealed (if records are retrieved for the
+    /// purpose of reversal)
+    ///-----------------------------------------------------------------------------
+    /// note that this does not interface with the disguiser's ability to track produced pps
+    pub fn cleanup_records_of_disguise(&self, did: DID, privkey: &records::PrivKey) {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.cleanup_records_of_disguise(did, &decrypt_cap);
+        locked_llapi.cleanup_records_of_disguise(did, &privkey);
         drop(locked_llapi);
     }
 
     pub fn get_records_of_disguise(
         &self,
         _did: DID,
-        decrypt_cap: &records::DecryptCap,
-    ) -> (
-        Vec<Vec<u8>>,
-        Vec<Vec<u8>>,
-        HashMap<UID, records::PrivkeyRecord>,
-    ) {
+        privkey: &records::PrivKey,
+    ) -> (Vec<Vec<u8>>, HashMap<UID, records::SFChainRecord>) {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        let res = locked_llapi.get_records(decrypt_cap);
+        let res = locked_llapi.get_records(privkey);
         drop(locked_llapi);
         res
     }
 
-    //-----------------------------------------------------------------------------
-    // Save arbitrary diffs performed by the disguise for the purpose of later
-    // restoring.
-    //-----------------------------------------------------------------------------
+    ///-----------------------------------------------------------------------------
+    /// Save arbitrary diffs performed by the disguise for the purpose of later
+    /// restoring.
+    ///-----------------------------------------------------------------------------
     pub fn save_diff_record(&self, uid: UID, did: DID, data: Vec<u8>) {
         let mut locked_llapi = self.llapi.lock().unwrap();
         locked_llapi.save_diff_record(uid, did, data);
@@ -315,22 +338,9 @@ impl EdnaClient {
         drop(locked_llapi);
     }
 
-    pub fn register_and_save_pseudoprincipal_record(
-        &self,
-        did: DID,
-        old_uid: &UID,
-        new_uid: &UID,
-        record_bytes: &Vec<u8>,
-        crypto: bool,
-    ) {
+    pub fn register_pseudoprincipal(&self, did: DID, old_uid: &UID, new_uid: &UID, pp: TableRow) {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.register_and_save_pseudoprincipal_record(
-            did,
-            old_uid,
-            new_uid,
-            record_bytes.clone(),
-            crypto,
-        );
+        locked_llapi.register_pseudoprincipal(did, old_uid, new_uid, pp);
         drop(locked_llapi);
     }
 
@@ -342,23 +352,22 @@ impl EdnaClient {
         uid: UID,
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
-        crypto: bool,
-    ) -> HashSet<(UID, Vec<u8>)> {
+    ) -> HashSet<UID> {
         let locked_llapi = self.llapi.lock().unwrap();
-        let pps = locked_llapi.get_pseudoprincipals(&uid, password, user_share);
+        let uids = locked_llapi.get_pseudoprincipals(&uid, password, user_share);
         drop(locked_llapi);
 
         // PROXY: LOGIN PSEUDOPRINCIPALS
         if crypto {
             let mut db = self.pool.get_conn().unwrap();
-            for (_, pk) in &pps {
+            for (_, pk) in &uids{
                 if pk.len() > 0 {
                     db.query_drop(format!("LOGIN {}", base64::encode(pk)))
                         .unwrap();
                 }
             }
         }
-        pps
+        uids
     }
 
     // UID is the foreign-key ID of the principal
@@ -367,7 +376,7 @@ impl EdnaClient {
         for_user: UID,
         disguise_spec_json: &str,
         table_info_json: &str,
-        pp_gen_json: &str,
+        guise_gen_json: &str,
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
         use_txn: bool,
@@ -375,7 +384,7 @@ impl EdnaClient {
         warn!("EDNA: APPLYING Disguise");
         let table_infos: HashMap<TableName, TableInfo> =
             serde_json::from_str(table_info_json).unwrap();
-        let pp_gen: PseudoprincipalGenerator = serde_json::from_str(pp_gen_json).unwrap();
+        let guise_gen: PseudoprincipalGenerator = serde_json::from_str(guise_gen_json).unwrap();
         let disguise_spec: DisguiseSpec = serde_json::from_str(disguise_spec_json).unwrap();
         let disguise = Disguise {
             user: if for_user == "NULL" {
@@ -385,15 +394,15 @@ impl EdnaClient {
             },
             table_disguises: disguise_spec,
         };
-        let mut db = self.pool.get_conn().unwrap();
+        let mut db = self.pool.get_conn()?;
         if use_txn {
             let txopts = TxOpts::default();
-            txopts.set_isolation_level(Some(IsolationLevel::Serializable));
+            txopts.set_isolation_level(Some(Serializable));
             let mut txn = db.start_transaction(txopts)?;
-            let res = self.hlapi.apply(
+            let res = self.disguiser.apply(
                 &disguise,
                 &table_infos,
-                &pp_gen,
+                &guise_gen,
                 &mut txn,
                 password,
                 user_share,
@@ -401,10 +410,10 @@ impl EdnaClient {
             txn.commit()?;
             return res;
         } else {
-            return self.hlapi.apply(
+            return self.disguiser.apply(
                 &disguise,
                 &table_infos,
-                &pp_gen,
+                &guise_gen,
                 &mut db,
                 password,
                 user_share,
@@ -418,7 +427,7 @@ impl EdnaClient {
         uid: UID,
         did: DID,
         table_info_json: &str,
-        pp_gen_json: &str,
+        guise_gen_json: &str,
         reveal_pps: Option<RevealPPType>,
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
@@ -427,18 +436,18 @@ impl EdnaClient {
         warn!("EDNA: REVERSING Disguise {}", did);
         let table_infos: HashMap<TableName, TableInfo> =
             serde_json::from_str(table_info_json).unwrap();
-        let pp_gen: PseudoprincipalGenerator = serde_json::from_str(pp_gen_json).unwrap();
-        let mut db = self.pool.get_conn().unwrap();
+        let guise_gen: PseudoprincipalGenerator = serde_json::from_str(guise_gen_json).unwrap();
+        let mut db = self.pool.get_conn()?;
         let user = if uid == "NULL" { None } else { Some(&uid) };
         if use_txn {
             let txopts = TxOpts::default();
-            txopts.set_isolation_level(Some(IsolationLevel::Serializable));
+            txopts.set_isolation_level(Some(Serializable));
             let mut txn = db.start_transaction(txopts)?;
-            self.hlapi.reveal(
+            self.revealer.reveal(
                 user,
                 did,
                 &table_infos,
-                &pp_gen,
+                &guise_gen,
                 reveal_pps,
                 &mut txn,
                 password,
@@ -446,11 +455,11 @@ impl EdnaClient {
             )?;
             txn.commit()?;
         } else {
-            self.hlapi.reveal(
+            self.revealer.reveal(
                 user,
                 did,
                 &table_infos,
-                &pp_gen,
+                &guise_gen,
                 reveal_pps,
                 &mut db,
                 password,
@@ -458,5 +467,12 @@ impl EdnaClient {
             )?;
         }
         Ok(())
+    }
+
+    pub fn record_update<F>(&mut self, f: F)
+    where
+        F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static + Send + Sync,
+    {
+        self.revealer.record_update(Box::new(f));
     }
 }

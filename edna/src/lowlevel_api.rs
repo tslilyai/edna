@@ -34,7 +34,7 @@ impl LowLevelAPI {
         uid: &UID,
         password: Option<String>,
         user_share: Option<UserData>,
-    ) -> Option<DecryptCap> {
+    ) -> Option<PrivKey> {
         self.record_ctrler.get_priv_key(uid, password, user_share)
     }
 
@@ -53,7 +53,7 @@ impl LowLevelAPI {
     }
 
     // registers the princiapl with edna, giving them a private/public keypair
-    pub fn register_principal_without_sharing(&mut self, uid: &UID) -> DecryptCap {
+    pub fn register_principal_without_sharing(&mut self, uid: &UID) -> PrivKey {
         let mut db = self.pool.get_conn().unwrap();
         let privkey = self
             .record_ctrler
@@ -108,15 +108,15 @@ impl LowLevelAPI {
     // Additional function to get and mark records revealed (if records are retrieved for the
     // purpose of reversal)
     //----------------------------------------------------------------------------
-    pub fn get_locators(&mut self, pk: &DecryptCap) -> Vec<records::Locator> {
+    pub fn get_locators(&mut self, pk: &PrivKey) -> Vec<records::Locator> {
         self.record_ctrler.get_locators(&pk)
     }
 
     pub fn get_records(
         &mut self,
-        decrypt_cap: &records::DecryptCap,
+        privkey: &records::PrivKey,
     ) -> (Vec<Vec<u8>>, HashMap<UID, SFChainRecord>) {
-        let (diff_records, sfchain_records) = self.get_recs_and_privkeys(&decrypt_cap);
+        let (diff_records, sfchain_records) = self.get_recs_and_privkeys(&privkey);
         (
             diff_records
                 .iter()
@@ -128,16 +128,16 @@ impl LowLevelAPI {
 
     pub fn get_recs_and_privkeys(
         &mut self,
-        decrypt_cap: &records::DecryptCap,
+        privkey: &records::PrivKey,
     ) -> (Vec<DiffRecordWrapper>, HashMap<UID, SFChainRecord>) {
         let mut diff_records = vec![];
         let mut sfchain_records = HashMap::new();
-        if decrypt_cap.is_empty() {
+        if privkey.is_empty() {
             return (diff_records, sfchain_records);
         }
-        let locators = self.record_ctrler.get_locators(&decrypt_cap);
+        let locators = self.record_ctrler.get_locators(&privkey);
         for lc in &locators {
-            let (dts, pks) = self.record_ctrler.get_user_records(&decrypt_cap, &lc);
+            let (dts, pks) = self.record_ctrler.get_user_records(&privkey, &lc);
             diff_records.extend(dts.iter().cloned());
             for (new_uid, pk) in &pks {
                 sfchain_records.insert(new_uid.clone(), pk.clone());
@@ -146,12 +146,12 @@ impl LowLevelAPI {
         (diff_records, sfchain_records)
     }
 
-    pub fn cleanup_records_of_disguise(&mut self, did: DID, decrypt_cap: &records::DecryptCap) {
+    pub fn cleanup_records_of_disguise(&mut self, did: DID, privkey: &records::PrivKey) {
         let mut db = self.pool.get_conn().unwrap();
-        let locators = self.record_ctrler.get_locators(decrypt_cap);
+        let locators = self.record_ctrler.get_locators(privkey);
         for lc in locators {
             self.record_ctrler
-                .cleanup_user_records(did, decrypt_cap, &lc, &mut db);
+                .cleanup_user_records(did, privkey, &lc, &mut db);
         }
     }
 
@@ -177,9 +177,9 @@ impl LowLevelAPI {
         old_uid: &UID,
         new_uid: &UID,
         pp: TableRow,
-    ) {
+    ) -> PrivKey {
         self.record_ctrler
-            .register_pseudoprincipal(old_uid, new_uid, pp, did);
+            .register_pseudoprincipal(old_uid, new_uid, pp, did)
     }
 
     pub fn save_decor_record(
@@ -200,15 +200,15 @@ impl LowLevelAPI {
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
     ) -> HashSet<UID> {
-        let mut decrypt_cap = vec![];
+        let mut privkey = vec![];
         let priv_key = self.get_priv_key(user, password, user_share);
         if let Some(key) = priv_key {
-            decrypt_cap = key;
+            privkey = key;
         }
-        let locators = self.record_ctrler.get_locators(&decrypt_cap);
+        let locators = self.record_ctrler.get_locators(&privkey);
         let uids = self
             .record_ctrler
-            .get_user_pseudoprincipals(&decrypt_cap, &locators);
+            .get_user_pseudoprincipals(&privkey, &locators);
         uids
     }
 

@@ -220,7 +220,7 @@ impl EdnaClient {
     pub fn register_principal_without_using_secret_sharing(
         &mut self,
         uid: &UID,
-    ) -> records::DecryptCap {
+    ) -> records::PrivKey {
         let mut locked_llapi = self.llapi.lock().unwrap();
         let privkey = locked_llapi.register_principal_without_sharing(uid);
         drop(locked_llapi);
@@ -259,19 +259,19 @@ impl EdnaClient {
     /// purpose of reversal)
     ///-----------------------------------------------------------------------------
     /// note that this does not interface with the disguiser's ability to track produced pps
-    pub fn cleanup_records_of_disguise(&self, did: DID, decrypt_cap: &records::DecryptCap) {
+    pub fn cleanup_records_of_disguise(&self, did: DID, privkey: &records::PrivKey) {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.cleanup_records_of_disguise(did, &decrypt_cap);
+        locked_llapi.cleanup_records_of_disguise(did, &privkey);
         drop(locked_llapi);
     }
 
     pub fn get_records_of_disguise(
         &self,
         _did: DID,
-        decrypt_cap: &records::DecryptCap,
+        privkey: &records::PrivKey,
     ) -> (Vec<Vec<u8>>, HashMap<UID, records::SFChainRecord>) {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        let res = locked_llapi.get_records(decrypt_cap);
+        let res = locked_llapi.get_records(privkey);
         drop(locked_llapi);
         res
     }

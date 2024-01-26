@@ -82,14 +82,14 @@ impl Revealer {
         password: Option<String>,
         user_share: Option<(Share, Loc)>,
     ) -> Result<(), mysql::Error> {
-        let mut decrypt_cap = vec![];
+        let mut privkey = vec![];
 
         if uid != None {
             let llapi = self.llapi.lock().unwrap();
 
             let priv_key = llapi.get_priv_key(&(uid.clone().unwrap()), password, user_share);
             if let Some(key) = priv_key {
-                decrypt_cap = key;
+                privkey = key;
             }
             drop(llapi);
 
@@ -97,7 +97,7 @@ impl Revealer {
         }
 
         warn!("Revealing disguise for {:?}", uid);
-        self.reveal_using_secretkey(did, table_info, pp_gen, reveal_pps, decrypt_cap, db)
+        self.reveal_using_secretkey(did, table_info, pp_gen, reveal_pps, privkey, db)
     }
 
     // Note: Decorrelations are not revealed if not using EdnaSpeaksForRecords
@@ -108,7 +108,7 @@ impl Revealer {
         table_info: &HashMap<String, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
-        decrypt_cap: records::DecryptCap,
+        privkey: records::PrivKey,
         db: &mut Q,
     ) -> Result<(), mysql::Error> {
         // NOTE: We are currently not trying to reveal items with identifying
@@ -120,7 +120,7 @@ impl Revealer {
             .llapi
             .lock()
             .unwrap()
-            .get_recs_and_privkeys(&decrypt_cap);
+            .get_recs_and_privkeys(&privkey);
         warn!(
             "Edna: Get records for reveal: {}mus",
             start.elapsed().as_micros()
@@ -301,7 +301,7 @@ impl Revealer {
         }
         success &= EdnaDiffRecord::reveal_new_pps(&pp_records, &mut reveal_args)?;
 
-        llapi.cleanup_records_of_disguise(did, &decrypt_cap);
+        llapi.cleanup_records_of_disguise(did, &privkey);
         if !success {
             info!(
                 "Reveal records failed, clearing anyways: {}mus",

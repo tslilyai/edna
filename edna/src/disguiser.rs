@@ -117,7 +117,7 @@ impl Disguiser {
         password: Option<String>,
         user_share: Option<(Share, Loc)>,
     ) -> Result<DID, mysql::Error> {
-        let mut decrypt_cap = vec![];
+        let mut privkey = vec![];
 
         if disguise.user != None {
             let llapi = self.llapi.lock().unwrap();
@@ -125,14 +125,14 @@ impl Disguiser {
             let priv_key =
                 llapi.get_priv_key(&(disguise.user.clone().unwrap()), password, user_share);
             if let Some(key) = priv_key {
-                decrypt_cap = key;
+                privkey = key;
             }
 
             drop(llapi);
         }
 
         warn!("Applying disguise for {:?}", disguise.user);
-        self.apply_using_secretkey(disguise, table_info, pp_gen, decrypt_cap, conn)
+        self.apply_using_secretkey(disguise, table_info, pp_gen, privkey, conn)
     }
 
     pub fn apply_using_secretkey<Q: Queryable>(
@@ -140,7 +140,7 @@ impl Disguiser {
         disguise: &Disguise,
         table_info: &HashMap<String, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
-        decrypt_cap: records::DecryptCap,
+        privkey: records::PrivKey,
         conn: &mut Q,
     ) -> Result<DID, mysql::Error> {
         let start = time::Instant::now();
@@ -153,7 +153,7 @@ impl Disguiser {
         );
 
         let get_rec_start = time::Instant::now();
-        let (_, sfchain) = llapi.get_recs_and_privkeys(&decrypt_cap);
+        let (_, sfchain) = llapi.get_recs_and_privkeys(&privkey);
         warn!(
             "Edna: get records: {}mus",
             get_rec_start.elapsed().as_micros()
