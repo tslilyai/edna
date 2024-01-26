@@ -225,28 +225,7 @@ impl EdnaDiffRecord {
             format!("IN ({})", pps_to_delete.join(","))
         };
 
-        if args.reveal_pps == RevealPPType::Delete {
-            for (child_table, tinfo) in args.timap.into_iter() {
-                if child_table == &args.pp_gen.table {
-                    continue;
-                }
-                let selection = if tinfo.owner_fks.len() == 1 {
-                    format!("{} {}", tinfo.owner_fks[0].from_col, all_pp_select)
-                } else {
-                    tinfo
-                        .owner_fks
-                        .iter()
-                        .map(|fk| format!("{} {}", fk.from_col, all_pp_select))
-                        .collect::<Vec<String>>()
-                        .join(" OR ")
-                };
-                helpers::query_drop(
-                    &format!("DELETE FROM {} WHERE {}", tinfo.table, selection),
-                    args.db,
-                )?;
-            }
-        } else {
-            // Restore!
+        if args.reveal_pps == RevealPPType::Restore {
             // CHECK: if original entities do not exist, do not recorrelate
             let selection = if old_to_new.len() == 1 {
                 format!(
@@ -275,21 +254,59 @@ impl EdnaDiffRecord {
                 );
                 return Ok(false);
             }
+        }
 
-            // Actually update pp children, if any exist!
-            for (old_uid, new_uids) in old_to_new.iter() {
-                // NOTE: Assume only one id used as a foreign key.
-                let new_uids_str = new_uids.join(",");
-                let pp_select = if new_uids.len() == 1 {
-                    format!("= {}", new_uids[0])
+        for (child_table, tinfo) in args.timap.into_iter() {
+            if child_table == &args.pp_gen.table {
+                continue;
+            }
+            // get count of children SO WE DON'T UPDATE if we don't need
+            // to (select is cheaper!)
+            let start = time::Instant::now();
+            let all_select= if tinfo.owner_fks.len() == 1 {
+                    format!("{} {}", tinfo.owner_fks[0].from_col, all_pp_select)
                 } else {
-                    format!("IN ({})", new_uids_str)
+                    tinfo
+                        .owner_fks
+                        .iter()
+                        .map(|fk| format!("{} {}", fk.from_col, all_pp_select))
+                        .collect::<Vec<String>>()
+                        .join(" OR ")
                 };
 
-                for (child_table, tinfo) in args.timap.into_iter() {
-                    if child_table == &args.pp_gen.table {
-                        continue;
-                    }
+            let checkstmt =
+                format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, all_select);
+            let res = args.db.query_iter(checkstmt.clone()).unwrap();
+            let mut count: u64 = 0;
+            for row in res {
+                count = from_value(row.unwrap().unwrap()[0].clone());
+                break;
+            }
+            warn!(
+                "Check count of pseudoprincipals {}: {}mus",
+                checkstmt,
+                start.elapsed().as_micros()
+            );
+            if count == 0 {
+                info!("Don't update, found 0 children");
+                continue;
+            }
+            if args.reveal_pps == RevealPPType::Delete {
+                helpers::query_drop(
+                    &format!("DELETE FROM {} WHERE {}", tinfo.table, all_select),
+                    args.db,
+                )?;
+            } else {
+                // Actually update pp children, if any exist!
+                for (old_uid, new_uids) in old_to_new.iter() {
+                    // NOTE: Assume only one id used as a foreign key.
+                    let new_uids_str = new_uids.join(",");
+                    let pp_select = if new_uids.len() == 1 {
+                        format!("= {}", new_uids[0])
+                    } else {
+                        format!("IN ({})", new_uids_str)
+                    };
+                    
                     let selection = if tinfo.owner_fks.len() == 1 {
                         format!("{} {}", tinfo.owner_fks[0].from_col, pp_select)
                     } else {
@@ -300,27 +317,7 @@ impl EdnaDiffRecord {
                             .collect::<Vec<String>>()
                             .join(" OR ")
                     };
-                    // get count of children SO WE DON'T UPDATE if we don't need
-                    // to (select is cheaper!)
-                    let start = time::Instant::now();
-                    let checkstmt =
-                        format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, selection);
-                    let res = args.db.query_iter(checkstmt.clone()).unwrap();
-                    let mut count: u64 = 0;
-                    for row in res {
-                        count = from_value(row.unwrap().unwrap()[0].clone());
-                        break;
-                    }
-                    warn!(
-                        "Check count of pseudoprincipals {}: {}mus",
-                        selection,
-                        start.elapsed().as_micros()
-                    );
-                    if count == 0 {
-                        // don't need to
-                        info!("Don't update, found 0 children");
-                        continue;
-                    }
+                
                     // if only one owner col, skip the case
                     let updates = if tinfo.owner_fks.len() == 1 {
                         format!("{} = {}", tinfo.owner_fks[0].from_col, old_uid)
