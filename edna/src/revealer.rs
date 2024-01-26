@@ -159,7 +159,11 @@ impl Revealer {
                 }
             }
         }
-        warn!("Construct graph and get recorrelated pps: {:?}: {}mus", recorrelated_pps, start.elapsed().as_micros());
+        warn!(
+            "Construct graph and get recorrelated pps: {:?}: {}mus",
+            recorrelated_pps,
+            start.elapsed().as_micros()
+        );
 
         let mut llapi = self.llapi.lock().unwrap();
         llapi.start_reveal(did);
@@ -295,7 +299,10 @@ impl Revealer {
 
         llapi.cleanup_records_of_disguise(did, &decrypt_cap);
         if !success {
-            info!("Reveal records failed, clearing anyways: {}mus", fnstart.elapsed().as_micros());
+            info!(
+                "Reveal records failed, clearing anyways: {}mus",
+                fnstart.elapsed().as_micros()
+            );
         }
         llapi.end_reveal(did);
         warn!("Reveal records total: {}mus", fnstart.elapsed().as_micros());

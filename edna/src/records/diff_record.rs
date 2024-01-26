@@ -195,6 +195,7 @@ impl EdnaDiffRecord {
         }
 
         let mut old_to_new: HashMap<UID, Vec<UID>> = HashMap::new();
+        let mut pps_to_delete: Vec<UID> = vec![];
         for r in records {
             // all diff records should be removing a new pp
             assert_eq!(r.new_values.len(), 1);
@@ -216,10 +217,37 @@ impl EdnaDiffRecord {
                     old_to_new.insert(old_uid.clone(), vec![r.new_uid.clone()]);
                 }
             }
+            pps_to_delete.push(r.new_uid.clone());
         }
+        let all_pp_select = if pps_to_delete.len() == 1 {
+            format!("= {}", pps_to_delete[0])
+        } else {
+            format!("IN ({})", pps_to_delete.join(","))
+        };
 
-        // CHECK: if original entities do not exist, do not recorrelate
-        if args.reveal_pps == RevealPPType::Restore {
+        if args.reveal_pps == RevealPPType::Delete {
+            for (child_table, tinfo) in args.timap.into_iter() {
+                if child_table == &args.pp_gen.table {
+                    continue;
+                }
+                let selection = if tinfo.owner_fks.len() == 1 {
+                    format!("{} {}", tinfo.owner_fks[0].from_col, all_pp_select)
+                } else {
+                    tinfo
+                        .owner_fks
+                        .iter()
+                        .map(|fk| format!("{} {}", fk.from_col, all_pp_select))
+                        .collect::<Vec<String>>()
+                        .join(" OR ")
+                };
+                helpers::query_drop(
+                    &format!("DELETE FROM {} WHERE {}", tinfo.table, selection),
+                    args.db,
+                )?;
+            }
+        } else {
+            // Restore!
+            // CHECK: if original entities do not exist, do not recorrelate
             let selection = if old_to_new.len() == 1 {
                 format!(
                     "{} = {}",
@@ -247,38 +275,31 @@ impl EdnaDiffRecord {
                 );
                 return Ok(false);
             }
-        }
 
-        // Actually delete or update pp children, if any exist!
-        for (old_uid, new_uids) in old_to_new.iter() {
-            // NOTE: Assume only one id used as a foreign key.
-            let new_uids_str = new_uids.join(",");
-            let pp_select = if new_uids.len() == 1 {
-                format!("= {}", new_uids[0])
-            } else {
-                format!("IN ({})", new_uids_str)
-            };
-
-            for (child_table, tinfo) in args.timap.into_iter() {
-                if child_table == &args.pp_gen.table {
-                    continue;
-                }
-                let selection = if tinfo.owner_fks.len() == 1 {
-                    format!("{} {}", tinfo.owner_fks[0].from_col, pp_select)
+            // Actually update pp children, if any exist!
+            for (old_uid, new_uids) in old_to_new.iter() {
+                // NOTE: Assume only one id used as a foreign key.
+                let new_uids_str = new_uids.join(",");
+                let pp_select = if new_uids.len() == 1 {
+                    format!("= {}", new_uids[0])
                 } else {
-                    tinfo
-                        .owner_fks
-                        .iter()
-                        .map(|fk| format!("{} {}", fk.from_col, pp_select))
-                        .collect::<Vec<String>>()
-                        .join(" OR ")
+                    format!("IN ({})", new_uids_str)
                 };
-                if args.reveal_pps == RevealPPType::Delete {
-                    helpers::query_drop(
-                        &format!("DELETE FROM {} WHERE {}", tinfo.table, selection),
-                        args.db,
-                    )?;
-                } else {
+
+                for (child_table, tinfo) in args.timap.into_iter() {
+                    if child_table == &args.pp_gen.table {
+                        continue;
+                    }
+                    let selection = if tinfo.owner_fks.len() == 1 {
+                        format!("{} {}", tinfo.owner_fks[0].from_col, pp_select)
+                    } else {
+                        tinfo
+                            .owner_fks
+                            .iter()
+                            .map(|fk| format!("{} {}", fk.from_col, pp_select))
+                            .collect::<Vec<String>>()
+                            .join(" OR ")
+                    };
                     // get count of children SO WE DON'T UPDATE if we don't need
                     // to (select is cheaper!)
                     let start = time::Instant::now();
@@ -320,21 +341,22 @@ impl EdnaDiffRecord {
                         &format!("UPDATE {} SET {} WHERE {}", tinfo.table, updates, selection),
                         args.db,
                     )?;
-                };
+                }
             }
-            for new_uid in new_uids {
-                // remove PP metadata from the record ctrler (when all locators
-                // are gone) do per new uid because did might differ NOTE: pps
-                // kept for "restore" can never be reclaimed now
-                args.llapi.forget_principal(&new_uid, args.did);
-            }
-            // now remove the pseudoprincipals
-            let delete_q = format!(
-                "DELETE FROM {} WHERE {} {}",
-                args.pp_gen.table, args.pp_gen.id_col, pp_select
-            );
-            helpers::query_drop(&delete_q, args.db)?;
         }
+        for new_uid in pps_to_delete {
+            // remove PP metadata from the record ctrler (when all locators
+            // are gone) do per new uid because did might differ NOTE: pps
+            // kept for "restore" can never be reclaimed now
+            args.llapi.forget_principal(&new_uid, args.did);
+        }
+
+        // now remove the pseudoprincipals
+        let delete_q = format!(
+            "DELETE FROM {} WHERE {} {}",
+            args.pp_gen.table, args.pp_gen.id_col, all_pp_select
+        );
+        helpers::query_drop(&delete_q, args.db)?;
         warn!(
             "Reveal {} new pps: {}mus",
             records.len(),
