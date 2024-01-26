@@ -141,7 +141,7 @@ impl EdnaDiffRecord {
         let pubkey = if self.pubkey.is_empty() {
             None
         } else {
-            Some(PublicKey::from(get_pk_bytes(self.pubkey.clone())))
+            Some(PublicKey::from(get_pk_bytes()self.pubkey.clone())))
         };
         let pdata = PrincipalData {
             pubkey: pubkey,

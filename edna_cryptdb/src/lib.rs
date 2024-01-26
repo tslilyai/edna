@@ -150,6 +150,7 @@ pub struct EdnaClient {
     pub disguiser: disguiser::Disguiser,
     pub revealer: revealer::Revealer,
     pub llapi: Arc<Mutex<lowlevel_api::LowLevelAPI>>,
+    pub dryrun: bool,
 }
 
 impl EdnaClient {
@@ -187,6 +188,7 @@ impl EdnaClient {
             ),
             revealer: revealer::Revealer::new(llapi.clone(), pool.clone(), !dryrun),
             llapi: llapi,
+            dryrun: dryrun
         }
     }
 
@@ -358,9 +360,9 @@ impl EdnaClient {
         drop(locked_llapi);
 
         // PROXY: LOGIN PSEUDOPRINCIPALS
-        if crypto {
+        if !self.dryrun {
             let mut db = self.pool.get_conn().unwrap();
-            for (_, pk) in &uids{
+            for pk in &uids {
                 if pk.len() > 0 {
                     db.query_drop(format!("LOGIN {}", base64::encode(pk)))
                         .unwrap();

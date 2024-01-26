@@ -257,7 +257,7 @@ pub fn get_create_schema_statements(schema: &str, in_memory: bool) -> Vec<Statem
     stmts
 }
 
-pub fn get_single_parsed_stmt(stmt: &String) -> Result<Statement, mysql::Error> {
+pub fn get_single_parsed_stmt(stmt: &str) -> Result<Statement, mysql::Error> {
     warn!("Parsing stmt {}", stmt);
     let asts = sql_parser::parser::parse_statements(stmt.to_string());
     match asts {

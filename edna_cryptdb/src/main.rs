@@ -27,5 +27,5 @@ fn main() {
 
     // create db pool to proxy
     let url = format!("mysql://127.0.0.1:{}", port);
-    let _edna = EdnaClient::new(&url, true, false);
+    let _edna = EdnaClient::new("", "", "", &url, true, false, false);
 }

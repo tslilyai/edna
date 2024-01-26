@@ -122,7 +122,7 @@ impl Proxy {
         pass: &str,
         dbname: &str,
         to_encrypt: HashMap<String, HashSet<String>>,
-        crypto: bool,
+        dryrun: bool,
     ) -> Proxy {
         // assumes the db is already initialized
         let url = format!("mysql://{}:{}@{}/{}", user, pass, host, dbname);
@@ -138,7 +138,7 @@ impl Proxy {
 
         info!("Returning proxy!");
         Proxy {
-            dryrun: !crypto,
+            dryrun: dryrun,
             pool: pool.clone(),
             state: Arc::new(Mutex::new(ProxyState {
                 admin_access_keys: HashMap::new(),
@@ -179,7 +179,7 @@ impl Proxy {
         let encrypt_start = time::Instant::now();
         let bytes = bincode::serialize(&rowkey).unwrap();
         let encdata_admin =
-            encrypt_det_with_pubkey(&admin_pubkey, &state.edna_secretkey, &state.nonce, &bytes);
+            helpers::encrypt_det_with_pubkey(&admin_pubkey, &state.edna_secretkey, &state.nonce, &bytes);
         match state.admin_access_keys.get_mut(table) {
             Some(table_keys) => {
                 table_keys.insert(encdata_admin);
@@ -203,7 +203,7 @@ impl Proxy {
         );
     }
 
-    fn save_and_clear_logged_in(state: &mut ProxyState, pk: Option<PublicKey>) {
+    fn save_and_clear_logged_in(&self, state: &mut ProxyState, pk: Option<PublicKey>) {
         let start = time::Instant::now();
 
         // delete keys to delete prior to saving
@@ -229,7 +229,7 @@ impl Proxy {
                 let encrypt_start = time::Instant::now();
                 for k in delete_keys {
                     let bytes = bincode::serialize(&k).unwrap();
-                    let encdata_admin = encrypt_det_with_pubkey(
+                    let encdata_admin = helpers::encrypt_det_with_pubkey(
                         &admin_pubkey,
                         &state.edna_secretkey,
                         &state.nonce,
@@ -258,14 +258,14 @@ impl Proxy {
             if pk != state.admin_pubkey.as_ref().unwrap() {
                 let keys = state.logged_in_keys_plaintext.get(&pk).unwrap();
                 let bytes = bincode::serialize(&keys).unwrap();
-                let encdata_princ = encrypt_with_pubkey(&pk, &bytes, self.dryrun);
+                let encdata_princ = encrypt_with_pubkey(&Some(&pk), &bytes, self.dryrun);
                 state
                     .access_keys_plaintext
                     .insert(pk.clone(), encdata_princ);
 
                 let keys = state.logged_in_keys_enc.get(&pk).unwrap();
                 let bytes = bincode::serialize(&keys).unwrap();
-                let encdata_princ = encrypt_with_pubkey(&pk, &bytes, self.dryrun);
+                let encdata_princ = encrypt_with_pubkey(&Some(&pk), &bytes, self.dryrun);
                 state.access_keys_enc.insert(pk.clone(), encdata_princ);
             }
             state
@@ -284,7 +284,7 @@ impl Proxy {
                 warn!("logout plaintext pk with {} table keys", keys.len());
                 if pk != state.admin_pubkey.as_ref().unwrap() {
                     let bytes = bincode::serialize(&keys).unwrap();
-                    let encdata_princ = encrypt_with_pubkey(&pk, &bytes, self.dryrun);
+                    let encdata_princ = encrypt_with_pubkey(&Some(pk), &bytes, self.dryrun);
                     state
                         .access_keys_plaintext
                         .insert(pk.clone(), encdata_princ);
@@ -295,7 +295,7 @@ impl Proxy {
                 warn!("logout enc pk with {} table keys", keys.len());
                 if pk != state.admin_pubkey.as_ref().unwrap() {
                     let bytes = bincode::serialize(&keys).unwrap();
-                    let encdata_princ = encrypt_with_pubkey(&pk, &bytes, self.dryrun);
+                    let encdata_princ = encrypt_with_pubkey(&Some(pk), &bytes, self.dryrun);
                     state.access_keys_enc.insert(pk.clone(), encdata_princ);
                 }
             }
@@ -637,7 +637,7 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
             let pubkey = PublicKey::from(get_pk_bytes(&pkbytes));
             let hm: HashMap<TableName, HashSet<RowKey>> = HashMap::new();
             let bytes = bincode::serialize(&hm).unwrap();
-            let encdata = encrypt_with_pubkey(&pubkey, &bytes, self.dryrun);
+            let encdata = encrypt_with_pubkey(&Some(&pubkey), &bytes, self.dryrun);
             state
                 .access_keys_plaintext
                 .insert(pubkey.clone(), encdata.clone());
@@ -661,7 +661,7 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
             let pubkey = PublicKey::from(get_pk_bytes(&pkbytes));
             state.access_keys_plaintext.remove(&pubkey);
             state.access_keys_enc.remove(&pubkey);
-            info!("Removed user with pubkey {:?}", pkbytes);
+            info!("Removed user with pubkey {:?}", &pkbytes);
             results.completed(1, 1).unwrap();
             warn!("Forget: {}mus", start.elapsed().as_micros());
             return Ok(());
@@ -695,7 +695,7 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
                 let mut table_keys_enc = HashMap::new();
                 for (table, enc_keys) in state.admin_access_keys.iter() {
                     for ek in enc_keys {
-                        let (success, rowkey_bytes) = decrypt_encdata(&ek, &skbytes);
+                        let (success, rowkey_bytes) = decrypt_encdata(&ek, &skbytes, self.dryrun);
                         assert!(success);
                         let rowkey: Arc<RowKey> = bincode::deserialize(&rowkey_bytes).unwrap();
                         Proxy::insert_key(&mut table_keys_plaintext, table, rowkey.clone(), false);
@@ -715,7 +715,7 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
                 // PLAINTEXT
                 let start = time::Instant::now();
                 let enc_table_keys = state.access_keys_plaintext.get(&pubkey).unwrap();
-                let (success, plaintext) = decrypt_encdata(&enc_table_keys, &skbytes);
+                let (success, plaintext) = decrypt_encdata(&enc_table_keys, &skbytes, self.dryrun);
                 assert!(success);
                 let table_keys: TableKeys = bincode::deserialize(&plaintext).unwrap();
                 warn!(
@@ -730,7 +730,7 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
                 // ENC
                 let start = time::Instant::now();
                 let enc_table_keys = state.access_keys_enc.get(&pubkey).unwrap();
-                let (success, plaintext) = decrypt_encdata(&enc_table_keys, &skbytes);
+                let (success, plaintext) = decrypt_encdata(&enc_table_keys, &skbytes, self.dryrun);
                 assert!(success);
                 let table_keys: TableKeys = bincode::deserialize(&plaintext).unwrap();
                 warn!(
@@ -753,12 +753,12 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
              */
             let qparts: Vec<&str> = query.split_whitespace().collect();
             if qparts.len() < 2 {
-                Proxy::save_and_clear_logged_in(&mut state, None);
+                self.save_and_clear_logged_in(&mut state, None);
             } else {
                 let skbytes = base64::decode(&qparts[1]).unwrap();
                 let skey = SecretKey::from(get_pk_bytes(&skbytes));
                 let pubkey = PublicKey::from(&skey);
-                Proxy::save_and_clear_logged_in(&mut state, Some(pubkey));
+                self.save_and_clear_logged_in(&mut state, Some(pubkey));
                 info!("Logging out user with pubkey {}", qparts[1]);
             }
             results.completed(1, 1).unwrap();
@@ -867,7 +867,6 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
                                     let select_start = time::Instant::now();
                                     helpers::write_decrypted_mysql_answer_rows(
                                         &s.to_string(),
-                                        &new_s.to_string(),
                                         results,
                                         &state.logged_in_keys_enc,
                                         &table,

@@ -148,7 +148,7 @@ impl RecordPersister {
             let pubkey = if pkbytes.is_empty() {
                 None
             } else {
-                Some(PublicKey::from(get_pk_bytes(pkbytes)))
+                Some(PublicKey::from(get_pk_bytes(&pkbytes)))
             };
             let index: Index = u64::from_str(&row[3].value()).unwrap();
             ret.push((uid, is_anon, pubkey, index));

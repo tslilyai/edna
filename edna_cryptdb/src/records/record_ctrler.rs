@@ -383,7 +383,7 @@ impl RecordCtrler {
     ) -> (PrivKey, Vec<u8> /*publickey*/) {
         if self.dryrun {
             // pk = uid as bytes
-            let pk = get_pk_bytes(uid.as_bytes().to_vec());
+            let pk = get_pk_bytes(&uid.as_bytes().to_vec());
             let hash = {
                 let mut hasher = DefaultHasher::new();
                 base64::encode(pk).hash(&mut hasher);
@@ -618,7 +618,7 @@ impl RecordCtrler {
         let popt = self.principal_data.get(&lc.uid);
         let pubkey = if popt.is_none() {
             warn!("UpdateBagAtLoc: no user with uid {} found", lc.uid,);
-            Some(PublicKey::from(get_pk_bytes(lc.pubkey.clone())))
+            Some(PublicKey::from(get_pk_bytes(&lc.pubkey)))
         } else {
             popt.unwrap().pubkey.clone()
         };
@@ -768,9 +768,9 @@ impl RecordCtrler {
             } else {
                 info!(
                     "Dryrun got pk bytes {}",
-                    base64::encode(get_pk_bytes(uid.as_bytes().to_vec()))
+                    base64::encode(get_pk_bytes(&uid.as_bytes().to_vec()))
                 );
-                return Some(get_pk_bytes(uid.as_bytes().to_vec()).to_vec());
+                return Some(get_pk_bytes(&uid.as_bytes().to_vec()).to_vec());
             }
         }
 
@@ -835,7 +835,7 @@ impl RecordCtrler {
             prime: self.prime.clone(),
         };
         let priv_key = sss.reconstruct(&shares);
-        let pkbytes = get_pk_bytes(priv_key.to_bytes_le().1);
+        let pkbytes = get_pk_bytes(&priv_key.to_bytes_le().1);
         info!("SSS reconstruct {}: {}mus", uid, start.elapsed().as_micros());
         return Some(pkbytes.to_vec());
     }
