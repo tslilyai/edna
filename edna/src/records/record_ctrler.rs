@@ -590,7 +590,7 @@ impl RecordCtrler {
     }
 
     // forget metadata as soon as all locators are gone.
-    // do this even for pseudoprincipals, because pseudoprincipals can be restored
+    // don't this even for pseudoprincipals; we'll either fail to recorrelate to pseudoprincipal can be restored
     // from recursive disguising!
     pub fn mark_principal_to_forget(&mut self, uid: &UID, did: DID) {
         let start = time::Instant::now();
