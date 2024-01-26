@@ -220,11 +220,19 @@ impl EdnaDiffRecord {
 
         // CHECK: if original entities do not exist, do not recorrelate
         if args.reveal_pps == RevealPPType::Restore {
-            let selection = format!(
-                "{} IN ({})",
-                args.pp_gen.id_col,
-                old_to_new.keys().cloned().collect::<Vec<_>>().join(",")
-            );
+            let selection = if old_to_new.len() == 1 {
+                format!(
+                    "{} = {}",
+                    args.pp_gen.id_col,
+                    old_to_new.keys().collect::<Vec<_>>()[0]
+                )
+            } else {
+                format!(
+                    "{} IN ({})",
+                    args.pp_gen.id_col,
+                    old_to_new.keys().cloned().collect::<Vec<_>>().join(",")
+                )
+            };
             debug!("reveal pps selection: {}", selection);
             let selected = helpers::get_query_rows_str_q::<Q>(
                 &helpers::str_select_statement(&args.pp_gen.table, &args.pp_gen.table, &selection),
@@ -255,16 +263,43 @@ impl EdnaDiffRecord {
                 if child_table == &args.pp_gen.table {
                     continue;
                 }
-                let selection = tinfo
-                    .owner_fks
-                    .iter()
-                    .map(|c| format!("`{}` {}", c.from_col, pp_select))
-                    .collect::<Vec<String>>()
-                    .join(" OR ");
-                debug!("reveal pps selection: {}", selection);
-                let update_stmt = if args.reveal_pps == RevealPPType::Delete {
-                    format!("DELETE FROM {} WHERE {}", tinfo.table, selection)
+                let selection = if tinfo.owner_fks.len() == 1 {
+                    format!("{} {}", tinfo.owner_fks[0].from_col, pp_select)
                 } else {
+                    tinfo
+                        .owner_fks
+                        .iter()
+                        .map(|fk| format!("{} {}", fk.from_col, pp_select))
+                        .collect::<Vec<String>>()
+                        .join(" OR ")
+                };
+                if args.reveal_pps == RevealPPType::Delete {
+                    helpers::query_drop(
+                        &format!("DELETE FROM {} WHERE {}", tinfo.table, selection),
+                        args.db,
+                    )?;
+                } else {
+                    // get count of children SO WE DON'T UPDATE if we don't need
+                    // to (select is cheaper!)
+                    let start = time::Instant::now();
+                    let checkstmt =
+                        format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, selection);
+                    let res = args.db.query_iter(checkstmt.clone()).unwrap();
+                    let mut count: u64 = 0;
+                    for row in res {
+                        count = from_value(row.unwrap().unwrap()[0].clone());
+                        break;
+                    }
+                    warn!(
+                        "Check count of pseudoprincipals {}: {}mus",
+                        selection,
+                        start.elapsed().as_micros()
+                    );
+                    if count == 0 {
+                        // don't need to
+                        info!("Don't update, found 0 children");
+                        continue;
+                    }
                     // if only one owner col, skip the case
                     let updates = if tinfo.owner_fks.len() == 1 {
                         format!("{} = {}", tinfo.owner_fks[0].from_col, old_uid)
@@ -281,9 +316,11 @@ impl EdnaDiffRecord {
                             .collect::<Vec<String>>()
                             .join(", ")
                     };
-                    format!("UPDATE {} SET {} WHERE {}", tinfo.table, updates, selection)
+                    helpers::query_drop(
+                        &format!("UPDATE {} SET {} WHERE {}", tinfo.table, updates, selection),
+                        args.db,
+                    )?;
                 };
-                helpers::query_drop(&update_stmt, args.db)?;
             }
             for new_uid in new_uids {
                 // remove PP metadata from the record ctrler (when all locators
