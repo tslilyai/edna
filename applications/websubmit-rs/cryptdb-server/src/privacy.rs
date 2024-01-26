@@ -107,7 +107,6 @@ pub(crate) fn edit_as_pseudoprincipal(
         data.email.to_string(),
         Some(data.apikey.to_string()),
         None,
-        bg.crypto,
     );
     info!(
         bg.log,
@@ -122,12 +121,12 @@ pub(crate) fn edit_as_pseudoprincipal(
     'pploop: for pp in pps {
         let answers_res = bg.query_iter(&format!(
             "SELECT email, q, answer FROM answers WHERE lec = {} AND email = '{}';",
-            data.lec_id, pp.0
+            data.lec_id, pp
         ));
         if answers_res.is_empty() {
             info!(
                 bg.log,
-                "No answers for lec {} for pp {}", data.lec_id, pp.0
+                "No answers for lec {} for pp {}", data.lec_id, pp
                 );
         } else {
             for r in answers_res {

@@ -33,8 +33,10 @@ fn test_remove_shared_after_anon() {
     init_logger();
     let dbname = "testRemoveSharedAnon".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna =
-        edna_cryptdb::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true, false, false);
+    let mut edna = edna_cryptdb::EdnaClient::new(&format!(
+        "mysql://tester:pass@127.0.0.1/{}",
+        dbname), true, false
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -179,8 +181,10 @@ fn test_remove_one_shared() {
     init_logger();
     let dbname = "testRemoveOneSharedDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna =
-        edna_cryptdb::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true, false, false);
+    let mut edna = edna_cryptdb::EdnaClient::new(&format!(
+        "mysql://tester:pass@127.0.0.1/{}",
+        dbname), true, false
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -520,8 +524,10 @@ fn test_remove_all_shared() {
     init_logger();
     let dbname = "testRemoveAllSharedDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna =
-        edna_cryptdb::EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true, false, false);
+    let mut edna = edna_cryptdb::EdnaClient::new(&format!(
+        "mysql://tester:pass@127.0.0.1/{}",
+        dbname), true, false
+    );
 
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),

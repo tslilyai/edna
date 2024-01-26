@@ -87,10 +87,9 @@ pub(crate) fn generate(
     // api key acts as the password
     let start = time::Instant::now();
     let mut bg = backend.lock().unwrap();
-    let crypto = bg.crypto;
     let share = bg
         .edna
-        .register_principal(&data.email, hash.as_str().into(), crypto);
+        .register_principal(&data.email, hash.as_str().into());
     error!(bg.log, "APIKEY generate register edna: {}mus", start.elapsed().as_micros());
     let share_str = serde_json::to_string(&share).unwrap();
     if bg.crypto {

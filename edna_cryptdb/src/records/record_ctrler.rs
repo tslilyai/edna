@@ -513,7 +513,10 @@ impl RecordCtrler {
         // persist share info at share_loc
         self.shares_map.insert(uid_pw_hash, perm_share.clone());
         info!("edna-stored user share: {:?}", perm_share.share);
-        info!("user-stored user share: {:?}", (&all_shares[2], uid_pw_hash));
+        info!(
+            "user-stored user share: {:?}",
+            (&all_shares[2], uid_pw_hash)
+        );
         RecordPersister::persist_share(&vec![(uid_pw_hash, perm_share.clone())], db);
 
         (all_shares[2].clone(), uid_pw_hash)
@@ -525,7 +528,7 @@ impl RecordCtrler {
         new_uid: &UID,
         pp: TableRow,
         did: DID,
-    ) -> PrivKey { 
+    ) -> PrivKey {
         let start = time::Instant::now();
         let anon_uidstr = new_uid.trim_matches('\'');
         // save the anon principal as a new principal with a public key
@@ -543,8 +546,11 @@ impl RecordCtrler {
         );
 
         // we need to record the pp in the speaksfor chain
-        let chain_record =
-            new_sfchain_record(old_uid.to_string(), anon_uidstr.to_string(), secretkey.clone());
+        let chain_record = new_sfchain_record(
+            old_uid.to_string(),
+            anon_uidstr.to_string(),
+            secretkey.clone(),
+        );
         self.insert_chain_record(old_uid, did, &chain_record);
 
         // we also need to record a diff record for the pp
@@ -714,11 +720,7 @@ impl RecordCtrler {
             // decrypt record with privkey provided by client
             let (succeeded, plaintext) = decrypt_encdata(encbag, privkey, self.dryrun);
             if !succeeded {
-                info!(
-                    "Failed to decrypt bag {} with {}",
-                    lc.uid,
-                    privkey.len()
-                );
+                info!("Failed to decrypt bag {} with {}", lc.uid, privkey.len());
                 return (diff_records, pk_records);
             }
             let mut bag: Bag = bincode::deserialize(&plaintext).unwrap();
@@ -836,7 +838,11 @@ impl RecordCtrler {
         };
         let priv_key = sss.reconstruct(&shares);
         let pkbytes = get_pk_bytes(&priv_key.to_bytes_le().1);
-        info!("SSS reconstruct {}: {}mus", uid, start.elapsed().as_micros());
+        info!(
+            "SSS reconstruct {}: {}mus",
+            uid,
+            start.elapsed().as_micros()
+        );
         return Some(pkbytes.to_vec());
     }
 
@@ -922,10 +928,7 @@ impl RecordCtrler {
                     hasher.finish()
                 };
                 if let Some(encls) = self.enc_locators_map.get(&pk_hash) {
-                    info!(
-                        "Cleanup: Getting records of pseudoprincipal {}", 
-                        new_uid,
-                    );
+                    info!("Cleanup: Getting records of pseudoprincipal {}", new_uid,);
                     let mut empty = false;
                     for enclc in encls.clone() {
                         let (_, lcbytes) = decrypt_encdata(&enclc, &pkt.priv_key, self.dryrun);
@@ -1052,7 +1055,12 @@ mod tests {
         let iters = 5;
         let dbname = "testRecordCtrlerUserMulti".to_string();
         helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, "");
-        EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true, false, false);
+        EdnaClient::new(
+            &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+            true,
+            false,
+        );
+
         let url = format!("mysql://{}:{}@{}/{}", "tester", "pass", "127.0.0.1", dbname);
         let pool = mysql::Pool::new(Opts::from_url(&url).unwrap()).unwrap();
         let mut db = pool.get_conn().unwrap();
@@ -1121,7 +1129,12 @@ mod tests {
         let iters = 5;
         let dbname = "testRecordCtrlerUserPK".to_string();
         helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, "");
-        EdnaClient::new("tester", "pass", "127.0.0.1", &dbname, true, false, false);
+        EdnaClient::new(
+            &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
+            true,
+            false,
+        );
+
         let url = format!("mysql://{}:{}@{}/{}", "tester", "pass", "127.0.0.1", dbname);
         let pool = mysql::Pool::new(Opts::from_url(&url).unwrap()).unwrap();
         let mut db = pool.get_conn().unwrap();

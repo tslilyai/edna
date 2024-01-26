@@ -155,21 +155,11 @@ pub struct EdnaClient {
 
 impl EdnaClient {
     pub fn new(
-        user: &str,
-        password: &str,
-        host: &str,
-        dbname: &str,
+        url: &str,
         in_memory: bool,
-        proxy: bool,
         dryrun: bool,
     ) -> EdnaClient {
-        let url = if proxy {
-            format!("mysql://127.0.0.1:{}", 62292)
-        } else {
-            format!("mysql://{}:{}@{}/{}", user, password, host, dbname)
-        };
-        let pool = mysql::Pool::new(Opts::from_url(&url).unwrap()).unwrap();
-
+        let pool = mysql::Pool::new(Opts::from_url(url).unwrap()).unwrap();
         let llapi = Arc::new(Mutex::new(lowlevel_api::LowLevelAPI::new(
             pool.clone(),
             in_memory,
