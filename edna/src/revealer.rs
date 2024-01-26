@@ -233,19 +233,23 @@ impl Revealer {
         removed_revealed.insert(pp_gen.table.clone());
 
         // revealing in order of disguising: undo all decor
-        /*for dr in &drs {
-            if dr.did == did && dr.record.typ == DECOR {
-                info!("Reversing decor record {:?}\n", dr.record);
-                reveal_args.uid = dr.uid.clone();
-                let revealed = dr.record.reveal(&mut reveal_args)?;
-                if revealed {
-                    info!("Decor Record revealed!\n");
-                } else {
-                    success = false;
-                    info!("Failed to reveal decor record");
+        // but only if we aren't going to do so anyways
+        // when revealing new PPs!
+        if reveal_pps != RevealPPType::Restore {
+            for dr in &drs {
+                if dr.did == did && dr.record.typ == DECOR {
+                    info!("Reversing decor record {:?}\n", dr.record);
+                    reveal_args.uid = dr.uid.clone();
+                    let revealed = dr.record.reveal(&mut reveal_args)?;
+                    if revealed {
+                        info!("Decor Record revealed!\n");
+                    } else {
+                        success = false;
+                        info!("Failed to reveal decor record");
+                    }
                 }
             }
-        }*/
+        }
 
         // reveal all modify diff records
         for dr in &drs {
