@@ -903,6 +903,7 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
                 Statement::Insert(s) => {
                     let table = &s.table_name.to_string();
                     if let Some(enccols) = state.tables_to_encrypt.get(table) {
+                        let enccols = enccols.clone();
                         // HACK
                         let enccol_ixs = if table == "answers" {
                             vec![0, 3, 4]
@@ -916,70 +917,65 @@ impl<W: io::Write> MysqlShim<W> for Proxy {
                                 match &q.body {
                                     SetExpr::Values(vs) => {
                                         let insert_start = time::Instant::now();
-                                        // generate a symmetric key to encrypt the row
-                                        let mut key: Vec<u8> =
-                                            repeat(0u8).take(AES_BYTES).collect();
-                                        let mut rng = rand::thread_rng();
-                                        rng.fill_bytes(&mut key[..]);
-                                        let mut iv: Vec<u8> = repeat(0u8).take(AES_BYTES).collect();
-                                        rng.fill_bytes(&mut iv[..]);
-                                        warn!("new_key: {}mus", insert_start.elapsed().as_micros());
-                                        let row_ids = vs.0[0]
-                                            .iter()
-                                            .map(|e| {
-                                                helpers::trim_quotes(&e.to_string()).to_string()
-                                            })
-                                            .collect();
-                                        let mut rowkey = RowKey {
-                                            row_ids: row_ids,
-                                            enc_row_ids: vec![],
-                                            symkey: key,
-                                            iv: iv.clone(),
-                                        };
-                                        // XXX assumes only one row being inserted
-                                        assert_eq!(vs.0.len(), 1);
-                                        let new_vs: Vec<Vec<Expr>> = vs
-                                            .0
-                                            .iter()
-                                            .map(|row| {
-                                                let mut newrow = vec![];
-                                                for (i, e) in row.iter().enumerate() {
-                                                    if enccol_ixs.contains(&i) {
-                                                        newrow.push(helpers::encrypt_expr_values(
-                                                            &e, &rowkey, &iv, enccols,
-                                                        ));
-                                                    } else {
-                                                        newrow.push(e.clone());
-                                                    }
+                                        for vrow in &vs.0 {
+                                            // generate a symmetric key to encrypt the row
+                                            let mut key: Vec<u8> =
+                                                repeat(0u8).take(AES_BYTES).collect();
+                                            let mut rng = rand::thread_rng();
+                                            rng.fill_bytes(&mut key[..]);
+                                            let mut iv: Vec<u8> = repeat(0u8).take(AES_BYTES).collect();
+                                            rng.fill_bytes(&mut iv[..]);
+                                            warn!("new_key: {}mus", insert_start.elapsed().as_micros());
+                                            let row_ids = vrow
+                                                .iter()
+                                                .map(|e| {
+                                                    helpers::trim_quotes(&e.to_string()).to_string()
+                                                })
+                                                .collect();
+                                            let mut rowkey = RowKey {
+                                                row_ids: row_ids,
+                                                enc_row_ids: vec![],
+                                                symkey: key,
+                                                iv: iv.clone(),
+                                            };
+                                            // XXX assumes only one row being inserted
+                                            //assert_eq!(vs.0.len(), 1);
+                                            let mut new_v = vec![];
+                                            for (i, e) in vrow.iter().enumerate() {
+                                                if enccol_ixs.contains(&i) {
+                                                    new_v.push(helpers::encrypt_expr_values(
+                                                        &e, &rowkey, &iv, &enccols,
+                                                    ));
+                                                } else {
+                                                    new_v.push(e.clone());
                                                 }
-                                                newrow
-                                            })
-                                            .collect();
-                                        rowkey.enc_row_ids = new_vs[0]
-                                            .iter()
-                                            .map(|e| {
-                                                helpers::trim_quotes(&e.to_string()).to_string()
-                                            })
-                                            .collect();
-                                        new_q.body = SetExpr::Values(Values(new_vs.clone()));
-                                        warn!(
-                                            "Insert: Encrypt expr {}mus",
-                                            insert_start.elapsed().as_micros()
-                                        );
+                                            }
+                                            rowkey.enc_row_ids = new_v
+                                                .iter()
+                                                .map(|e| {
+                                                    helpers::trim_quotes(&e.to_string()).to_string()
+                                                })
+                                                .collect();
+                                            new_q.body = SetExpr::Values(Values(vec![new_v.clone()]));
+                                            warn!(
+                                                "Insert: Encrypt expr {}mus",
+                                                insert_start.elapsed().as_micros()
+                                            );
 
-                                        // save both the encrypted row IDs (to check for encrypted returned
-                                        // row matches) and the unecrypted ones (to check for plaintext predicate matches)
-                                        let insert_start = time::Instant::now();
+                                            // save both the encrypted row IDs (to check for encrypted returned
+                                            // row matches) and the unecrypted ones (to check for plaintext predicate matches)
+                                            let insert_start = time::Instant::now();
 
-                                        Proxy::save_key_for_users(
-                                            &mut state,
-                                            Arc::new(rowkey),
-                                            &s.table_name.to_string(),
-                                        );
-                                        warn!(
-                                            "Insert: Save key {}mus",
-                                            insert_start.elapsed().as_micros()
-                                        );
+                                            Proxy::save_key_for_users(
+                                                &mut state,
+                                                Arc::new(rowkey),
+                                                &s.table_name.to_string(),
+                                            );
+                                            warn!(
+                                                "Insert: Save key {}mus",
+                                                insert_start.elapsed().as_micros()
+                                            );
+                                        }
                                     }
                                     _ => unimplemented!("Bad values inserted"),
                                 }
