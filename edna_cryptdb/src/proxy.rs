@@ -222,7 +222,7 @@ impl Proxy {
             let admin_pubkey = state.admin_pubkey.as_ref().unwrap().clone();
             if let Some(table_keys) = state.admin_access_keys.get_mut(table) {
                 warn!(
-                    "PREDeleting {} admin keys, current len is {}",
+                    "PRE-Deleting {} admin keys, current len is {}",
                     table,
                     table_keys.len()
                 );
@@ -238,7 +238,7 @@ impl Proxy {
                     table_keys.remove(&encdata_admin);
                 }
                 warn!(
-                    "POSTDeleting {} admin keys, current len is {}: {}mus",
+                    "POST-Deleting {} admin keys, current len is {}: {}mus",
                     table,
                     table_keys.len(),
                     encrypt_start.elapsed().as_micros()
