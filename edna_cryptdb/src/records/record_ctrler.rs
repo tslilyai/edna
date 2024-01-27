@@ -1018,7 +1018,8 @@ impl RecordCtrler {
                 for pk in &records {
                     if uids.is_empty() {
                         // save the original user too
-                        uids.insert((pk.1.old_uid.clone(), pk.1.priv_key.clone()));
+                        // TODO
+                        uids.insert((pk.1.old_uid.clone(), privkey.clone()));
                     }
                     uids.insert((pk.1.new_uid.clone(), pk.1.priv_key.clone()));
                     new_uids.push((pk.0.clone(), pk.1.priv_key.clone()));
