@@ -439,7 +439,7 @@ impl RecordCtrler {
         if uid.contains("malte") {
             query_drop(&format!("REGISTER {} ADMIN", base64::encode(&pubkey_vec)), db).unwrap();
         } else {
-            query_drop(&format!("REGISTER {} ADMIN", base64::encode(&pubkey_vec)), db).unwrap();
+            query_drop(&format!("REGISTER {}", base64::encode(&pubkey_vec)), db).unwrap();
         }
 
         (secretkey.as_bytes().to_vec(), pubkey_vec)
