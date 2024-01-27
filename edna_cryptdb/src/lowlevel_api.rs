@@ -199,7 +199,7 @@ impl LowLevelAPI {
         user: &UID,
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
-    ) -> HashSet<UID> {
+    ) -> HashSet<(UID, PrivKey)> {
         let mut decrypt_cap = vec![];
         let priv_key = self.get_priv_key(user, password, user_share);
         if let Some(key) = priv_key {

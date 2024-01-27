@@ -1001,7 +1001,7 @@ impl RecordCtrler {
         &self,
         privkey: &PrivKey,
         locators: &Vec<Locator>,
-    ) -> HashSet<UID> {
+    ) -> HashSet<(UID, PrivKey)> {
         let mut uids = HashSet::new();
         if privkey.is_empty() {
             return uids;
@@ -1018,9 +1018,9 @@ impl RecordCtrler {
                 for pk in &records {
                     if uids.is_empty() {
                         // save the original user too
-                        uids.insert(pk.1.old_uid.clone());
+                        uids.insert((pk.1.old_uid.clone(), pk.1.priv_key.clone()));
                     }
-                    uids.insert(pk.1.new_uid.clone());
+                    uids.insert((pk.1.new_uid.clone(), pk.1.priv_key.clone()));
                     new_uids.push((pk.0.clone(), pk.1.priv_key.clone()));
                 }
                 // get all records of pseudoprincipal

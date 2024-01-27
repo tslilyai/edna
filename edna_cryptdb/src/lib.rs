@@ -346,18 +346,20 @@ impl EdnaClient {
         user_share: Option<(records::Share, records::Loc)>,
     ) -> HashSet<UID> {
         let locked_llapi = self.llapi.lock().unwrap();
-        let uids = locked_llapi.get_pseudoprincipals(&uid, password, user_share);
+        let uidpks = locked_llapi.get_pseudoprincipals(&uid, password, user_share);
         drop(locked_llapi);
+        let mut uids = HashSet::new();
 
         // PROXY: LOGIN PSEUDOPRINCIPALS
-        if !self.dryrun {
-            let mut db = self.pool.get_conn().unwrap();
-            for pk in &uids {
+        for (uid, pk) in &uidpks {
+            if !self.dryrun {
+                let mut db = self.pool.get_conn().unwrap();
                 if pk.len() > 0 {
                     db.query_drop(format!("LOGIN {}", base64::encode(pk)))
                         .unwrap();
                 }
             }
+            uids.insert(uid.clone());
         }
         uids
     }
