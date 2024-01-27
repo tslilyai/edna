@@ -378,7 +378,7 @@ impl RecordCtrler {
         &mut self,
         uid: &UID,
         is_anon: bool,
-        db: Option<&mut Q>,
+        db: &mut Q,
         persist: bool,
     ) -> (PrivKey, Vec<u8> /*publickey*/) {
         if self.dryrun {
@@ -397,8 +397,7 @@ impl RecordCtrler {
             };
             self.mark_principal_to_insert(uid, &pdata);
             if persist {
-                assert!(db.is_some());
-                self.persist_inserted_principals::<Q>(db.unwrap());
+                self.persist_inserted_principals::<Q>(db);
             }
             self.principal_data.insert(uid.clone(), pdata);
 
@@ -431,11 +430,19 @@ impl RecordCtrler {
         };
         self.mark_principal_to_insert(uid, &pdata);
         if persist {
-            assert!(db.is_some());
-            self.persist_inserted_principals::<Q>(db.unwrap());
+            self.persist_inserted_principals::<Q>(db);
         }
         self.principal_data.insert(uid.clone(), pdata);
-        (secretkey.as_bytes().to_vec(), pubkey.as_bytes().to_vec())
+
+        // XXX PROXY CRYPTDB super hacky
+        let pubkey_vec = pubkey.as_bytes().to_vec();
+        if uid.contains("malte") {
+            query_drop(&format!("REGISTER {} ADMIN", base64::encode(&pubkey_vec)), db).unwrap();
+        } else {
+            query_drop(&format!("REGISTER {} ADMIN", base64::encode(&pubkey_vec)), db).unwrap();
+        }
+
+        (secretkey.as_bytes().to_vec(), pubkey_vec)
     }
 
     pub fn register_principal_private_key<Q: Queryable>(
@@ -445,11 +452,11 @@ impl RecordCtrler {
         db: &mut Q,
         persist: bool,
     ) -> PrivKey {
-        let (secretkey, _pubkey) = self.register_principal(uid, is_anon, Some(db), persist);
+        let (secretkey, _pubkey) = self.register_principal(uid, is_anon, db, persist);
         secretkey
     }
 
-    // registers the princiapl with edna, giving them a private/public keypair
+    // registers the principal with edna, giving them a private/public keypair
     // breaks the private key into shares and returns the user's portion
     pub fn register_principal_secret_sharing<Q: Queryable>(
         &mut self,
@@ -457,7 +464,7 @@ impl RecordCtrler {
         db: &mut Q,
         password: String,
     ) -> UserData {
-        let (secretkey, _) = self.register_principal(uid, false, Some(db), true);
+        let (secretkey, _) = self.register_principal(uid, false, db, true);
         if self.dryrun {
             return (
                 [
@@ -522,12 +529,13 @@ impl RecordCtrler {
         (all_shares[2].clone(), uid_pw_hash)
     }
 
-    pub fn register_pseudoprincipal(
+    pub fn register_pseudoprincipal<Q: Queryable>(
         &mut self,
         old_uid: &UID,
         new_uid: &UID,
         pp: TableRow,
         did: DID,
+        db: &mut Q
     ) -> PrivKey {
         let start = time::Instant::now();
         let anon_uidstr = new_uid.trim_matches('\'');
@@ -535,7 +543,7 @@ impl RecordCtrler {
         let (secretkey, pubkey) = self.register_principal(
             &anon_uidstr.to_string(),
             true,
-            None::<&mut mysql::Conn>,
+            db,
             false,
         );
         info!(
@@ -1177,7 +1185,7 @@ mod tests {
                     table: pseudoprincipal_name.clone(),
                     row: vec![RowVal::new("uid".to_string(), anon_uid.to_string())],
                 };
-                ctrler.register_pseudoprincipal(&u.to_string(), &anon_uid.to_string(), pp, d);
+                ctrler.register_pseudoprincipal(&u.to_string(), &anon_uid.to_string(), pp, d, &mut db);
                 ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
             }
 

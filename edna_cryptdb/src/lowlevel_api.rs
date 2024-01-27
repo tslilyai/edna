@@ -179,7 +179,7 @@ impl LowLevelAPI {
         pp: TableRow,
     ) -> PrivKey {
         self.record_ctrler
-            .register_pseudoprincipal(old_uid, new_uid, pp, did)
+            .register_pseudoprincipal(old_uid, new_uid, pp, did, &mut self.pool.get_conn().unwrap())
     }
 
     pub fn save_decor_record(
