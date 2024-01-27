@@ -436,7 +436,7 @@ impl RecordCtrler {
 
         // XXX PROXY CRYPTDB super hacky
         let pubkey_vec = pubkey.as_bytes().to_vec();
-        warn!("Proxy: Register principal {}", base64::encode(&pubkey_vec));
+        warn!("Proxy: Register principal pubkey {} privkey {}", base64::encode(&pubkey_vec), base64::encode(secrekey.as_bytes().to_vec()));
         if uid.contains("malte") {
             query_drop(&format!("REGISTER {} ADMIN", base64::encode(&pubkey_vec)), db).unwrap();
         } else {
