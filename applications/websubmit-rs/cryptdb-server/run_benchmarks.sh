@@ -16,14 +16,12 @@ if $crypto; then
 	schema="src/schema.sql"
 fi
 
-for l in 20; do
-    for u in 2000; do
-	RUST_LOG=error $BUILDDIR/target/release/cryptdb-srv \
-		-i myclass_cryptdb --schema $schema --config sample-config.toml \
-		--benchmark true --crypto $crypto \
-    	--nusers $u --nlec $l --nqs 4 &> \
-    	output/${l}lec_${u}users_$crypto.out
-	echo "Ran test for $l lecture and $u users"
-    done
-done
+l=20
+u=2000
+RUST_LOG=error $BUILDDIR/target/release/cryptdb-srv \
+    -i myclass_cryptdb --schema $schema --config sample-config.toml \
+    --benchmark true --crypto $crypto \
+    --nusers $u --nlec $l --nqs 4 &> \
+    output/${l}lec_${u}users_$crypto.out
+echo "Ran test for $l lecture and $u users"
 rm *txt
