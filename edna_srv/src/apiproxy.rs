@@ -88,6 +88,7 @@ pub(crate) fn reveal_disguise(
         &data.tableinfo_json,
         &data.ppgen_json,
         Some(edna::RevealPPType::Restore),
+        true, // allow singlecolumn reveals 
         password,
         None,
         false, // use_txn
@@ -196,7 +197,7 @@ pub(crate) fn end_reveal(did: edna::DID, edna: &State<Arc<Mutex<EdnaClient>>>) {
 #[derive(Deserialize, JsonSchema)]
 pub struct GetRecordsOfDisguise {
     did: edna::DID,
-    decrypt_cap: edna::records::DecryptCap,
+    decrypt_cap: edna::records::PrivKey,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -220,7 +221,7 @@ pub(crate) fn get_records_of_disguise(
 #[derive(Deserialize, JsonSchema)]
 pub struct CleanupRecordsOfDisguise {
     did: edna::DID,
-    decrypt_cap: edna::records::DecryptCap,
+    decrypt_cap: edna::records::PrivKey,
 }
 #[openapi]
 #[post("/cleanup_records_of_disguise", format = "json", data = "<data>")]

@@ -16,6 +16,7 @@ pub struct RevealArgs<'a, Q: Queryable> {
     pub uid: UID,
     pub did: DID,
     pub reveal_pps: RevealPPType,
+    pub allow_singlecolumn_reveals: bool,
     pub llapi: &'a mut LowLevelAPI,
     pub db: &'a mut Q,
 }
@@ -78,6 +79,7 @@ impl Revealer {
         table_info: &HashMap<String, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
+        allow_singlecolumn_reveals: bool,
         db: &mut Q,
         password: Option<String>,
         user_share: Option<(Share, Loc)>,
@@ -97,7 +99,7 @@ impl Revealer {
         }
 
         warn!("Revealing disguise for {:?}", uid);
-        self.reveal_using_secretkey(did, table_info, pp_gen, reveal_pps, privkey, db)
+        self.reveal_using_secretkey(did, table_info, pp_gen, reveal_pps, allow_singlecolumn_reveals, privkey, db)
     }
 
     // Note: Decorrelations are not revealed if not using EdnaSpeaksForRecords
@@ -108,6 +110,7 @@ impl Revealer {
         table_info: &HashMap<String, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
+        allow_singlecolumn_reveals: bool,
         privkey: records::PrivKey,
         db: &mut Q,
     ) -> Result<(), mysql::Error> {
@@ -175,6 +178,7 @@ impl Revealer {
             uid: String::new(),
             did: did,
             reveal_pps: reveal_pps,
+            allow_singlecolumn_reveals: allow_singlecolumn_reveals,
             llapi: &mut llapi,
             db: db,
         };

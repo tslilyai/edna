@@ -263,19 +263,18 @@ impl EdnaDiffRecord {
             // get count of children SO WE DON'T UPDATE if we don't need
             // to (select is cheaper!)
             let start = time::Instant::now();
-            let all_select= if tinfo.owner_fks.len() == 1 {
-                    format!("{} {}", tinfo.owner_fks[0].from_col, all_pp_select)
-                } else {
-                    tinfo
-                        .owner_fks
-                        .iter()
-                        .map(|fk| format!("{} {}", fk.from_col, all_pp_select))
-                        .collect::<Vec<String>>()
-                        .join(" OR ")
-                };
+            let all_select = if tinfo.owner_fks.len() == 1 {
+                format!("{} {}", tinfo.owner_fks[0].from_col, all_pp_select)
+            } else {
+                tinfo
+                    .owner_fks
+                    .iter()
+                    .map(|fk| format!("{} {}", fk.from_col, all_pp_select))
+                    .collect::<Vec<String>>()
+                    .join(" OR ")
+            };
 
-            let checkstmt =
-                format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, all_select);
+            let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, all_select);
             let res = args.db.query_iter(checkstmt.clone()).unwrap();
             let mut count: u64 = 0;
             for row in res {
@@ -306,7 +305,7 @@ impl EdnaDiffRecord {
                     } else {
                         format!("IN ({})", new_uids_str)
                     };
-                    
+
                     let selection = if tinfo.owner_fks.len() == 1 {
                         format!("{} {}", tinfo.owner_fks[0].from_col, pp_select)
                     } else {
@@ -317,7 +316,7 @@ impl EdnaDiffRecord {
                             .collect::<Vec<String>>()
                             .join(" OR ")
                     };
-                
+
                     // if only one owner col, skip the case
                     let updates = if tinfo.owner_fks.len() == 1 {
                         format!("{} = {}", tinfo.owner_fks[0].from_col, old_uid)
@@ -611,7 +610,14 @@ impl EdnaDiffRecord {
                         nv,
                         iv,
                         ov
-                    )
+                    );
+                    if !args.allow_singlecolumn_reveals {
+                        warn!(
+                            "restore old objs, don't restore partial rows: {}mus",
+                            fnstart.elapsed().as_micros()
+                        );
+                        return Ok(false);
+                    }
                 }
             }
             // somehow this row exactly matches, we can just keep this row

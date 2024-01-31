@@ -388,6 +388,7 @@ fn run_disguising_thread(
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             Some(uid.to_string()),
             None,
             use_txn,
@@ -488,6 +489,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
                 TABLEINFO_JSON,
                 PPGEN_JSON,
                 Some(edna::RevealPPType::Restore),
+                true, // allow partial row reveals
                 Some(u.to_string()),
                 None,
                 false,
@@ -650,6 +652,7 @@ fn run_stats_test(
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             Some(user_id.to_string()),
             None,
             use_txn,
@@ -732,6 +735,7 @@ fn run_stats_test(
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             Some(user_id.to_string()),
             None,
             use_txn,
@@ -854,6 +858,7 @@ fn run_stats_test(
                 TABLEINFO_JSON,
                 PPGEN_JSON,
                 Some(edna::RevealPPType::Restore),
+                true, // allow partial row reveals
                 Some(user_id.to_string()),
                 None,
                 use_txn,

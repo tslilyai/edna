@@ -139,6 +139,7 @@ fn test_remove_shared_after_anon() {
         TABLEINFO_JSON,
         PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
         None,
         Some(admin_user_share.clone()),
         false,
@@ -150,6 +151,7 @@ fn test_remove_shared_after_anon() {
         TABLEINFO_JSON,
         PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
         None,
         Some(admin_user_share.clone()),
         false,
@@ -302,6 +304,7 @@ fn test_remove_one_shared() {
         TABLEINFO_JSON,
         PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
         None,
         Some(user_shares[0].clone()),
         false,
@@ -343,6 +346,7 @@ fn test_remove_one_shared() {
         TABLEINFO_JSON,
         PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
         None,
         Some(admin_user_share.clone()),
         false,
@@ -597,6 +601,7 @@ fn test_remove_all_shared() {
         TABLEINFO_JSON,
         PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
         None,
         Some(admin_user_share),
         false,
@@ -628,6 +633,7 @@ fn test_remove_all_shared() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,

@@ -93,6 +93,7 @@ fn test_app_rev_anon_disguise() {
         TABLEINFO_JSON,
         PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
         None,
         None,
         false,
@@ -197,6 +198,7 @@ fn test_app_rev_anon_disguise() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -345,6 +347,7 @@ fn test_app_rev_gdpr_disguise() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -568,6 +571,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         TABLEINFO_JSON,
         PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
         None,
         None,
         false,
@@ -663,6 +667,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -763,6 +768,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -923,6 +929,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1018,6 +1025,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1161,6 +1169,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1245,6 +1254,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             TABLEINFO_JSON,
             PPGEN_JSON,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,

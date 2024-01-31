@@ -317,8 +317,8 @@ add_labels((X+2*barwidth),
 ], plt, 'b', offset)
 
 plt.ylabel('Time (sec)')
-plt.ylim(ymin=0, ymax=5500)
-plt.yticks(range(0, 5500, 2000))
+plt.ylim(ymin=0, ymax=7500)
+plt.yticks(range(0, 7500, 2000))
 #plt.tick_params(
 #    axis='x',          # changes apply to the x-axis
 #    which='both',      # both major and minor ticks are affected
