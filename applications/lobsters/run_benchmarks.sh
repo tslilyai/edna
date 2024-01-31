@@ -15,6 +15,7 @@ for u in 2 13; do
     	for txn in '' '--txn'; do
 		    mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
             	    mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+            #CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph --no-inline -F99 -o 14users_cheap.svg -b lobsters -- \
 		    RUST_LOG=error ../../target/release/lobsters \
 			--scale $scale \
 			--nconcurrent $u \
