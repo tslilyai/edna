@@ -220,4 +220,11 @@ impl LowLevelAPI {
     pub fn principal_is_anon(&self, uid: &UID) -> bool {
         self.record_ctrler.principal_is_anon(uid)
     }
+
+    /*
+     * UPDATES STUFF
+     */
+    pub fn get_updates_since(&self, t: u64) -> &[Update] {
+        self.record_ctrler.get_updates_since(t)
+    }
 }

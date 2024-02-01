@@ -2,11 +2,12 @@ use crate::lowlevel_api::*;
 use crate::records::*;
 use crate::*;
 use log::{info, warn};
+use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 pub struct RevealArgs<'a, Q: Queryable> {
-    pub timap: &'a HashMap<String, TableInfo>,
+    pub timap: HashMap<String, TableInfo>,
     pub pp_gen: &'a PseudoprincipalGenerator,
     pub recorrelated_pps: &'a HashSet<UID>,
     pub edges: &'a HashMap<UID, Vec<SFChainRecord>>,
@@ -14,8 +15,9 @@ pub struct RevealArgs<'a, Q: Queryable> {
     pub did: DID,
     pub reveal_pps: RevealPPType,
     pub allow_singlecolumn_reveals: bool,
-    pub llapi: &'a mut LowLevelAPI,
+    pub llapi_locked: &'a mut LowLevelAPI,
     pub db: &'a mut Q,
+    pub oldest_t: u64,
 }
 pub struct Revealer {
     pub llapi: Arc<Mutex<LowLevelAPI>>,
@@ -69,7 +71,7 @@ impl Revealer {
         &mut self,
         uid: Option<&UID>,
         did: DID,
-        table_info: &HashMap<String, TableInfo>,
+        timap: &HashMap<String, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
         allow_singlecolumn_reveals: bool,
@@ -80,19 +82,27 @@ impl Revealer {
         let mut privkey = vec![];
 
         if uid != None {
-            let llapi = self.llapi.lock().unwrap();
+            let llapi_locked = self.llapi.lock().unwrap();
 
-            let priv_key = llapi.get_priv_key(&(uid.clone().unwrap()), password, user_share);
+            let priv_key = llapi_locked.get_priv_key(&(uid.clone().unwrap()), password, user_share);
             if let Some(key) = priv_key {
                 privkey = key;
             }
-            drop(llapi);
+            drop(llapi_locked);
 
             info!("got priv key");
         }
 
         warn!("Revealing disguise for {:?}", uid);
-        self.reveal_using_secretkey(did, table_info, pp_gen, reveal_pps, allow_singlecolumn_reveals, privkey, db)
+        self.reveal_using_secretkey(
+            did,
+            timap,
+            pp_gen,
+            reveal_pps,
+            allow_singlecolumn_reveals,
+            privkey,
+            db,
+        )
     }
 
     // Note: Decorrelations are not revealed if not using EdnaSpeaksForRecords
@@ -100,7 +110,7 @@ impl Revealer {
     pub fn reveal_using_secretkey<Q: Queryable>(
         &mut self,
         did: DID,
-        table_info: &HashMap<String, TableInfo>,
+        timap: &HashMap<String, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
         allow_singlecolumn_reveals: bool,
@@ -112,22 +122,23 @@ impl Revealer {
         // decorrelated (would need to check all possible pps as fks)
         let fnstart = time::Instant::now();
         let start = time::Instant::now();
-        let (drws, pks) = self
-            .llapi
-            .lock()
-            .unwrap()
-            .get_recs_and_privkeys(&privkey);
+        let mut llapi_locked = self.llapi.lock().unwrap();
+        let (drws, pks) = llapi_locked.get_recs_and_privkeys(&privkey);
         warn!(
             "Edna: Get records for reveal: {}mus",
             start.elapsed().as_micros()
         );
         let reveal_pps = reveal_pps.unwrap_or(RevealPPType::Restore);
+        let mut oldest_t = 0;
         let drs: HashSet<EdnaDiffRecordWrapper> = drws
             .iter()
-            .map(|drw| EdnaDiffRecordWrapper {
-                did: drw.did,
-                uid: drw.uid.clone(),
-                record: edna_diff_record_from_bytes(&drw.record_data),
+            .map(|drw| {
+                oldest_t = min(oldest_t, drw.t);
+                EdnaDiffRecordWrapper {
+                    did: drw.did,
+                    uid: drw.uid.clone(),
+                    record: edna_diff_record_from_bytes(&drw.record_data, drw.t),
+                }
             })
             .collect();
 
@@ -161,10 +172,9 @@ impl Revealer {
             start.elapsed().as_micros()
         );
 
-        let mut llapi = self.llapi.lock().unwrap();
-        llapi.start_reveal(did);
+        llapi_locked.start_reveal(did);
         let mut reveal_args = RevealArgs {
-            timap: &table_info,
+            timap: timap.clone(),
             pp_gen: &pp_gen,
             recorrelated_pps: &recorrelated_pps,
             edges: &edges,
@@ -172,8 +182,9 @@ impl Revealer {
             did: did,
             reveal_pps: reveal_pps,
             allow_singlecolumn_reveals: allow_singlecolumn_reveals,
-            llapi: &mut llapi,
+            llapi_locked: &mut llapi_locked,
             db: db,
+            oldest_t: oldest_t,
         };
 
         // first, reveal any removed principals
@@ -269,7 +280,7 @@ impl Revealer {
                 continue;
             }
             // reveal all referenced tables first
-            let ti = table_info.get(table).unwrap();
+            let ti = timap.get(table).unwrap();
             for fk in &ti.other_fks {
                 let reftab = &fk.to_table;
                 if removed_revealed.contains(reftab) {
@@ -298,14 +309,16 @@ impl Revealer {
         }
         success &= EdnaDiffRecord::reveal_new_pps(&pp_records, &mut reveal_args)?;
 
-        llapi.cleanup_records_of_disguise(did, &privkey);
+        let mut llapi_locked = self.llapi.lock().unwrap();
+        llapi_locked.cleanup_records_of_disguise(did, &privkey);
         if !success {
             info!(
                 "Reveal records failed, clearing anyways: {}mus",
                 fnstart.elapsed().as_micros()
             );
         }
-        llapi.end_reveal(did);
+        llapi_locked.end_reveal(did);
+        drop(llapi_locked);
         warn!("Reveal records total: {}mus", fnstart.elapsed().as_micros());
         Ok(())
     }

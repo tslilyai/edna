@@ -61,6 +61,8 @@ pub struct EdnaDiffRecord {
     // NEW_PSEUDOPRINCIPAL
     pub old_uid: UID,
     pub new_uid: UID,
+
+    pub t: u64,
 }
 
 pub fn diff_records_from_bytes(bytes: &Vec<u8>) -> Vec<DiffRecordWrapper> {
@@ -72,8 +74,10 @@ pub fn diff_record_from_bytes(bytes: &Vec<u8>) -> DiffRecordWrapper {
 pub fn diff_record_to_bytes(record: &DiffRecordWrapper) -> Vec<u8> {
     bincode::serialize(record).unwrap()
 }
-pub fn edna_diff_record_from_bytes(bytes: &Vec<u8>) -> EdnaDiffRecord {
-    bincode::deserialize(bytes).unwrap()
+pub fn edna_diff_record_from_bytes(bytes: &Vec<u8>, t: u64) -> EdnaDiffRecord {
+    let mut rec : EdnaDiffRecord = bincode::deserialize(bytes).unwrap();
+    rec.t = t;
+    rec
 }
 pub fn edna_diff_record_to_bytes(record: &EdnaDiffRecord) -> Vec<u8> {
     bincode::serialize(record).unwrap()
@@ -260,7 +264,7 @@ impl EdnaDiffRecord {
             }
         }
 
-        for (child_table, tinfo) in args.timap.into_iter() {
+        for (child_table, tinfo) in &args.timap {
             if child_table == &args.pp_gen.table {
                 continue;
             }
@@ -348,7 +352,7 @@ impl EdnaDiffRecord {
             // remove PP metadata from the record ctrler (when all locators
             // are gone) do per new uid because did might differ NOTE: pps
             // kept for "restore" can never be reclaimed now
-            args.llapi.forget_principal(&new_uid, args.did);
+            args.llapi_locked.forget_principal(&new_uid, args.did);
         }
 
         // now remove the pseudoprincipals
@@ -367,10 +371,24 @@ impl EdnaDiffRecord {
 
     pub fn reveal<Q: Queryable>(&self, args: &mut RevealArgs<Q>) -> Result<bool, mysql::Error> {
         let fnstart = time::Instant::now();
+
+        // get updates to apply to old and new values
+        let mut new_values = self.new_values.clone();
+        let mut old_values = self.old_values.clone();
+        let updates = args.llapi_locked.get_updates_since(args.oldest_t);
+        for up in updates {
+            if up.t < self.t {
+                continue;
+            }
+            new_values = (up.upfn)(new_values);
+            old_values = (up.upfn)(old_values);
+            args.timap = up.timap.clone();
+        }
+
         // all diff records should be restoring something
         let res = match self.typ {
             // only ever called for a natural principal
-            REMOVE_PRINCIPAL => self.reveal_removed_principal(&args.uid, args.llapi),
+            REMOVE_PRINCIPAL => self.reveal_removed_principal(&args.uid, args.llapi_locked),
             NEW_PP => unimplemented!("no single record reveal of pseudoprincipals!"),
             _ => {
                 // remove rows before we reinsert old ones to avoid false
@@ -703,9 +721,9 @@ impl EdnaDiffRecord {
             // that we've already tried to rewrite the new value to.
             if should_delete {
                 // retain if things refer to it
-                for (_, tinfo) in args.timap.into_iter() {
+                for (_, tinfo) in &args.timap {
                     let nchildren =
-                        EdnaDiffRecord::get_count_of_children(&ids[0].value(), tinfo, args.db)?;
+                        EdnaDiffRecord::get_count_of_children(&ids[0].value(), &tinfo, args.db)?;
                     if nchildren == 0 {
                         let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
                         helpers::query_drop(&delete_q, args.db)?;

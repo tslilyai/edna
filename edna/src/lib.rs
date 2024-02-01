@@ -31,6 +31,12 @@ pub type ColName = String;
 pub type TableName = String;
 pub type UpdateFn = Box<dyn Fn(Vec<TableRow>) -> Vec<TableRow> + Send + Sync>;
 
+pub struct Update {
+    t: u64,
+    timap: HashMap<TableName, TableInfo>,
+    upfn: UpdateFn,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseudoprincipalGenerator {
     pub table: TableName,
@@ -415,12 +421,12 @@ impl EdnaClient {
         Ok(())
     }
 
-    pub fn record_update<F>(&mut self, f: F)
+    pub fn record_update<F>(&mut self, f: F, tinfo: HashMap<TableName, TableInfo>)
     where
         F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static + Send + Sync,
     {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.record_ctrler.record_update(Box::new(f));
+        locked_llapi.record_ctrler.record_update(Box::new(f), tinfo);
         drop(locked_llapi);
     }
 }

@@ -2,7 +2,7 @@ use crate::crypto::*;
 use crate::helpers::*;
 use crate::records::*;
 use crate::TableRow;
-use crate::{DID, UID, UpdateFn};
+use crate::{TableInfo, Update, UpdateFn, DID, UID, TableName};
 use crypto_box::{PublicKey, SecretKey};
 use log::{error, info, warn};
 use mysql::prelude::*;
@@ -83,7 +83,7 @@ pub struct Locator {
 
 pub struct RecordCtrler {
     pub start_time: time::Instant,
-    updates: Vec<(u64, UpdateFn)>,
+    updates: Vec<Update>,
 
     // principal records are stored indexed by some large random num
     principal_data: HashMap<UID, PrincipalData>,
@@ -1041,21 +1041,24 @@ impl RecordCtrler {
         uids
     }
 
-    pub fn record_update(&mut self, f: UpdateFn) {
-        self.updates
-            .push((self.start_time.elapsed().as_secs(), Box::new(f)));
+    pub fn record_update(&mut self, f: UpdateFn, timap: HashMap<TableName, TableInfo>) {
+        self.updates.push(Update {
+            t: self.start_time.elapsed().as_secs(),
+            upfn: Box::new(f),
+            timap: timap,
+        });
         // TODO truncate old updates
     }
 
-    pub fn get_updates_since(&self, t: u64) -> &[(u64, UpdateFn)] {
+    pub fn get_updates_since(&self, t: u64) -> &[Update] {
         // note that they should already been sorted in ascending order
         let mut i = 0;
         while i < self.updates.len() {
             // time since start is greater
-            if self.updates[i].0 >= t {
+            if self.updates[i].t >= t {
                 break;
             }
-            i+=1;
+            i += 1;
         }
         return &self.updates[i..];
     }
