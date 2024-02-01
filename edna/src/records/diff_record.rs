@@ -40,6 +40,9 @@ pub struct DiffRecordWrapper {
     // FOR SECURITY DESIGN
     // for randomness
     pub nonce: u64,
+
+    // time record was created
+    pub t: u64,
 }
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
@@ -77,9 +80,10 @@ pub fn edna_diff_record_to_bytes(record: &EdnaDiffRecord) -> Vec<u8> {
 }
 
 // create diff record for generic data
-pub fn new_generic_diff_record_wrapper(uid: &UID, did: DID, data: Vec<u8>) -> DiffRecordWrapper {
+pub fn new_generic_diff_record_wrapper(start_time: time::Instant, uid: &UID, did: DID, data: Vec<u8>) -> DiffRecordWrapper {
     let mut record: DiffRecordWrapper = Default::default();
     record.nonce = thread_rng().gen();
+    record.t = start_time.elapsed().as_secs();
     record.uid = uid.to_string();
     record.did = did;
     record.record_data = data;

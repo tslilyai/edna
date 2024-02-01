@@ -4,9 +4,6 @@ use crate::*;
 use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
-
-pub type UpdateFn = Box<dyn Fn(Vec<TableRow>) -> Vec<TableRow> + Send + Sync>;
 
 pub struct RevealArgs<'a, Q: Queryable> {
     pub timap: &'a HashMap<String, TableInfo>,
@@ -23,8 +20,6 @@ pub struct RevealArgs<'a, Q: Queryable> {
 pub struct Revealer {
     pub llapi: Arc<Mutex<LowLevelAPI>>,
     pub pool: mysql::Pool,
-    start: Instant,
-    updates: Vec<(u64, UpdateFn)>,
 }
 
 impl Revealer {
@@ -32,8 +27,6 @@ impl Revealer {
         let revealer = Revealer {
             llapi: llapi,
             pool: pool,
-            start: Instant::now(),
-            updates: vec![],
         };
         revealer
     }
@@ -315,10 +308,5 @@ impl Revealer {
         llapi.end_reveal(did);
         warn!("Reveal records total: {}mus", fnstart.elapsed().as_micros());
         Ok(())
-    }
-
-    pub fn record_update(&mut self, f: UpdateFn) {
-        self.updates
-            .push((self.start.elapsed().as_secs(), Box::new(f)));
     }
 }

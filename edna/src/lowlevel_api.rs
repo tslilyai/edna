@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
  */
 pub struct LowLevelAPI {
     pub pool: mysql::Pool,
-    record_ctrler: RecordCtrler,
+    pub record_ctrler: RecordCtrler,
 }
 
 impl LowLevelAPI {
@@ -160,7 +160,12 @@ impl LowLevelAPI {
     // restoring.
     //----------------------------------------------------------------------------
     pub fn save_diff_record(&mut self, uid: UID, did: DID, data: Vec<u8>) {
-        let tok = records::new_generic_diff_record_wrapper(&uid, did, data);
+        let tok = records::new_generic_diff_record_wrapper(
+            self.record_ctrler.start_time,
+            &uid,
+            did,
+            data,
+        );
         self.record_ctrler.insert_diff_record_wrapper(&tok);
     }
 

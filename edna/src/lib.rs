@@ -29,6 +29,7 @@ pub type DID = u64;
 pub type UID = String;
 pub type ColName = String;
 pub type TableName = String;
+pub type UpdateFn = Box<dyn Fn(Vec<TableRow>) -> Vec<TableRow> + Send + Sync>;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseudoprincipalGenerator {
@@ -418,6 +419,8 @@ impl EdnaClient {
     where
         F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static + Send + Sync,
     {
-        self.revealer.record_update(Box::new(f));
+        let mut locked_llapi = self.llapi.lock().unwrap();
+        locked_llapi.record_ctrler.record_update(Box::new(f));
+        drop(locked_llapi);
     }
 }
