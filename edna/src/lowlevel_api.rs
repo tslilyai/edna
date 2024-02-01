@@ -224,7 +224,7 @@ impl LowLevelAPI {
     /*
      * UPDATES STUFF
      */
-    pub fn get_updates_since(&self, t: u64) -> &[Update] {
+    pub fn get_updates_since(&self, t: u64) -> Vec<Update> {
         self.record_ctrler.get_updates_since(t)
     }
 }

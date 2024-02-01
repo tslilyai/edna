@@ -17,7 +17,7 @@ pub struct RevealArgs<'a, Q: Queryable> {
     pub allow_singlecolumn_reveals: bool,
     pub llapi_locked: &'a mut LowLevelAPI,
     pub db: &'a mut Q,
-    pub oldest_t: u64,
+    pub updates: Vec<Update>,
 }
 pub struct Revealer {
     pub llapi: Arc<Mutex<LowLevelAPI>>,
@@ -173,6 +173,7 @@ impl Revealer {
         );
 
         llapi_locked.start_reveal(did);
+        let updates = llapi_locked.get_updates_since(oldest_t);
         let mut reveal_args = RevealArgs {
             timap: timap.clone(),
             pp_gen: &pp_gen,
@@ -184,7 +185,7 @@ impl Revealer {
             allow_singlecolumn_reveals: allow_singlecolumn_reveals,
             llapi_locked: &mut llapi_locked,
             db: db,
-            oldest_t: oldest_t,
+            updates: updates,
         };
 
         // first, reveal any removed principals

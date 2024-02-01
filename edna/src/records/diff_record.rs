@@ -375,14 +375,15 @@ impl EdnaDiffRecord {
         // get updates to apply to old and new values
         let mut new_values = self.new_values.clone();
         let mut old_values = self.old_values.clone();
-        let updates = args.llapi_locked.get_updates_since(args.oldest_t);
-        for up in updates {
-            if up.t < self.t {
+        for up_lock in &args.updates {
+            if up_lock.t < self.t {
                 continue;
             }
-            new_values = (up.upfn)(new_values);
-            old_values = (up.upfn)(old_values);
-            args.timap = up.timap.clone();
+            let up = up_lock.upfn.lock().unwrap();
+            new_values = (up)(new_values);
+            old_values = (up)(old_values);
+            drop(up);
+            args.timap = up_lock.timap.clone();
         }
 
         // all diff records should be restoring something

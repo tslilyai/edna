@@ -1044,13 +1044,13 @@ impl RecordCtrler {
     pub fn record_update(&mut self, f: UpdateFn, timap: HashMap<TableName, TableInfo>) {
         self.updates.push(Update {
             t: self.start_time.elapsed().as_secs(),
-            upfn: Box::new(f),
+            upfn: f.clone(),
             timap: timap,
         });
         // TODO truncate old updates
     }
 
-    pub fn get_updates_since(&self, t: u64) -> &[Update] {
+    pub fn get_updates_since(&self, t: u64) -> Vec<Update> {
         // note that they should already been sorted in ascending order
         let mut i = 0;
         while i < self.updates.len() {
@@ -1060,7 +1060,7 @@ impl RecordCtrler {
             }
             i += 1;
         }
-        return &self.updates[i..];
+        return self.updates[i..].to_vec();
     }
 }
 
