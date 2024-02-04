@@ -606,24 +606,31 @@ impl RecordCtrler {
     }
 
     // forget metadata as soon as all locators are gone.
-    // don't this even for pseudoprincipals; we'll either fail to recorrelate to pseudoprincipal can be restored
-    // from recursive disguising!
+    // don't this even for pseudoprincipals; we'll either fail to recorrelate to
+    // pseudoprincipal can be restored from recursive disguising!
     pub fn mark_principal_to_forget(&mut self, uid: &UID, did: DID) {
         let start = time::Instant::now();
-        let p = self.principal_data.get_mut(uid).unwrap();
-        let precord = new_generic_diff_record_wrapper(
-            self.start_time,
-            uid,
-            did,
-            edna_diff_record_to_bytes(&new_remove_principal_record(&p)),
-        );
-        self.insert_diff_record_wrapper(&precord);
-        self.tmp_remove_principals.insert(uid.to_string());
-        info!(
-            "Edna: mark principal {} to remove : {}",
-            uid,
-            start.elapsed().as_micros()
-        );
+        if let Some(p) = self.principal_data.get_mut(uid) {
+            let precord = new_generic_diff_record_wrapper(
+                self.start_time,
+                uid,
+                did,
+                edna_diff_record_to_bytes(&new_remove_principal_record(&p)),
+            );
+            self.insert_diff_record_wrapper(&precord);
+            self.tmp_remove_principals.insert(uid.to_string());
+            info!(
+                "Edna: mark principal {} to remove : {}",
+                uid,
+                start.elapsed().as_micros()
+            );
+        } else {
+            info!(
+                "Edna: principal {} already removed: {}",
+                uid,
+                start.elapsed().as_micros()
+            );
+        }
     }
 
     /*

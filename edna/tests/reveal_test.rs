@@ -1048,7 +1048,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         assert!(results.len() > 0);
     }
 
-    // moderations still decorrelated
+    // moderations recorrelated
     for u in 1..USER_ITERS + 1 {
         let mut results = vec![];
         let res = db

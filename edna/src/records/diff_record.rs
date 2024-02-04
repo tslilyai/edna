@@ -193,7 +193,7 @@ impl EdnaDiffRecord {
         * Note: we could also transfer the principal's records to the
         * original principal's bag, and reencrypt
 
-        * Note: this will fail if we're one of the modified
+        * Note: this will fail if one of the modified
         * pseudoprincipals happens to be in the speaks-for chain, and
         * is already recorrelated
         */
@@ -377,6 +377,7 @@ impl EdnaDiffRecord {
         let mut old_values = self.old_values.clone();
         for up_lock in &args.updates {
             if up_lock.t < self.t {
+                debug!("Skipping update with time {} before disguise time {}", up_lock.t, self.t);
                 continue;
             }
             let up = up_lock.upfn.lock().unwrap();
@@ -384,6 +385,9 @@ impl EdnaDiffRecord {
             old_values = (up)(old_values);
             drop(up);
         }
+        let mut old_values : HashSet<_> = old_values.iter().cloned().collect();
+        debug!("Updated old values are {:?}", old_values);
+        debug!("Updated new values are {:?}", new_values);
 
         // all diff records should be restoring something
         let res = match self.typ {
@@ -394,14 +398,12 @@ impl EdnaDiffRecord {
                 // remove rows before we reinsert old ones to avoid false
                 // duplicates
                 let mut success = true;
-                let mut old_values: HashSet<TableRow> =
-                    self.old_values.iter().map(|ov| ov.clone()).collect();
                 let mut start = time::Instant::now();
-                success &= self.remove_or_update_rows(&self.new_values, &mut old_values, args)?;
+                success &= self.remove_or_update_rows(&new_values, &mut old_values, args)?;
                 if success {
                     info!(
                         "Removed {} new non-pp rows: {}mus",
-                        self.new_values.len(),
+                        new_values.len(),
                         start.elapsed().as_micros()
                     );
                 } else {
@@ -412,15 +414,32 @@ impl EdnaDiffRecord {
                 }
                 start = time::Instant::now();
                 for ov in &old_values {
-                    success &= self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
-                    if success {
-                        info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
-                    } else {
-                        info!(
-                            "Failed to restore old_value {:?}: {}mus",
-                            ov,
-                            start.elapsed().as_micros()
-                        );
+                    // restore users first
+                    if ov.table == "users" {
+                        success &= self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
+                        if success {
+                            info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
+                        } else {
+                            info!(
+                                "Failed to restore old_value {:?}: {}mus",
+                                ov,
+                                start.elapsed().as_micros()
+                            );
+                        }
+                    }
+                }
+                for ov in &old_values {
+                    if ov.table != "users" {
+                        success &= self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
+                        if success {
+                            info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
+                        } else {
+                            info!(
+                                "Failed to restore old_value {:?}: {}mus",
+                                ov,
+                                start.elapsed().as_micros()
+                            );
+                        }
                     }
                 }
                 Ok(success)
@@ -507,15 +526,20 @@ impl EdnaDiffRecord {
                 continue;
             }
             let selection = format!(
-                "SELECT * FROM {} WHERE {}.{} = {}",
+                "SELECT COUNT(*) FROM {} WHERE {}.{} = {}",
                 fk.to_table,
                 fk.to_table,
                 fk.to_col,
                 helpers::to_mysql_valstr(&curval)
             );
             info!("other fk selection: {}", selection.to_string());
-            let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
-            if selected.is_empty() {
+            let res = args.db.query_iter(selection.clone()).unwrap();
+            let mut count: u64 = 0;
+            for row in res {
+                count = from_value(row.unwrap().unwrap()[0].clone());
+                break;
+            }
+            if count == 0 {
                 warn!(
                     "restore old objs: No entity exists for fk col {} val {}: {}mus",
                     fk.from_col,
@@ -625,7 +649,8 @@ impl EdnaDiffRecord {
                 if nv == iv && ov != nv {
                     updates.push(format!("`{}` = '{}'", rv.column(), rv.value()));
                 } else {
-                    // don't update if the item column is different from the value that we changed it to!
+                    // don't update if the item column is different from the
+                    // value that we changed it to!
                     debug!(
                         "Don't update column {}, nv {}, item v {}, ov {}",
                         rv.column(),

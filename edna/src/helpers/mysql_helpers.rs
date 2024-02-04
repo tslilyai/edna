@@ -1,6 +1,6 @@
 use crate::RowVal;
 use crate::*;
-use log::{info, debug, warn};
+use log::{debug, info, warn};
 use mysql::Opts;
 use std::str::FromStr;
 

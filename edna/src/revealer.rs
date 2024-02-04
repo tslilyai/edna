@@ -39,12 +39,13 @@ impl Revealer {
         dsmap: &HashMap<String, Vec<(String, EdnaDiffRecord)>>,
         args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
+        info!("Revealing remove diffs of table {}", table);
         match dsmap.get(table) {
             Some(ds) => {
                 let mut success = true;
                 for (uid, d) in ds {
                     // don't restore deleted pseudoprincipals that have been recorrelated!
-                    if args.recorrelated_pps.contains(uid) && &d.new_uid == uid {
+                    if args.recorrelated_pps.contains(uid) && table == args.pp_gen.table {
                         info!(
                             "Skipping restoration of deleted recorrelated pp {}, table {}!",
                             uid, table
@@ -231,15 +232,62 @@ impl Revealer {
                 }
             }
         }
-        let mut removed_revealed = HashSet::new();
 
+        // reveal all modify diff records
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == MODIFY {
+                info!("Reversing modify record {:?}\n", dr.record);
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
+                if revealed {
+                    info!("Modify Diff Record revealed!\n");
+                } else {
+                    success = false;
+                    info!("Failed to reveal modify record");
+                }
+            }
+        }
+        
+        // Note: we do restore removed records first because of referential
+        // integrity, which can be violated if we restore decorrelations before
+        // remove. This also means that we violate referential integrity when we
+        // remove before decor.
+        
         // reveal user removed records first for referential integrity
         self.reveal_remove_diffs_of_table(
             &pp_gen.table,
             &remove_diffs_for_table,
             &mut reveal_args,
         )?;
-        removed_revealed.insert(pp_gen.table.clone());
+        // insert all non-user removed records
+        let mut all_tables = remove_diffs_for_table.keys().collect::<HashSet<_>>();
+        all_tables.remove(&pp_gen.table);
+        let all_tables_copy = all_tables.clone();
+        while all_tables.len() > 0 {
+            for table in &all_tables_copy {
+                // need to check that we haven't revealed this table yet
+                if all_tables.contains(table) {
+                    // reveal all referenced tables first
+                    // note: we assume no circularity
+                    let ti = timap.get(&table.to_string()).unwrap();
+                    for fk in &ti.other_fks {
+                        let reftab = &fk.to_table;
+                        // if we haven't revealed the referenced table yet, reveal it!
+                        if all_tables.contains(reftab) {
+                            self.reveal_remove_diffs_of_table(
+                                reftab,
+                                &remove_diffs_for_table,
+                                &mut reveal_args,
+                            )?;
+                            all_tables.remove(reftab);
+                        }
+                    }
+                    // then reveal this one
+                    self.reveal_remove_diffs_of_table(table, &remove_diffs_for_table, &mut reveal_args)?;
+                    all_tables.remove(table);
+                }
+            }
+        }
 
         // revealing in order of disguising: undo all decor
         // but only if we aren't going to do so anyways
@@ -260,45 +308,6 @@ impl Revealer {
             }
         }
 
-        // reveal all modify diff records
-        for dr in &drs {
-            if dr.did == did && dr.record.typ == MODIFY {
-                info!("Reversing modify record {:?}\n", dr.record);
-                reveal_args.uid = dr.uid.clone();
-                let revealed = dr.record.reveal(&mut reveal_args)?;
-                if revealed {
-                    info!("Modify Diff Record revealed!\n");
-                } else {
-                    success = false;
-                    info!("Failed to reveal modify record");
-                }
-            }
-        }
-
-        // insert all non-user removed records
-        for table in remove_diffs_for_table.keys() {
-            if removed_revealed.contains(table) {
-                continue;
-            }
-            // reveal all referenced tables first
-            let ti = timap.get(table).unwrap();
-            for fk in &ti.other_fks {
-                let reftab = &fk.to_table;
-                if removed_revealed.contains(reftab) {
-                    continue;
-                }
-                self.reveal_remove_diffs_of_table(
-                    reftab,
-                    &remove_diffs_for_table,
-                    &mut reveal_args,
-                )?;
-                removed_revealed.insert(reftab.clone());
-            }
-            // then reveal this one
-            self.reveal_remove_diffs_of_table(table, &remove_diffs_for_table, &mut reveal_args)?;
-            removed_revealed.insert(table.clone());
-        }
-
         // reveal (by deleting) new pseudoprincipals
         // note that we do this after recorrelation in case a shared data item
         // introduced a record referring to a pseudoprincipal
@@ -310,7 +319,6 @@ impl Revealer {
         }
         success &= EdnaDiffRecord::reveal_new_pps(&pp_records, &mut reveal_args)?;
 
-        let mut llapi_locked = self.llapi.lock().unwrap();
         llapi_locked.cleanup_records_of_disguise(did, &privkey);
         if !success {
             info!(

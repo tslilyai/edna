@@ -38,7 +38,7 @@ barwidth = 0.15
 # positions
 X = np.arange(2)
 labels = ['Low Load', 'High Load']
-HIGH_LOAD = 20
+HIGH_LOAD = 30
 LOW_LOAD = 2
 TOTAL_TIME = 100000.0
 BUCKET_TIME = 25000
@@ -317,8 +317,8 @@ add_labels((X+2*barwidth),
 ], plt, 'b', offset)
 
 plt.ylabel('Time (sec)')
-plt.ylim(ymin=0, ymax=7500)
-plt.yticks(range(0, 7500, 2000))
+plt.ylim(ymin=0, ymax=10500)
+plt.yticks(range(0, 10500, 2000))
 #plt.tick_params(
 #    axis='x',          # changes apply to the x-axis
 #    which='both',      # both major and minor ticks are affected
