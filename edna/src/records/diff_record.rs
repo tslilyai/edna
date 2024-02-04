@@ -383,7 +383,6 @@ impl EdnaDiffRecord {
             new_values = (up)(new_values);
             old_values = (up)(old_values);
             drop(up);
-            args.timap = up_lock.timap.clone();
         }
 
         // all diff records should be restoring something

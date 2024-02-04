@@ -34,7 +34,6 @@ pub type UpdateFn = Arc<Mutex<dyn Fn(Vec<TableRow>) -> Vec<TableRow> + Send + Sy
 #[derive(Clone)]
 pub struct Update {
     t: u64,
-    timap: HashMap<TableName, TableInfo>,
     upfn: UpdateFn,
 }
 
@@ -422,12 +421,12 @@ impl EdnaClient {
         Ok(())
     }
 
-    pub fn record_update<F>(&mut self, f: F, tinfo: HashMap<TableName, TableInfo>)
+    pub fn record_update<F>(&mut self, f: F)
     where
         F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static + Send + Sync,
     {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.record_ctrler.record_update(Arc::new(Mutex::new(f)), tinfo);
+        locked_llapi.record_ctrler.record_update(Arc::new(Mutex::new(f)));
         drop(locked_llapi);
     }
 }

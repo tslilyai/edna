@@ -2,7 +2,7 @@ use crate::crypto::*;
 use crate::helpers::*;
 use crate::records::*;
 use crate::TableRow;
-use crate::{TableInfo, Update, UpdateFn, DID, UID, TableName};
+use crate::{Update, UpdateFn, DID, UID};
 use crypto_box::{PublicKey, SecretKey};
 use log::{error, info, warn};
 use mysql::prelude::*;
@@ -1041,11 +1041,10 @@ impl RecordCtrler {
         uids
     }
 
-    pub fn record_update(&mut self, f: UpdateFn, timap: HashMap<TableName, TableInfo>) {
+    pub fn record_update(&mut self, f: UpdateFn) {
         self.updates.push(Update {
             t: self.start_time.elapsed().as_secs(),
             upfn: f.clone(),
-            timap: timap,
         });
         // TODO truncate old updates
     }
@@ -1111,7 +1110,7 @@ mod tests {
                 let d = ctrler.start_disguise(Some(u.to_string()));
                 for i in 0..iters {
                     let mut remove_record = new_generic_diff_record_wrapper(
-                        self.start_time,
+                        ctrler.start_time,
                         &u.to_string(),
                         d,
                         edna_diff_record_to_bytes(&new_delete_record(TableRow {
@@ -1143,7 +1142,7 @@ mod tests {
             let (diff_records, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
             assert_eq!(diff_records.len(), (iters as usize));
             for i in 0..iters {
-                let dt = edna_diff_record_from_bytes(&diff_records[i].record_data);
+                let dt = edna_diff_record_from_bytes(&diff_records[i].record_data, 0);
                 let old_val = from_str::<u64>(&dt.old_values[0].row[0].value()).unwrap();
 
                 assert!(old_val < old_fk_value || old_val <= old_fk_value + (iters as u64));
@@ -1181,7 +1180,7 @@ mod tests {
             for i in 1..iters {
                 let d = ctrler.start_disguise(Some(u.to_string()));
                 let remove_record = new_generic_diff_record_wrapper(
-                    self.start_time,
+                    ctrler.start_time,
                     &u.to_string(),
                     d,
                     edna_diff_record_to_bytes(&new_delete_record(TableRow {
@@ -1229,7 +1228,7 @@ mod tests {
             let (diff_records, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
 
             assert_eq!(diff_records.len(), 2); // TODO lily check
-            let dt = edna_diff_record_from_bytes(&diff_records[0].record_data);
+            let dt = edna_diff_record_from_bytes(&diff_records[0].record_data, 0);
             let old_val = from_str::<u64>(&dt.old_values[0].row[0].value()).unwrap();
             assert!(old_val < old_fk_value || old_val <= old_fk_value + (iters as u64));
         }

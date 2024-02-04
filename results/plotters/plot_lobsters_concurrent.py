@@ -38,7 +38,7 @@ barwidth = 0.15
 # positions
 X = np.arange(2)
 labels = ['Low Load', 'High Load']
-HIGH_LOAD = 14
+HIGH_LOAD = 20
 LOW_LOAD = 2
 TOTAL_TIME = 100000.0
 BUCKET_TIME = 25000
