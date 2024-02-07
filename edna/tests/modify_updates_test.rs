@@ -16,10 +16,6 @@ const ANON_JSON: &'static str = include_str!("./disguises/universal_anon_disguis
 const GDPR_JSON: &'static str = include_str!("./disguises/gdpr_disguise.json");
 const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
 
-//const UPDATED_SCHEMA: &'static str = include_str!("./schema_updated.sql");
-const UPDATED_PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen_updated.json");
-const UPDATED_TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info_updated.json");
-
 const USER_ITERS: u64 = 2;
 const NSTORIES: u64 = 2;
 
