@@ -79,8 +79,8 @@ fn apply_update_strings(db: &mut mysql::Conn) {
     let new_rows = update_strings(table_rows);
 
     db.query_drop("DELETE FROM moderations WHERE TRUE").unwrap();
-    db.query_drop("DELETE FROM stories WHERE TRUE");
-    db.query_drop("DELETE FROM users WHERE TRUE");
+    db.query_drop("DELETE FROM stories WHERE TRUE").unwrap();
+    db.query_drop("DELETE FROM users WHERE TRUE").unwrap();
 
     // insert new rows into database
     for table_row in new_rows {
