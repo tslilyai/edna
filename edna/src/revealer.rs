@@ -49,7 +49,7 @@ impl Revealer {
                 let mut success = true;
                 for (uid, d) in ds {
                     // don't restore deleted pseudoprincipals that have been recorrelated!
-                    if args.recorrelated_pps.contains(uid) && &d.new_uid == uid {
+                    if args.recorrelated_pps.contains(uid) && table == args.pp_gen.table {
                         info!(
                             "Skipping restoration of deleted recorrelated pp {}, table {}!",
                             uid, table
