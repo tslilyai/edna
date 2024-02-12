@@ -23,6 +23,7 @@ use structopt::StructOpt;
 mod datagen;
 mod disguises;
 mod queriers;
+mod updates_bench;
 include!("statistics.rs");
 
 const TOTAL_TIME: u128 = 500000;
@@ -87,6 +88,11 @@ fn main() {
     if args.prime {
         // don't run benchmarks if we're just priming
         error!("PRIMING???");
+        return;
+    }
+
+    if args.test == "updates" {
+        updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn);
         return;
     }
 

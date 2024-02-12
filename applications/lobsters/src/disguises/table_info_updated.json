@@ -1,0 +1,300 @@
+{
+    "comments": {
+        "table": "comments",
+        "id_cols": ["id"],
+        "other_fks": [
+            {
+                "to_table": "stories",
+                "to_col": "id",
+                "from_table": "comments",
+                "from_col": "story_id"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "comments",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "hat_requests": {
+        "table": "hat_requests",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "hat_requests",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "hats": {
+        "table": "hats",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "hats",
+                "from_col": "granted_by_user_id"
+            },
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "hats",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "hidden_stories": {
+        "table": "hidden_stories",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "hidden_stories",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "invitations": {
+        "table": "invitations",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "invitations",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "messages": {
+        "table": "messages",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "messages",
+                "from_col": "author_user_id"
+            },
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "messages",
+                "from_col": "recipient_user_id"
+            }
+        ]
+    },
+    "mod_notes": {
+        "table": "mod_notes",
+        "id_cols": ["id"],
+        "other_fks": [
+            {
+                "to_table": "stories",
+                "to_col": "id",
+                "from_table": "mod_notes",
+                "from_col": "story_id"
+            },
+            {
+                "to_table": "comments",
+                "to_col": "id",
+                "from_table": "mod_notes",
+                "from_col": "comment_id"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "mod_notes",
+                "from_col": "moderator_user_id"
+            },
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "mod_notes",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "moderations": {
+        "table": "moderations",
+        "id_cols": ["id"],
+        "other_fks": [
+            {
+                "to_table": "stories",
+                "to_col": "id",
+                "from_table": "moderations",
+                "from_col": "story_id"
+            },
+            {
+                "to_table": "comments",
+                "to_col": "id",
+                "from_table": "moderations",
+                "from_col": "comment_id"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "moderations",
+                "from_col": "moderator_user_id"
+            },
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "moderations",
+                "from_col": "user_id"
+            }
+        ]
+    },
+   "read_ribbons": {
+        "table": "read_ribbons",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "read_ribbons",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "saved_stories": {
+        "table": "saved_stories",
+        "id_cols": ["id"],
+        "other_fks": [],
+          "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "saved_stories",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "stories": {
+        "table": "stories",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "stories",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "suggested_taggings": {
+        "table": "suggested_taggings",
+        "id_cols": ["id"],
+        "other_fks": [
+           {
+                "to_table": "stories",
+                "to_col": "id",
+                "from_table": "suggested_taggings",
+                "from_col": "story_id"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "suggested_taggings",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "suggested_titles": {
+        "table": "suggested_titles",
+        "id_cols": ["id"],
+        "other_fks": [],
+         "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "suggested_titles",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "tag_filters": {
+        "table": "tag_filters",
+        "id_cols": ["id"],
+        "other_fks": [
+            {
+                "to_table": "stories",
+                "to_col": "id",
+                "from_table": "tag_filters",
+                "from_col": "story_id"
+            },
+            {
+                "to_table": "comments",
+                "to_col": "id",
+                "from_table": "tag_filters",
+                "from_col": "comment_id"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "tag_filters",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "users": {
+        "table": "users",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "users",
+                "from_col": "id"
+            }
+        ]
+    },
+    "votes": {
+        "table": "votes",
+        "id_cols": ["id"],
+        "other_fks": [
+            {
+                "to_table": "stories",
+                "to_col": "id",
+                "from_table": "votes",
+                "from_col": "story_id"
+            },
+            {
+                "to_table": "comments",
+                "to_col": "id",
+                "from_table": "votes",
+                "from_col": "comment_id"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "votes",
+                "from_col": "user_id"
+            }
+        ]
+    }
+}
