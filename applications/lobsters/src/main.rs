@@ -92,7 +92,7 @@ fn main() {
     }
 
     if args.test == "updates" {
-        updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn);
+        updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn, nusers);
         return;
     }
 

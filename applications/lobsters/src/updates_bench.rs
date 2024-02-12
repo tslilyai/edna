@@ -16,12 +16,13 @@ pub fn run_updates_test(
     db: &mut mysql::PooledConn,
     num_updates: usize,
     use_txn: bool,
+    nusers: usize,
 ) {
     let overall_start = time::Instant::now();
     let mut delete_durations = vec![];
     let mut restore_durations = vec![];
 
-    let uid = 1; // TODO
+    let uid = nusers; // always test most expensive user
 
     // UNSUB
     let start = time::Instant::now();
