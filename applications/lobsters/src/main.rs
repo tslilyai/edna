@@ -57,8 +57,8 @@ struct Cli {
 fn init_logger() {
     let _ = env_logger::builder()
         // Include all events in tests
-        //.filter_level(log::LevelFilter::Warn)
-        .filter_level(log::LevelFilter::Error)
+        .filter_level(log::LevelFilter::Warn)
+        //.filter_level(log::LevelFilter::Error)
         // Ensure events are captured by `cargo test`
         .is_test(true)
         // Ignore errors initializing the logger if tests race to configure it
@@ -92,7 +92,7 @@ fn main() {
     }
 
     if args.test == "updates" {
-        updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn, nusers);
+        updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn, nusers as usize);
         return;
     }
 

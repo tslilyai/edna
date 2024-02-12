@@ -9,6 +9,18 @@ db=lobsters_edna
 sql=/data/lobsters_edna_messages_and_tags.sql;
 scale=2.75
 
+# UPDATE TEST
+mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+
+RUST_LOG=warn ../../target/release/lobsters \
+    --test 'updates' \
+    --scale $scale \
+    --txn \
+    &> output/updates-txn.out
+    echo "Ran updates test with txn"
+exit
+
 # CONCURRENT TEST
 for u in 2 13; do
 	for d in 'expensive' 'cheap' 'none'; do
