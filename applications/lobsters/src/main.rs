@@ -91,11 +91,6 @@ fn main() {
         return;
     }
 
-    if args.test == "updates" {
-        updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn, nusers as usize);
-        return;
-    }
-
     if args.test.contains("baseline") {
         match args.test.as_str() {
             "baseline_stats" => run_baseline_stats_test(&mut db, &sampler),
@@ -112,6 +107,12 @@ fn main() {
         let user_id = u as u64 + 1;
         edna.register_principal(&user_id.to_string(), user_id.to_string());
     }
+
+    if args.test == "updates" {
+        updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn, nusers as usize);
+        return;
+    }
+
     let mut run_concurrent = false;
     match args.test.as_str() {
         "storage" => run_sizes_test(&mut edna, &sampler),

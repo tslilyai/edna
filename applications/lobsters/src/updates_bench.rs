@@ -18,8 +18,8 @@ pub fn run_updates_test(
     use_txn: bool,
     nusers: usize,
 ) {
-    let overall_start = time::Instant::now();
     let mut delete_durations = vec![];
+    let mut updated_restore_durations = vec![];
     let mut restore_durations = vec![];
 
     let uid = nusers; // always test most expensive user
@@ -37,8 +37,42 @@ pub fn run_updates_test(
             use_txn,
         )
         .unwrap();
-    delete_durations.push((overall_start.elapsed(), start.elapsed()));
-    warn!("Ran unsub: {}", start.elapsed().as_micros());
+    delete_durations.push(start.elapsed());
+    warn!("Ran unsub 1: {}", start.elapsed().as_micros());
+
+    // RESUB
+    let start = time::Instant::now();
+    edna.reveal_disguise(
+        uid.to_string(),
+        did,
+        TABLEINFO_JSON,
+        PPGEN_JSON,
+        Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
+        Some(uid.to_string()),
+        None,
+        use_txn,
+    )
+    .unwrap();
+    restore_durations.push(start.elapsed());
+    warn!("Ran resub no updates: {}", start.elapsed().as_micros());
+
+
+    // UNSUB
+    let start = time::Instant::now();
+    let did = edna
+        .apply_disguise(
+            uid.to_string(),
+            GDPR_JSON,
+            TABLEINFO_JSON,
+            PPGEN_JSON,
+            None, //Some(uid.to_string()),
+            None,
+            use_txn,
+        )
+        .unwrap();
+    delete_durations.push(start.elapsed());
+    warn!("Ran unsub 2: {}", start.elapsed().as_micros());
 
     // apply schema updates!
     apply_updates(db, 0, num_updates);
@@ -63,10 +97,10 @@ pub fn run_updates_test(
         use_txn,
     )
     .unwrap();
-    restore_durations.push((overall_start.elapsed(), start.elapsed()));
-    warn!("Ran resub: {}", start.elapsed().as_micros());
+    updated_restore_durations.push(start.elapsed());
+    warn!("Ran resub updates: {}", start.elapsed().as_micros());
 
-    print_update_stats(&delete_durations, &restore_durations);
+    print_update_stats(&delete_durations, &restore_durations, &updated_restore_durations);
 }
 
 // Update 0: Update all comments to remove all as
@@ -126,14 +160,16 @@ fn update_2(rows: Vec<TableRow>) -> Vec<TableRow> {
             let parent = helpers::get_value_of_col(&row.row, "parent_comment_id").unwrap();
             let id = helpers::get_value_of_col(&row.row, "id").unwrap();
 
-            // note that this assumes usernames are still unique
-            new_rows.push(TableRow {
-                table: "parentcomments".to_string(),
-                row: vec![
-                    RowVal::new("parent_comment_id".to_string(), parent),
-                    RowVal::new("comment_id".to_string(), id),
-                ],
-            });
+            if parent != "NULL" {
+                // note that this assumes usernames are still unique
+                new_rows.push(TableRow {
+                    table: "parentcomments".to_string(),
+                    row: vec![
+                        RowVal::new("parent_comment_id".to_string(), parent),
+                        RowVal::new("comment_id".to_string(), id),
+                    ],
+                });
+            }
 
             // remove parent comment id from comment row
             let comment_row = row
@@ -211,7 +247,7 @@ fn apply_updates(db: &mut mysql::PooledConn, ubegin: usize, uend: usize) {
             let comment = helpers::get_value_of_col(&r.row, "comment").unwrap();
             let id = helpers::get_value_of_col(&r.row, "id").unwrap();
             db.query_drop(format!(
-                "UPDATE comments SET comment = {} WHERE id = {};",
+                "UPDATE comments SET comment = '{}' WHERE id = {};",
                 comment, id
             ))
             .unwrap();
@@ -224,7 +260,7 @@ fn apply_updates(db: &mut mysql::PooledConn, ubegin: usize, uend: usize) {
             let comment = helpers::get_value_of_col(&r.row, "comment").unwrap();
             let id = helpers::get_value_of_col(&r.row, "id").unwrap();
             db.query_drop(format!(
-                "UPDATE comments SET comment = {} WHERE id = {};",
+                "UPDATE comments SET comment = '{}' WHERE id = {};",
                 comment, id
             ))
             .unwrap();
@@ -314,11 +350,12 @@ fn apply_updates(db: &mut mysql::PooledConn, ubegin: usize, uend: usize) {
 }
 
 fn print_update_stats(
-    delete_durations: &Vec<(Duration, Duration)>,
-    restore_durations: &Vec<(Duration, Duration)>,
+    delete_durations: &Vec<Duration>,
+    restore_durations: &Vec<Duration>,
+    updated_restore_durations: &Vec<Duration>,
 ) {
     let filename = format!(
-        "../../results/lobsters_results/update_stats.csv",
+      "../../results/lobsters_results/update_stats.csv",
     );
 
     // print out stats
@@ -335,9 +372,8 @@ fn print_update_stats(
         delete_durations
             .iter()
             .map(|d| format!(
-                "{}:{}",
-                d.0.as_millis().to_string(),
-                d.1.as_micros().to_string()
+                "{}",
+                d.as_micros().to_string()
             ))
             .collect::<Vec<String>>()
             .join(",")
@@ -349,9 +385,21 @@ fn print_update_stats(
         restore_durations
             .iter()
             .map(|d| format!(
-                "{}:{}",
-                d.0.as_millis().to_string(),
-                d.1.as_micros().to_string()
+                "{}",
+                d.as_micros().to_string()
+            ))
+            .collect::<Vec<String>>()
+            .join(",")
+    )
+    .unwrap();
+    writeln!(
+        f,
+        "{}",
+        updated_restore_durations
+            .iter()
+            .map(|d| format!(
+                "{}",
+                d.as_micros().to_string()
             ))
             .collect::<Vec<String>>()
             .join(",")
