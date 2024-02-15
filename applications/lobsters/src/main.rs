@@ -24,6 +24,7 @@ mod datagen;
 mod disguises;
 mod queriers;
 mod updates_bench;
+mod reveal_bench;
 include!("statistics.rs");
 
 const TOTAL_TIME: u128 = 500000;
@@ -110,6 +111,10 @@ fn main() {
 
     if args.test == "updates" {
         updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn, nusers as usize);
+        return;
+    }
+    if args.test == "reveal" {
+        reveal_bench::run_disguise_reveal_test(&mut edna, &mut db, 4, args.use_txn, nusers as usize);
         return;
     }
 

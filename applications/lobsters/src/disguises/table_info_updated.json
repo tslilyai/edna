@@ -1,4 +1,28 @@
 {
+    "parentcomments": {
+        "table": "parentcomments",
+        "id_cols": ["parent_comment_id"],
+        "other_fks": [
+            {
+                "to_table": "comments",
+                "to_col": "id",
+                "from_table": "parentcomments",
+                "from_col": "comment_id"
+            }
+        ]
+    },
+    "commentblobs": {
+        "table": "commentblobs",
+        "id_cols": ["id"],
+        "other_fks": [
+            {
+                "to_table": "comments",
+                "to_col": "id",
+                "from_table": "commentblobs",
+                "from_col": "id"
+            }
+        ]
+    },
     "comments": {
         "table": "comments",
         "id_cols": ["id"],

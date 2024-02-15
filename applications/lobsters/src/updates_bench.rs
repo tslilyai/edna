@@ -171,15 +171,15 @@ fn update_2(rows: Vec<TableRow>) -> Vec<TableRow> {
                 });
             }
 
-            // remove parent comment id from comment row
+            // remove parent comment id from comment row, also remove any null columns
             let comment_row = row
                 .row
                 .clone()
                 .into_iter()
-                .filter(|rv| &rv.column() == "parent_comment_id")
+                .filter(|rv| &rv.column() != "parent_comment_id" && rv.value() != "NULL")
                 .collect::<Vec<RowVal>>();
             new_rows.push(TableRow {
-                table: "comment".to_string(),
+                table: "comments".to_string(),
                 row: comment_row,
             });
         } else {
@@ -206,7 +206,7 @@ fn update_3(rows: Vec<TableRow>) -> Vec<TableRow> {
             });
 
             // remove comment blob from comment row
-            let comment_row = row
+            let comment_row : Vec<_> = row
                 .row
                 .clone()
                 .iter()
@@ -219,11 +219,13 @@ fn update_3(rows: Vec<TableRow>) -> Vec<TableRow> {
                 })
                 .collect();
             new_rows.push(TableRow {
-                table: "comment".to_string(),
-                row: comment_row,
+                table: "comments".to_string(),
+                row: comment_row.clone(),
             });
+            warn!("comment row update 3: {:?}", comment_row);
         } else {
             new_rows.push(row.clone());
+            warn!("comment row nonupdated: {:?}", row);
         }
     }
     new_rows
@@ -310,15 +312,18 @@ fn apply_updates(db: &mut mysql::PooledConn, ubegin: usize, uend: usize) {
     if 3 >= ubegin && 3 < uend {
         // Update 3: Update all comments to have parent comment id table
         db.query_drop("DELETE FROM comments WHERE TRUE").unwrap();
-        db.query_drop("ALTER TABLE comments ALTER COLUMN comments int unsigned")
+        db.query_drop("ALTER TABLE comments DROP COLUMN comment")
+            .unwrap();
+        db.query_drop("ALTER TABLE comments ADD COLUMN comment int")
             .unwrap();
         db.query_drop(format!(
-            r"CREATE TABLE `commentblobs` (`comment` int, `id` int NOT NULL);"
+            r"CREATE TABLE `commentblobs` (`comment` mediumblob, `id` int NOT NULL);"
         ))
         .unwrap();
 
         table_rows = update_3(table_rows);
         for table_row in &table_rows {
+            warn!("Table row update 3 is {:?}", &table_row);
             helpers::query_drop(
                 &format!(
                     "INSERT INTO {} ({}) VALUES ({})",
