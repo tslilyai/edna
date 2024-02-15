@@ -9,7 +9,8 @@
                 "from_table": "parentcomments",
                 "from_col": "comment_id"
             }
-        ]
+        ],
+        "owner_fks": []
     },
     "commentblobs": {
         "table": "commentblobs",
@@ -21,7 +22,8 @@
                 "from_table": "commentblobs",
                 "from_col": "id"
             }
-        ]
+        ],
+        "owner_fks": []
     },
     "comments": {
         "table": "comments",
