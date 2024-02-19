@@ -1,7 +1,7 @@
 use edna::{helpers, EdnaClient, RowVal, TableRow};
 use log::warn;
 use mysql::prelude::*;
-use std::fs::{OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::str::FromStr;
 use std::time;
@@ -57,7 +57,6 @@ pub fn run_updates_test(
     restore_durations.push(start.elapsed());
     warn!("Ran resub no updates: {}", start.elapsed().as_micros());
 
-
     // UNSUB
     let start = time::Instant::now();
     let did = edna
@@ -76,7 +75,7 @@ pub fn run_updates_test(
 
     // apply schema updates!
     apply_updates(db, 0, num_updates);
-    
+
     // record one-by-one, so they count as separate updates in Edna
     edna.record_update(update_0);
     edna.record_update(update_1);
@@ -100,7 +99,11 @@ pub fn run_updates_test(
     updated_restore_durations.push(start.elapsed());
     warn!("Ran resub updates: {}", start.elapsed().as_micros());
 
-    print_update_stats(&delete_durations, &restore_durations, &updated_restore_durations);
+    print_update_stats(
+        &delete_durations,
+        &restore_durations,
+        &updated_restore_durations,
+    );
 }
 
 // Update 0: Update all comments to remove all as
@@ -200,13 +203,13 @@ fn update_3(rows: Vec<TableRow>) -> Vec<TableRow> {
             new_rows.push(TableRow {
                 table: "commentblobs".to_string(),
                 row: vec![
-                    RowVal::new("id".to_string(), id.clone()),
                     RowVal::new("comment".to_string(), comment),
+                    RowVal::new("id".to_string(), id.clone()),
                 ],
             });
 
             // remove comment blob from comment row
-            let comment_row : Vec<_> = row
+            let comment_row: Vec<_> = row
                 .row
                 .clone()
                 .iter()
@@ -359,9 +362,7 @@ fn print_update_stats(
     restore_durations: &Vec<Duration>,
     updated_restore_durations: &Vec<Duration>,
 ) {
-    let filename = format!(
-      "../../results/lobsters_results/update_stats.csv",
-    );
+    let filename = format!("../../results/lobsters_results/update_stats.csv",);
 
     // print out stats
     let mut f = OpenOptions::new()
@@ -376,10 +377,7 @@ fn print_update_stats(
         "{}",
         delete_durations
             .iter()
-            .map(|d| format!(
-                "{}",
-                d.as_micros().to_string()
-            ))
+            .map(|d| format!("{}", d.as_micros().to_string()))
             .collect::<Vec<String>>()
             .join(",")
     )
@@ -389,10 +387,7 @@ fn print_update_stats(
         "{}",
         restore_durations
             .iter()
-            .map(|d| format!(
-                "{}",
-                d.as_micros().to_string()
-            ))
+            .map(|d| format!("{}", d.as_micros().to_string()))
             .collect::<Vec<String>>()
             .join(",")
     )
@@ -402,10 +397,7 @@ fn print_update_stats(
         "{}",
         updated_restore_durations
             .iter()
-            .map(|d| format!(
-                "{}",
-                d.as_micros().to_string()
-            ))
+            .map(|d| format!("{}", d.as_micros().to_string()))
             .collect::<Vec<String>>()
             .join(",")
     )
