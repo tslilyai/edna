@@ -271,6 +271,9 @@ impl EdnaDiffRecord {
             if child_table == &args.pp_gen.table {
                 continue;
             }
+            if tinfo.owner_fks.len() == 0 {
+                continue;
+            }
             // get count of children SO WE DON'T UPDATE if we don't need
             // to (select is cheaper!)
             let start = time::Instant::now();
