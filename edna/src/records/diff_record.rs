@@ -227,6 +227,9 @@ impl EdnaDiffRecord {
             }
             pps_to_delete.push(r.new_uid.clone());
         }
+        if pps_to_delete.len() == 0 {
+            return Ok(true)
+        }
         let all_pp_select = if pps_to_delete.len() == 1 {
             format!("= {}", pps_to_delete[0])
         } else {
@@ -283,6 +286,7 @@ impl EdnaDiffRecord {
             };
 
             let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, all_select);
+            warn!("Check count of pseudoprincipals {}", checkstmt);
             let res = args.db.query_iter(checkstmt.clone()).unwrap();
             let mut count: u64 = 0;
             for row in res {
@@ -290,8 +294,7 @@ impl EdnaDiffRecord {
                 break;
             }
             warn!(
-                "Check count of pseudoprincipals {}: {}mus",
-                checkstmt,
+                "Check count of pseudoprincipals: {}mus",
                 start.elapsed().as_micros()
             );
             if count == 0 {
@@ -455,6 +458,9 @@ impl EdnaDiffRecord {
         tinfo: &TableInfo,
         db: &mut Q,
     ) -> Result<u64, mysql::Error> {
+        if tinfo.owner_fks.len() == 0 {
+            return Ok(0)
+        }
         let fnstart = time::Instant::now();
         let selection = tinfo
             .owner_fks
