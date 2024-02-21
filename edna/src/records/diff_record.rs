@@ -294,7 +294,7 @@ impl EdnaDiffRecord {
             };
 
             let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, all_select);
-            warn!("Check count of pseudoprincipals {}", checkstmt);
+            //warn!("Check count of pseudoprincipals {}", checkstmt);
             let res = args.db.query_iter(checkstmt.clone()).unwrap();
             let mut count: u64 = 0;
             for row in res {

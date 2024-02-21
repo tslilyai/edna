@@ -1,5 +1,5 @@
 use crate::*;
-use log::{debug, info, warn};
+use log::{info, warn};
 use mysql::Opts;
 use std::str::FromStr;
 
@@ -197,9 +197,12 @@ pub fn init_db(in_memory: bool, user: &str, pass: &str, host: &str, dbname: &str
  ************************************/
 pub fn query_drop<Q: Queryable>(q: &str, conn: &mut Q) -> Result<(), mysql::Error> {
     let start = time::Instant::now();
-    debug!("query_drop: {}", q);
     conn.query_drop(q)?;
-    warn!("query_drop: {}: {}mus\n", q, start.elapsed().as_micros());
+    warn!(
+        "query_drop: {}: {}mus\n",
+        q[..100].to_string(),
+        start.elapsed().as_micros()
+    );
     Ok(())
 }
 
