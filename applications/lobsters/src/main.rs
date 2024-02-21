@@ -22,9 +22,10 @@ use structopt::StructOpt;
 
 mod datagen;
 mod disguises;
+mod migrations;
 mod queriers;
-mod updates_bench;
 mod reveal_bench;
+mod updates_bench;
 include!("statistics.rs");
 
 const TOTAL_TIME: u128 = 500000;
@@ -108,13 +109,12 @@ fn main() {
         let user_id = u as u64 + 1;
         edna.register_principal(&user_id.to_string(), user_id.to_string());
     }
-
     if args.test == "updates" {
-        updates_bench::run_updates_test(&mut edna, &mut db, 4, args.use_txn, nusers as usize);
+        updates_bench::run_updates_test(&mut edna, &mut db, args.use_txn, nusers as usize);
         return;
     }
     if args.test == "reveal" {
-        reveal_bench::run_disguise_reveal_test(&mut edna, &mut db, 4, args.use_txn, nusers as usize);
+        reveal_bench::run_disguise_reveal_test(&mut edna, &mut db, args.use_txn, nusers as usize);
         return;
     }
 

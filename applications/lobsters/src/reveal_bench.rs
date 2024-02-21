@@ -1,20 +1,17 @@
-use edna::{helpers, EdnaClient, RowVal, TableRow};
+use edna::EdnaClient;
 use log::warn;
-use mysql::prelude::*;
-use std::fs::{OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
-use std::str::FromStr;
 use std::time;
 use std::time::Duration;
 
-const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info_updated.json");
-const PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen_updated.json");
+const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
+const PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen.json");
 const GDPR_JSON: &'static str = include_str!("./disguises/gdpr_disguise.json");
 
 pub fn run_disguise_reveal_test(
     edna: &mut EdnaClient,
-    db: &mut mysql::PooledConn,
-    num_updates: usize,
+    _db: &mut mysql::PooledConn,
     use_txn: bool,
     nusers: usize,
 ) {
@@ -55,16 +52,11 @@ pub fn run_disguise_reveal_test(
     .unwrap();
     restore_durations.push(start.elapsed());
     warn!("Ran resub no updates: {}", start.elapsed().as_micros());
-    print_update_stats(&delete_durations, &restore_durations);
+    print_stats(&delete_durations, &restore_durations);
 }
 
-fn print_update_stats(
-    delete_durations: &Vec<Duration>,
-    restore_durations: &Vec<Duration>,
-) {
-    let filename = format!(
-      "../../results/lobsters_results/update_stats.csv",
-    );
+fn print_stats(delete_durations: &Vec<Duration>, restore_durations: &Vec<Duration>) {
+    let filename = format!("../../results/lobsters_results/update_stats.csv",);
 
     // print out stats
     let mut f = OpenOptions::new()
@@ -79,10 +71,7 @@ fn print_update_stats(
         "{}",
         delete_durations
             .iter()
-            .map(|d| format!(
-                "{}",
-                d.as_micros().to_string()
-            ))
+            .map(|d| format!("{}", d.as_micros().to_string()))
             .collect::<Vec<String>>()
             .join(",")
     )
@@ -92,10 +81,7 @@ fn print_update_stats(
         "{}",
         restore_durations
             .iter()
-            .map(|d| format!(
-                "{}",
-                d.as_micros().to_string()
-            ))
+            .map(|d| format!("{}", d.as_micros().to_string()))
             .collect::<Vec<String>>()
             .join(",")
     )

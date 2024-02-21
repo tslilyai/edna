@@ -1,4 +1,3 @@
-use crate::RowVal;
 use crate::*;
 use log::{debug, info, warn};
 use mysql::Opts;
@@ -232,6 +231,43 @@ pub fn get_query_rows_str_txn(
             .collect();
         rows.push(vals);
     }
+    Ok(rows)
+}
+
+pub fn get_query_tablerows_str(
+    table: &str,
+    qstr: &str,
+    conn: &mut mysql::PooledConn,
+) -> Result<Vec<TableRow>, mysql::Error> {
+    let start = time::Instant::now();
+    info!("get_query_rows: {}\n", qstr);
+
+    let mut rows = vec![];
+    let res = conn.query_iter(qstr)?;
+    let cols: Vec<String> = res
+        .columns()
+        .as_ref()
+        .iter()
+        .map(|c| c.name_str().to_string())
+        .collect();
+
+    for row in res {
+        let rowvals = row.unwrap().unwrap();
+        let mut i = 0;
+        let vals: Vec<RowVal> = rowvals
+            .iter()
+            .map(|v| {
+                let index = i;
+                i += 1;
+                RowVal::new(cols[index].clone(), mysql_val_to_string(v))
+            })
+            .collect();
+        rows.push(TableRow {
+            table: table.to_string(),
+            row: vals,
+        });
+    }
+    warn!("{}: {}mus", qstr, start.elapsed().as_micros());
     Ok(rows)
 }
 
