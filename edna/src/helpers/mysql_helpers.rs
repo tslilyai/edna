@@ -240,7 +240,7 @@ pub fn get_query_tablerows_str(
     conn: &mut mysql::PooledConn,
 ) -> Result<Vec<TableRow>, mysql::Error> {
     let start = time::Instant::now();
-    info!("get_query_rows: {}\n", qstr);
+    //info!("get_query_rows: {}\n", qstr);
 
     let mut rows = vec![];
     let res = conn.query_iter(qstr)?;

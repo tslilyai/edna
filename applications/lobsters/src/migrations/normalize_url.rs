@@ -2,19 +2,23 @@
 
 use edna::{helpers, RowVal, TableRow};
 use log::warn;
-use mysql::prelude::*;
+use std::time;
 use url::Url;
 use urlnorm::UrlNormalizer;
 
 pub fn apply(db: &mut mysql::PooledConn) {
-    db.query_drop("ALTER TABLE stories ADD COLUMN normalized_url varchar(250) AFTER url")
-        .unwrap();
+    let start = time::Instant::now();
+    helpers::query_drop(
+        "ALTER TABLE stories ADD COLUMN normalized_url varchar(250) AFTER url",
+        db,
+    )
+    .unwrap();
     let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
     if stories.len() == 0 {
         return;
     }
     let new_rows = update(stories);
-    db.query_drop("DELETE FROM stories WHERE true").unwrap();
+    helpers::query_drop("DELETE FROM stories WHERE true", db).unwrap();
     let cols: Vec<String> = new_rows[0]
         .row
         .iter()
@@ -44,15 +48,20 @@ pub fn apply(db: &mut mysql::PooledConn) {
         all_stories.push(format!("({})", vals.join(",")));
     }
 
-    db.query_drop(format!(
-        "INSERT INTO stories ({}) VALUES {}",
-        colstr,
-        all_stories.join(","),
-    ))
+    helpers::query_drop(
+        &format!(
+            "INSERT INTO stories ({}) VALUES {}",
+            colstr,
+            all_stories.join(","),
+        ),
+        db,
+    )
     .unwrap();
+    warn!("normalize_url apply: {}mus", start.elapsed().as_micros());
 }
 
 pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
+    let start = time::Instant::now();
     let norm = UrlNormalizer::default();
     let mut new_rows = vec![];
     for row in rows {
@@ -62,7 +71,7 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
                 new_rows.push(row.clone());
                 continue;
             }
-            warn!("Url is {}", url);
+            //warn!("Url is {}", url);
             let url = match Url::parse(&url) {
                 Ok(u) => u,
                 Err(_) => Url::parse(&format!("http://www.{}.com", url)).unwrap(),
@@ -88,5 +97,6 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
             new_rows.push(row.clone());
         }
     }
+    warn!("normalize_url update: {}mus", start.elapsed().as_micros());
     new_rows
 }

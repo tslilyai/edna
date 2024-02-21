@@ -76,6 +76,10 @@ pub fn run_updates_test(
     normalize_url::apply(db);
     addusersettingshowemail::apply(db);
     story_text::apply(db);
+    warn!(
+        "apply all normalize url schema update: {}mus",
+        start.elapsed().as_micros()
+    );
 
     // record one-by-one, so they count as separate updates in Edna
     edna.record_update(normalize_url::update);

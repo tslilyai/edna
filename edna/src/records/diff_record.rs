@@ -75,7 +75,7 @@ pub fn diff_record_to_bytes(record: &DiffRecordWrapper) -> Vec<u8> {
     bincode::serialize(record).unwrap()
 }
 pub fn edna_diff_record_from_bytes(bytes: &Vec<u8>, t: u64) -> EdnaDiffRecord {
-    let mut rec : EdnaDiffRecord = bincode::deserialize(bytes).unwrap();
+    let mut rec: EdnaDiffRecord = bincode::deserialize(bytes).unwrap();
     rec.t = t;
     rec
 }
@@ -84,7 +84,12 @@ pub fn edna_diff_record_to_bytes(record: &EdnaDiffRecord) -> Vec<u8> {
 }
 
 // create diff record for generic data
-pub fn new_generic_diff_record_wrapper(start_time: time::Instant, uid: &UID, did: DID, data: Vec<u8>) -> DiffRecordWrapper {
+pub fn new_generic_diff_record_wrapper(
+    start_time: time::Instant,
+    uid: &UID,
+    did: DID,
+    data: Vec<u8>,
+) -> DiffRecordWrapper {
     let mut record: DiffRecordWrapper = Default::default();
     record.nonce = thread_rng().gen();
     record.t = start_time.elapsed().as_secs();
@@ -228,7 +233,7 @@ impl EdnaDiffRecord {
             pps_to_delete.push(r.new_uid.clone());
         }
         if pps_to_delete.len() == 0 {
-            return Ok(true)
+            return Ok(true);
         }
         let all_pp_select = if pps_to_delete.len() == 1 {
             format!("= {}", pps_to_delete[0])
@@ -383,15 +388,23 @@ impl EdnaDiffRecord {
         let mut old_values = self.old_values.clone();
         for up_lock in &args.updates {
             if up_lock.t < self.t {
-                debug!("Skipping update with time {} before disguise time {}", up_lock.t, self.t);
+                debug!(
+                    "Skipping update with time {} before disguise time {}",
+                    up_lock.t, self.t
+                );
                 continue;
             }
+            let start = time::Instant::now();
             let up = up_lock.upfn.lock().unwrap();
             new_values = (up)(new_values);
             old_values = (up)(old_values);
+            warn!(
+                "reveal diff record apply updates to vals: {}mus",
+                start.elapsed().as_micros()
+            );
             drop(up);
         }
-        let mut old_values : HashSet<_> = old_values.iter().cloned().collect();
+        let mut old_values: HashSet<_> = old_values.iter().cloned().collect();
         debug!("Updated old values are {:?}", old_values);
         debug!("Updated new values are {:?}", new_values);
 
@@ -422,7 +435,8 @@ impl EdnaDiffRecord {
                 for ov in &old_values {
                     // restore users first
                     if ov.table == "users" {
-                        success &= self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
+                        success &=
+                            self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
                         if success {
                             info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
                         } else {
@@ -436,7 +450,8 @@ impl EdnaDiffRecord {
                 }
                 for ov in &old_values {
                     if ov.table != "users" {
-                        success &= self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
+                        success &=
+                            self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
                         if success {
                             info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
                         } else {
@@ -462,7 +477,7 @@ impl EdnaDiffRecord {
         db: &mut Q,
     ) -> Result<u64, mysql::Error> {
         if tinfo.owner_fks.len() == 0 {
-            return Ok(0)
+            return Ok(0);
         }
         let fnstart = time::Instant::now();
         let selection = tinfo

@@ -1,12 +1,12 @@
 use edna::{helpers, RowVal, TableRow};
-//use log::warn;
-use mysql::prelude::*;
+use log::warn;
+use std::time;
 
 pub fn apply(db: &mut mysql::PooledConn) {
-    db.query_drop("create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime)").unwrap();
+    let start = time::Instant::now();
+    helpers::query_drop("create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime)", db).unwrap();
     let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
-    db.query_drop("ALTER TABLE stories DROP COLUMN story_cache")
-        .unwrap();
+    helpers::query_drop("ALTER TABLE stories DROP COLUMN story_cache", db).unwrap();
     if stories.len() == 0 {
         return;
     }
@@ -49,9 +49,11 @@ pub fn apply(db: &mut mysql::PooledConn) {
         db,
     )
     .unwrap();
+    warn!("story_text apply: {}mus", start.elapsed().as_micros());
 }
 
 pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
+    let start = time::Instant::now();
     let mut new_rows = vec![];
     for row in rows {
         if row.table == "stories" {
@@ -74,5 +76,6 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
             new_rows.push(row.clone());
         }
     }
+    warn!("story_text update: {}mus", start.elapsed().as_micros());
     new_rows
 }
