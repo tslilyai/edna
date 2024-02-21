@@ -54,7 +54,7 @@ pub fn apply(db: &mut mysql::PooledConn) {
 pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
     let mut new_rows = vec![];
     for row in rows {
-        if row.table == "story" {
+        if row.table == "stories" {
             let id = helpers::get_value_of_col(&row.row, "id").unwrap();
             let description = helpers::get_value_of_col(&row.row, "description").unwrap();
             let title = helpers::get_value_of_col(&row.row, "title").unwrap();
