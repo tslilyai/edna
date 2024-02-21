@@ -31,7 +31,7 @@
         "Timestamp",
         "Timestamp",
         "RandEmail",
-        {"Bool": 0},
+        {"Bool": False},
         "Timestamp"
     ]
 }
