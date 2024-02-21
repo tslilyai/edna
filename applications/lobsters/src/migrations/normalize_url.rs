@@ -63,7 +63,10 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
                 continue;
             }
             warn!("Url is {}", url);
-            let url = Url::parse(&url).unwrap();
+            let url = match Url::parse(&url) {
+                Ok(u) => u,
+                Err(_) => Url::parse(&format!("http://www.{}.com", url)).unwrap(),
+            };
             let normalized_url = norm.compute_normalization_string(&url);
             let story_row: Vec<_> = row
                 .row
