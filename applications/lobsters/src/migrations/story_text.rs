@@ -3,7 +3,7 @@ use edna::{helpers, RowVal, TableRow};
 use mysql::prelude::*;
 
 pub fn apply(db: &mut mysql::PooledConn) {
-    db.query_drop("create table story_texts (`title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime)").unwrap();
+    db.query_drop("create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime)").unwrap();
     let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
     db.query_drop("ALTER TABLE stories DROP COLUMN story_cache")
         .unwrap();
@@ -59,7 +59,7 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
 
             // note that this assumes usernames are still unique
             new_rows.push(TableRow {
-                table: "parentcomments".to_string(),
+                table: "story_texts".to_string(),
                 row: vec![
                     RowVal::new("id".to_string(), id),
                     RowVal::new("title".to_string(), title),
