@@ -1,7 +1,7 @@
 //https://github.com/lobsters/lobsters/blob/ab604bcb1aa594458b6769469cd3289a9aa7e1f3/db/migrate/20230828195756_normalize_url.rb
 
 use edna::{helpers, RowVal, TableRow};
-//use log::warn;
+use log::warn;
 use mysql::prelude::*;
 use url::Url;
 use urlnorm::UrlNormalizer;
@@ -62,6 +62,7 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
                 new_rows.push(row.clone());
                 continue;
             }
+            warn!("Url is {}", url);
             let url = Url::parse(&url).unwrap();
             let normalized_url = norm.compute_normalization_string(&url);
             let story_row: Vec<_> = row
