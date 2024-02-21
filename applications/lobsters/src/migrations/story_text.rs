@@ -40,11 +40,14 @@ pub fn apply(db: &mut mysql::PooledConn) {
         all_stories.push(format!("({})", vals.join(",")));
     }
 
-    db.query_drop(format!(
-        "INSERT INTO story_texts ({}) VALUES {}",
-        colstr,
-        all_stories.join(","),
-    ))
+    helpers::query_drop(
+        &format!(
+            "INSERT INTO story_texts ({}) VALUES {}",
+            colstr,
+            all_stories.join(","),
+        ),
+        db,
+    )
     .unwrap();
 }
 
