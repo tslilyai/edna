@@ -1,0 +1,75 @@
+use edna::{helpers, RowVal, TableRow};
+//use log::warn;
+use mysql::prelude::*;
+
+pub fn apply(db: &mut mysql::PooledConn) {
+    db.query_drop("create table story_texts (`title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime)").unwrap();
+    let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
+    db.query_drop("ALTER TABLE stories DROP COLUMN story_cache")
+        .unwrap();
+    if stories.len() == 0 {
+        return;
+    }
+    let new_rows = update(stories);
+    let cols: Vec<String> = new_rows[0]
+        .row
+        .iter()
+        .map(|rv| rv.column().clone())
+        .collect();
+    let colstr = cols.join(",");
+    let mut all_stories = vec![];
+    for s in new_rows {
+        let vals: Vec<String> = s
+            .row
+            .iter()
+            .map(|rv| {
+                if rv.value().is_empty() {
+                    "\"\"".to_string()
+                } else if rv.value() == "NULL" {
+                    "NULL".to_string()
+                } else {
+                    for c in rv.value().chars() {
+                        if !c.is_numeric() {
+                            return format!("\"{}\"", rv.value().clone());
+                        }
+                    }
+                    rv.value().clone()
+                }
+            })
+            .collect();
+        all_stories.push(format!("({})", vals.join(",")));
+    }
+
+    db.query_drop(format!(
+        "INSERT INTO story_texts ({}) VALUES {}",
+        colstr,
+        all_stories.join(","),
+    ))
+    .unwrap();
+}
+
+pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
+    let mut new_rows = vec![];
+    for row in rows {
+        if row.table == "story" {
+            let id = helpers::get_value_of_col(&row.row, "id").unwrap();
+            let description = helpers::get_value_of_col(&row.row, "description").unwrap();
+            let title = helpers::get_value_of_col(&row.row, "title").unwrap();
+            let body = helpers::get_value_of_col(&row.row, "story_cache").unwrap();
+
+            // note that this assumes usernames are still unique
+            new_rows.push(TableRow {
+                table: "parentcomments".to_string(),
+                row: vec![
+                    RowVal::new("id".to_string(), id),
+                    RowVal::new("title".to_string(), title),
+                    RowVal::new("description".to_string(), description),
+                    RowVal::new("body".to_string(), body),
+                ],
+            });
+        } else {
+            new_rows.push(row.clone());
+        }
+    }
+    new_rows
+}

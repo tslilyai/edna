@@ -225,6 +225,19 @@
             }
         ]
     },
+    "story_texts": {
+        "table": "story_texts",
+        "id_cols": ["id"],
+        "other_fks": [
+            {
+                "to_table": "stories",
+                "to_col": "id",
+                "from_table": "story_texts",
+                "from_col": "id"
+            }
+        ],
+        "owner_fks": []
+    },
     "suggested_taggings": {
         "table": "suggested_taggings",
         "id_cols": ["id"],
