@@ -75,10 +75,12 @@ pub fn run_updates_test(
     // apply schema updates!
     normalize_url::apply(db);
     addusersettingshowemail::apply(db);
+    parent_comment_id_table::apply(db);
 
     // record one-by-one, so they count as separate updates in Edna
     edna.record_update(normalize_url::update);
     edna.record_update(addusersettingshowemail::update);
+    edna.record_update(parent_comment_id_table::update);
 
     // RESUB
     let start = time::Instant::now();
