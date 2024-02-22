@@ -4,8 +4,7 @@ use std::time;
 
 pub fn apply(db: &mut mysql::PooledConn) {
     let start = time::Instant::now();
-    helpers::query_drop("create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime, 
-    INDEX `index_id`  (`story_id`)", db).unwrap();
+    helpers::query_drop("create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime, INDEX `index_id` (`id`)", db).unwrap();
     let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
     if stories.len() == 0 {
         return;
