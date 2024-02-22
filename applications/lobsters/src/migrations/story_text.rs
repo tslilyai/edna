@@ -18,25 +18,27 @@ pub fn apply(db: &mut mysql::PooledConn) {
     let colstr = cols.join(",");
     let mut all_stories = vec![];
     for s in new_rows {
-        let vals: Vec<String> = s
-            .row
-            .iter()
-            .map(|rv| {
-                if rv.value().is_empty() {
-                    "\"\"".to_string()
-                } else if rv.value() == "NULL" {
-                    "NULL".to_string()
-                } else {
-                    for c in rv.value().chars() {
-                        if !c.is_numeric() {
-                            return format!("\"{}\"", rv.value().clone());
+        if s.table == "story_texts" {
+            let vals: Vec<String> = s
+                .row
+                .iter()
+                .map(|rv| {
+                    if rv.value().is_empty() {
+                        "\"\"".to_string()
+                    } else if rv.value() == "NULL" {
+                        "NULL".to_string()
+                    } else {
+                        for c in rv.value().chars() {
+                            if !c.is_numeric() {
+                                return format!("\"{}\"", rv.value().clone());
+                            }
                         }
+                        rv.value().clone()
                     }
-                    rv.value().clone()
-                }
-            })
-            .collect();
-        all_stories.push(format!("({})", vals.join(",")));
+                })
+                .collect();
+            all_stories.push(format!("({})", vals.join(",")));
+        }
     }
 
     helpers::query_drop(
