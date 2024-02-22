@@ -51,6 +51,7 @@ pub fn run_updates_test(
 
     let mut user_stories = 0;
     let mut user_comments = 0;
+    let mut story_count = 0;
     let res = db
         .query_iter(format!(
             r"SELECT COUNT(*) FROM stories WHERE user_id={};",
@@ -72,6 +73,11 @@ pub fn run_updates_test(
         let vals = row.unwrap().unwrap();
         assert_eq!(vals.len(), 1);
         user_comments = helpers::mysql_val_to_u64(&vals[0]).unwrap();
+    }
+    let res = db.query_iter(r"SELECT COUNT(*) FROM stories").unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        story_count = helpers::mysql_val_to_u64(&vals[0]).unwrap();
     }
 
     // UNSUB
@@ -140,16 +146,13 @@ pub fn run_updates_test(
     edna.record_update(addusersettingshowemail::update);
     edna.record_update(story_text::update);
 
-    // check state of db
-    check_counts(user_stories, user_comments, db, uid);
-    let res = db
-        .query_iter(format!(r"SELECT COUNT(*) FROM story_texts JOIN stories on story_texts.id = stories.id WHERE stories.user_id = {};", uid))
-        .unwrap();
+    let mut story_text_count = 0;
+    let res = db.query_iter(r"SELECT COUNT(*) FROM story_texts").unwrap();
     for row in res {
         let vals = row.unwrap().unwrap();
-        assert_eq!(vals.len(), 1);
-        assert_eq!(user_stories, helpers::mysql_val_to_u64(&vals[0]).unwrap());
+        story_text_count = helpers::mysql_val_to_u64(&vals[0]).unwrap();
     }
+    assert_eq!(story_text_count, story_count);
 
     // RESUB
     let start = time::Instant::now();
@@ -178,6 +181,14 @@ pub fn run_updates_test(
         assert_eq!(vals.len(), 1);
         assert_eq!(user_stories, helpers::mysql_val_to_u64(&vals[0]).unwrap());
     }
+    let mut story_text_count = 0;
+    let res = db.query_iter(r"SELECT COUNT(*) FROM story_texts").unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        story_text_count = helpers::mysql_val_to_u64(&vals[0]).unwrap();
+    }
+    assert_eq!(story_text_count, story_count);
+
     print_update_stats(
         &delete_durations,
         &restore_durations,
