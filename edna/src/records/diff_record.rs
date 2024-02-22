@@ -552,10 +552,12 @@ impl EdnaDiffRecord {
                         item_selection
                     );
                     restore_or_update = RestoreOrUpdate::UPDATE;
+                    Some(is[0].clone())
+                } else {
+                    None
                 }
-                is[0].clone()
             }
-            Some(is) => is,
+            Some(_) => item_selected,
         };
 
         // CHECK 2: Referential integrity to non-owners
@@ -671,14 +673,7 @@ impl EdnaDiffRecord {
             // or we had an old value with an existing item in the database that
             // we want to see if we can update
             let new_value = new_value.unwrap_or(old_value);
-            if is.len() < 1 {
-                warn!(
-                    "restore old objs: no item to update {}mus",
-                    fnstart.elapsed().as_micros()
-                );
-                return Ok(false);
-            }
-            let item = &is;
+            let item = &is.unwrap();
             let mut updates = vec![];
             for (ix, rv) in old_value_row.iter().enumerate() {
                 assert_eq!(rv.column(), item[ix].column());
