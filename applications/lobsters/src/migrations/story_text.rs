@@ -4,9 +4,9 @@ use std::time;
 
 pub fn apply(db: &mut mysql::PooledConn) {
     let start = time::Instant::now();
-    helpers::query_drop("create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime, UNIQUE INDEX `index_id`  (`id`))", db).unwrap();
+    helpers::query_drop("create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime, 
+    INDEX `index_id`  (`story_id`)", db).unwrap();
     let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
-    helpers::query_drop("ALTER TABLE stories DROP COLUMN story_cache", db).unwrap();
     if stories.len() == 0 {
         return;
     }
@@ -49,6 +49,7 @@ pub fn apply(db: &mut mysql::PooledConn) {
         db,
     )
     .unwrap();
+    helpers::query_drop("ALTER TABLE stories DROP COLUMN story_cache", db).unwrap();
     warn!("story_text apply: {}mus", start.elapsed().as_micros());
 }
 
@@ -71,6 +72,15 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
                     RowVal::new("description".to_string(), description),
                     RowVal::new("body".to_string(), body),
                 ],
+            });
+            new_rows.push(TableRow {
+                table: "stories".to_string(),
+                row: row
+                    .row
+                    .iter()
+                    .cloned()
+                    .filter(|x| x.column() != "story_cache")
+                    .collect(),
             });
         } else {
             new_rows.push(row.clone());
