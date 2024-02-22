@@ -12,13 +12,21 @@ scale=2.75
 # UPDATE TEST
 mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
 mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
-
-RUST_LOG=warn ../../target/release/lobsters \
+RUST_BACKTRACE=1 RUST_LOG=warn ../../target/release/lobsters \
     --test 'updates' \
     --scale $scale \
     --txn \
     &> output/updates-txn.out
-    echo "Ran updates test with txn"
+echo "Ran updates test with txn"
+
+ mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+RUST_BACKTRACE=1 RUST_LOG=warn ../../target/release/lobsters \
+    --test 'reveal' \
+    --scale $scale \
+    --txn \
+    &> output/updates-txn.out
+echo "Ran updates test with txn"
 exit
 
 # CONCURRENT TEST

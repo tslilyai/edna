@@ -24,7 +24,6 @@ mod datagen;
 mod disguises;
 mod migrations;
 mod queriers;
-mod reveal_bench;
 mod updates_bench;
 include!("statistics.rs");
 
@@ -114,7 +113,7 @@ fn main() {
         return;
     }
     if args.test == "reveal" {
-        reveal_bench::run_disguise_reveal_test(&mut edna, &mut db, args.use_txn, nusers as usize);
+        updates_bench::run_simple_reveal(&mut edna, &mut db, args.use_txn, nusers as usize);
         return;
     }
 
