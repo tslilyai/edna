@@ -1,6 +1,7 @@
 use crate::migrations::*;
-use edna::EdnaClient;
+use edna::{helpers, EdnaClient};
 use log::warn;
+use mysql::prelude::*;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::time;
@@ -13,6 +14,31 @@ const PPGEN_JSON_UPDATED: &'static str = include_str!("./migrations/pp_gen_updat
 
 const GDPR_JSON: &'static str = include_str!("./disguises/gdpr_disguise.json");
 
+fn check_counts(user_stories: u64, user_comments: u64, db: &mut mysql::PooledConn, uid: usize) {
+    let res = db
+        .query_iter(format!(
+            r"SELECT COUNT(*) FROM stories WHERE user_id={};",
+            uid
+        ))
+        .unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        assert_eq!(vals.len(), 1);
+        assert_eq!(user_stories, helpers::mysql_val_to_u64(&vals[0]).unwrap());
+    }
+    let res = db
+        .query_iter(format!(
+            r"SELECT COUNT(*) FROM comments WHERE user_id={};",
+            uid
+        ))
+        .unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        assert_eq!(vals.len(), 1);
+        assert_eq!(user_comments, helpers::mysql_val_to_u64(&vals[0]).unwrap());
+    }
+}
+
 pub fn run_updates_test(
     edna: &mut EdnaClient,
     db: &mut mysql::PooledConn,
@@ -22,6 +48,31 @@ pub fn run_updates_test(
     let mut delete_durations = vec![];
     let mut updated_restore_durations = vec![];
     let mut restore_durations = vec![];
+
+    let mut user_stories = 0;
+    let mut user_comments = 0;
+    let res = db
+        .query_iter(format!(
+            r"SELECT COUNT(*) FROM stories WHERE user_id={};",
+            uid
+        ))
+        .unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        assert_eq!(vals.len(), 1);
+        user_stories = helpers::mysql_val_to_u64(&vals[0]).unwrap();
+    }
+    let res = db
+        .query_iter(format!(
+            r"SELECT COUNT(*) FROM comments WHERE user_id={};",
+            uid
+        ))
+        .unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        assert_eq!(vals.len(), 1);
+        user_comments = helpers::mysql_val_to_u64(&vals[0]).unwrap();
+    }
 
     // UNSUB
     let start = time::Instant::now();
@@ -56,6 +107,9 @@ pub fn run_updates_test(
     restore_durations.push(start.elapsed());
     warn!("Ran resub no updates: {}", start.elapsed().as_micros());
 
+    // check state of db
+    check_counts(user_stories, user_comments, db, uid);
+
     // UNSUB
     let start = time::Instant::now();
     let did = edna
@@ -86,6 +140,17 @@ pub fn run_updates_test(
     edna.record_update(addusersettingshowemail::update);
     edna.record_update(story_text::update);
 
+    // check state of db
+    check_counts(user_stories, user_comments, db, uid);
+    let res = db
+        .query_iter(format!(r"SELECT COUNT(*) FROM story_texts JOIN stories on story_texts.id = stories.id WHERE stories.user_id = {};", uid))
+        .unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        assert_eq!(vals.len(), 1);
+        assert_eq!(user_stories, helpers::mysql_val_to_u64(&vals[0]).unwrap());
+    }
+
     // RESUB
     let start = time::Instant::now();
     edna.reveal_disguise(
@@ -103,6 +168,16 @@ pub fn run_updates_test(
     updated_restore_durations.push(start.elapsed());
     warn!("Ran resub updates: {}", start.elapsed().as_micros());
 
+    // check state of db
+    check_counts(user_stories, user_comments, db, uid);
+    let res = db
+        .query_iter(format!(r"SELECT COUNT(*) FROM story_texts JOIN stories on story_texts.id = stories.id WHERE stories.user_id = {};", uid))
+        .unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        assert_eq!(vals.len(), 1);
+        assert_eq!(user_stories, helpers::mysql_val_to_u64(&vals[0]).unwrap());
+    }
     print_update_stats(
         &delete_durations,
         &restore_durations,
