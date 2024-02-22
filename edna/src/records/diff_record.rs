@@ -435,8 +435,13 @@ impl EdnaDiffRecord {
                 for ov in &old_values {
                     // restore users first
                     if ov.table == "users" {
-                        success &=
-                            self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
+                        success &= self.restore_old_value(
+                            None,
+                            &ov,
+                            RestoreOrUpdate::RESTORE,
+                            None,
+                            args,
+                        )?;
                         if success {
                             info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
                         } else {
@@ -450,8 +455,13 @@ impl EdnaDiffRecord {
                 }
                 for ov in &old_values {
                     if ov.table != "users" {
-                        success &=
-                            self.restore_old_value(None, &ov, RestoreOrUpdate::RESTORE, args)?;
+                        success &= self.restore_old_value(
+                            None,
+                            &ov,
+                            RestoreOrUpdate::RESTORE,
+                            None,
+                            args,
+                        )?;
                         if success {
                             info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
                         } else {
@@ -513,6 +523,7 @@ impl EdnaDiffRecord {
         new_value: Option<&TableRow>,
         old_value: &TableRow,
         restore_or_update: RestoreOrUpdate,
+        item_selected: Option<Vec<RowVal>>,
         args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
         let fnstart = time::Instant::now();
@@ -525,20 +536,27 @@ impl EdnaDiffRecord {
         let table_info = args.timap.get(table).unwrap();
         let ids = helpers::get_ids(&table_info.id_cols, &old_value_row);
         let item_selection = helpers::get_select_of_ids_str(&ids);
-        let item_selected = helpers::get_query_rows_str_q::<Q>(
-            &helpers::str_select_statement(table, table, &item_selection.to_string()),
-            args.db,
-        )?;
-        info!("restore old objs: going to restore {:?}", old_value_row);
 
-        // CHECK 1: If we're going to restore, don't reinsert if the item already exists
-        if restore_or_update == RestoreOrUpdate::RESTORE && !item_selected.is_empty() {
-            info!(
-                "restore old objs: found objects for {}, going to update instead!",
-                item_selection
-            );
-            restore_or_update = RestoreOrUpdate::UPDATE;
-        }
+        let is = match item_selected {
+            None => {
+                let is = helpers::get_query_rows_str_q::<Q>(
+                    &helpers::str_select_statement(table, table, &item_selection.to_string()),
+                    args.db,
+                )?;
+                info!("restore old objs: going to restore {:?}", old_value_row);
+
+                // CHECK 1: If we're going to restore, don't reinsert if the item already exists
+                if restore_or_update == RestoreOrUpdate::RESTORE && !is.is_empty() {
+                    info!(
+                        "restore old objs: found objects for {}, going to update instead!",
+                        item_selection
+                    );
+                    restore_or_update = RestoreOrUpdate::UPDATE;
+                }
+                is[0].clone()
+            }
+            Some(is) => is,
+        };
 
         // CHECK 2: Referential integrity to non-owners
         for fk in &table_info.other_fks {
@@ -653,14 +671,14 @@ impl EdnaDiffRecord {
             // or we had an old value with an existing item in the database that
             // we want to see if we can update
             let new_value = new_value.unwrap_or(old_value);
-            if item_selected.len() < 1 {
+            if is.len() < 1 {
                 warn!(
                     "restore old objs: no item to update {}mus",
                     fnstart.elapsed().as_micros()
                 );
                 return Ok(false);
             }
-            let item = &item_selected[0];
+            let item = &is;
             let mut updates = vec![];
             for (ix, rv) in old_value_row.iter().enumerate() {
                 assert_eq!(rv.column(), item[ix].column());
@@ -759,6 +777,7 @@ impl EdnaDiffRecord {
                         Some(new_value),
                         &ov,
                         RestoreOrUpdate::UPDATE,
+                        Some(selected[0].clone()),
                         args,
                     )? {
                         old_values.remove(&ov);
