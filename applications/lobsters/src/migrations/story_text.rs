@@ -51,6 +51,9 @@ pub fn apply(db: &mut mysql::PooledConn) {
     )
     .unwrap();
     helpers::query_drop("ALTER TABLE stories DROP COLUMN story_cache", db).unwrap();
+    helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
+    helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
+
     warn!("story_text apply: {}mus", start.elapsed().as_micros());
 }
 

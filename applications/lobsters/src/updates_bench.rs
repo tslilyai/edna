@@ -181,7 +181,6 @@ pub fn run_updates_test(
         "apply all schema updates: {}mus",
         start.elapsed().as_micros()
     );
-
     sleep(Duration::from_secs(10));
 
     // record one-by-one, so they count as separate updates in Edna
