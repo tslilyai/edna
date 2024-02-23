@@ -87,6 +87,7 @@ pub fn run_simple_reveal(
     helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
     helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
     sleep(Duration::from_secs(30));
+    helpers::query_drop("UPDATE stories SET url = 'newurl' WHERE user_id=10", db).unwrap();
 
     // RESUB
     let start = time::Instant::now();
@@ -199,6 +200,7 @@ pub fn run_updates_test(
         story_text_count = helpers::mysql_val_to_u64(&vals[0]).unwrap();
     }
     assert_eq!(story_text_count, story_count);
+    helpers::query_drop("UPDATE stories SET url = 'newurl' WHERE user_id=10", db).unwrap();
 
     // RESUB
     let start = time::Instant::now();

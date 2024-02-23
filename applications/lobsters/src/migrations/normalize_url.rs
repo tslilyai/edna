@@ -18,15 +18,25 @@ pub fn apply(db: &mut mysql::PooledConn) {
         return;
     }
     let new_rows = update(stories);
-    let cols: Vec<String> = new_rows[0]
+    /*let cols: Vec<String> = new_rows[0]
         .row
         .iter()
         .map(|rv| rv.column().clone())
         .collect();
     let colstr = cols.join(",");
-    let mut all_stories = vec![];
+    let mut all_stories = vec![];*/
     for s in new_rows {
-        let vals: Vec<String> = s
+        let norm = helpers::get_value_of_col(&s.row, "normalized_url").unwrap();
+        let id = helpers::get_value_of_col(&s.row, "id").unwrap();
+        helpers::query_drop(
+            &format!(
+                "UPDATE stories SET `normalized_url` = {} WHERE id = {}",
+                norm, id
+            ),
+            db,
+        )
+        .unwrap();
+        /*let vals: Vec<String> = s
             .row
             .iter()
             .map(|rv| {
@@ -44,9 +54,9 @@ pub fn apply(db: &mut mysql::PooledConn) {
                 }
             })
             .collect();
-        all_stories.push(format!("({})", vals.join(",")));
+        all_stories.push(format!("({})", vals.join(",")));*/
     }
-    helpers::query_drop(
+    /*helpers::query_drop(
         &format!(
             "INSERT INTO stories ({}) VALUES {}",
             colstr,
@@ -54,7 +64,7 @@ pub fn apply(db: &mut mysql::PooledConn) {
         ),
         db,
     )
-    .unwrap();
+    .unwrap();*/
     warn!("normalize_url apply: {}mus", start.elapsed().as_micros());
 }
 
