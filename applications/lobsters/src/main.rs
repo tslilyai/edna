@@ -109,11 +109,11 @@ fn main() {
         edna.register_principal(&user_id.to_string(), user_id.to_string());
     }
     if args.test == "updates" {
-        updates_bench::run_updates_test(&mut edna, &mut db, args.use_txn, nusers as usize);
+        updates_bench::run_updates_test(&mut edna, &mut db, args.use_txn, 10 as usize);
         return;
     }
     if args.test == "reveal" {
-        updates_bench::run_simple_reveal(&mut edna, &mut db, args.use_txn, nusers as usize);
+        updates_bench::run_simple_reveal(&mut edna, &mut db, args.use_txn, 10 as usize);
         return;
     }
 
