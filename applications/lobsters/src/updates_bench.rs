@@ -84,6 +84,10 @@ pub fn run_simple_reveal(
         )
         .unwrap();
 
+    helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
+    helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
+    sleep(Duration::from_secs(30));
+
     // RESUB
     let start = time::Instant::now();
     edna.reveal_disguise(
@@ -181,7 +185,7 @@ pub fn run_updates_test(
         "apply all schema updates: {}mus",
         start.elapsed().as_micros()
     );
-    sleep(Duration::from_secs(10));
+    sleep(Duration::from_secs(30));
 
     // record one-by-one, so they count as separate updates in Edna
     edna.record_update(normalize_url::update);
