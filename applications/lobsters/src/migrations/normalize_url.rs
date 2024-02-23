@@ -18,7 +18,6 @@ pub fn apply(db: &mut mysql::PooledConn) {
         return;
     }
     let new_rows = update(stories);
-    helpers::query_drop("DELETE FROM stories WHERE true", db).unwrap();
     let cols: Vec<String> = new_rows[0]
         .row
         .iter()
@@ -47,7 +46,6 @@ pub fn apply(db: &mut mysql::PooledConn) {
             .collect();
         all_stories.push(format!("({})", vals.join(",")));
     }
-
     helpers::query_drop(
         &format!(
             "INSERT INTO stories ({}) VALUES {}",

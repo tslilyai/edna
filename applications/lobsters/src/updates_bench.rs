@@ -178,7 +178,7 @@ pub fn run_updates_test(
 
     // apply schema updates!
     let start = time::Instant::now();
-    normalize_url::apply(db);
+    //normalize_url::apply(db);
     addusersettingshowemail::apply(db);
     story_text::apply(db);
     warn!(
@@ -188,7 +188,7 @@ pub fn run_updates_test(
     sleep(Duration::from_secs(30));
 
     // record one-by-one, so they count as separate updates in Edna
-    edna.record_update(normalize_url::update);
+    //edna.record_update(normalize_url::update);
     edna.record_update(addusersettingshowemail::update);
     edna.record_update(story_text::update);
 
@@ -215,7 +215,7 @@ pub fn run_updates_test(
     )
     .unwrap();
     let elapsed = start.elapsed();
-    warn!("Ran resub updates: {}", start.elapsed().as_micros());
+    warn!("Ran resub updates: {}", elapsed.as_micros());
 
     // check state of db
     check_counts(user_stories, user_comments, db, uid);
