@@ -13,16 +13,16 @@ scale=2.75
 mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
 mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
 RUST_BACKTRACE=1 RUST_LOG=warn ../../target/release/lobsters \
-    --test 'updates' \
+    --test 'reveal' \
     --scale $scale \
     --txn \
-    &> output/updates-txn.out
-echo "Ran updates test with txn"
+    &> output/reveal-txn.out
+echo "Ran reveal test with txn"
 
- mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
 mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
 RUST_BACKTRACE=1 RUST_LOG=warn ../../target/release/lobsters \
-    --test 'reveal' \
+    --test 'updates' \
     --scale $scale \
     --txn \
     &> output/updates-txn.out

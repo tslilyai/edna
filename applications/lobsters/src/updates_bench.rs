@@ -4,7 +4,9 @@ use log::warn;
 use mysql::prelude::*;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::thread::sleep;
 use std::time;
+use std::time::Duration;
 
 const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
 const PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen.json");
@@ -176,9 +178,11 @@ pub fn run_updates_test(
     addusersettingshowemail::apply(db);
     story_text::apply(db);
     warn!(
-        "apply all normalize url schema update: {}mus",
+        "apply all schema updates: {}mus",
         start.elapsed().as_micros()
     );
+
+    sleep(Duration::from_secs(10));
 
     // record one-by-one, so they count as separate updates in Edna
     edna.record_update(normalize_url::update);
