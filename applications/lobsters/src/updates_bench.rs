@@ -40,6 +40,54 @@ fn check_counts(user_stories: u64, user_comments: u64, db: &mut mysql::PooledCon
     }
 }
 
+pub fn run_mysql_migrations(db: &mut mysql::PooledConn, uid: usize) {
+    let mut user_stories = 0;
+    let mut user_comments = 0;
+    let res = db
+        .query_iter(format!(
+            r"SELECT COUNT(*) FROM stories WHERE user_id={};",
+            uid
+        ))
+        .unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        assert_eq!(vals.len(), 1);
+        user_stories = helpers::mysql_val_to_u64(&vals[0]).unwrap();
+    }
+    let res = db
+        .query_iter(format!(
+            r"SELECT COUNT(*) FROM comments WHERE user_id={};",
+            uid
+        ))
+        .unwrap();
+    for row in res {
+        let vals = row.unwrap().unwrap();
+        assert_eq!(vals.len(), 1);
+        user_comments = helpers::mysql_val_to_u64(&vals[0]).unwrap();
+    }
+    warn!(
+        "User {} has {} stories and {} comments",
+        uid, user_stories, user_comments
+    );
+    helpers::query_drop(
+        "UPDATE stories SET user_id = 291940682 WHERE user_id IN (10, 15, 20)",
+        db,
+    )
+    .unwrap();
+
+    normalize_url::apply(db);
+    addusersettingshowemail::apply(db);
+    story_text::apply(db);
+    helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
+    helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
+
+    helpers::query_drop(
+        "UPDATE stories SET user_id = 10 WHERE user_id IN (291940682, 128390290, 210948569)",
+        db,
+    )
+    .unwrap();
+}
+
 pub fn run_simple_reveal(
     edna: &mut EdnaClient,
     db: &mut mysql::PooledConn,
@@ -178,7 +226,7 @@ pub fn run_updates_test(
 
     // apply schema updates!
     let start = time::Instant::now();
-    //normalize_url::apply(db);
+    normalize_url::apply(db);
     addusersettingshowemail::apply(db);
     story_text::apply(db);
     warn!(

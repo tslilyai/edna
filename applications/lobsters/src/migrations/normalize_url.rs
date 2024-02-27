@@ -4,6 +4,7 @@ use edna::{helpers, RowVal, TableRow};
 use log::warn;
 use std::time;
 use url::Url;
+use mysql::prelude::*;
 use urlnorm::UrlNormalizer;
 
 pub fn apply(db: &mut mysql::PooledConn) {
@@ -28,12 +29,12 @@ pub fn apply(db: &mut mysql::PooledConn) {
     for s in new_rows {
         let norm = helpers::get_value_of_col(&s.row, "normalized_url").unwrap();
         let id = helpers::get_value_of_col(&s.row, "id").unwrap();
-        helpers::query_drop(
+        db.query_drop(
             &format!(
                 "UPDATE stories SET `normalized_url` = {} WHERE id = {}",
                 norm, id
             ),
-            db,
+            //db,
         )
         .unwrap();
         /*let vals: Vec<String> = s

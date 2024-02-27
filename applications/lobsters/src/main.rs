@@ -109,7 +109,8 @@ fn main() {
         edna.register_principal(&user_id.to_string(), user_id.to_string());
     }
     if args.test == "updates" {
-        updates_bench::run_updates_test(&mut edna, &mut db, args.use_txn, 10 as usize);
+        updates_bench::run_mysql_migrations(&mut db, 10 as usize);
+        //updates_bench::run_updates_test(&mut edna, &mut db, args.use_txn, 10 as usize);
         return;
     }
     if args.test == "reveal" {
