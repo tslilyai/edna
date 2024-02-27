@@ -5,7 +5,7 @@ use std::time;
 pub fn apply(db: &mut mysql::PooledConn) {
     let start = time::Instant::now();
     helpers::query_drop(
-        "create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext) AS (SELECT id, description, title, `story_cache` FROM stories",
+        "create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext) AS (SELECT id, description, title, `story_cache` FROM stories)",
         db,
     )
     .unwrap();
