@@ -10,13 +10,11 @@ pub fn apply(db: &mut mysql::PooledConn) {
     )
     .unwrap();
     helpers::query_drop("create index `index_id` on story_texts (`id`)", db).unwrap();
-
-    //(`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime, INDEX `index_id` (`id`))", db).unwrap();
-    let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
+    /*let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
     if stories.len() == 0 {
         return;
     }
-    /*let new_rows = update(stories);
+    let new_rows = update(stories);
     let cols: Vec<String> = new_rows[0]
         .row
         .iter()
@@ -58,7 +56,7 @@ pub fn apply(db: &mut mysql::PooledConn) {
     )
     .unwrap();*/
     helpers::query_drop("ALTER TABLE stories DROP COLUMN story_cache", db).unwrap();
-    //helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
+    helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
     //helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
 
     warn!("story_text apply: {}mus", start.elapsed().as_micros());
