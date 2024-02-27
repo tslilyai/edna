@@ -76,10 +76,10 @@ pub fn run_mysql_migrations(db: &mut mysql::PooledConn, uid: usize) {
     .unwrap();
 
     normalize_url::apply(db);
-    addusersettingshowemail::apply(db);
-    story_text::apply(db);
-    helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
-    helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
+    //addusersettingshowemail::apply(db);
+    //story_text::apply(db);
+    //helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
+    //helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
 
     helpers::query_drop(
         "UPDATE stories SET user_id = 10 WHERE user_id IN (291940682, 128390290, 210948569)",
