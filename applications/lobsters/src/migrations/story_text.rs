@@ -4,12 +4,19 @@ use std::time;
 
 pub fn apply(db: &mut mysql::PooledConn) {
     let start = time::Instant::now();
-    helpers::query_drop("create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime, INDEX `index_id` (`id`))", db).unwrap();
+    helpers::query_drop(
+        "create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext) AS (SELECT id, description, title, `story_cache` FROM stories",
+        db,
+    )
+    .unwrap();
+    helpers::query_drop("create index `index_id` on story_texts (`id`)", db).unwrap();
+
+    //(`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext, `created_at` datetime, INDEX `index_id` (`id`))", db).unwrap();
     let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
     if stories.len() == 0 {
         return;
     }
-    let new_rows = update(stories);
+    /*let new_rows = update(stories);
     let cols: Vec<String> = new_rows[0]
         .row
         .iter()
@@ -49,10 +56,10 @@ pub fn apply(db: &mut mysql::PooledConn) {
         ),
         db,
     )
-    .unwrap();
+    .unwrap();*/
     helpers::query_drop("ALTER TABLE stories DROP COLUMN story_cache", db).unwrap();
-    helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
-    helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
+    //helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
+    //helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
 
     warn!("story_text apply: {}mus", start.elapsed().as_micros());
 }
@@ -67,7 +74,6 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
             let title = helpers::get_value_of_col(&row.row, "title").unwrap();
             let body = helpers::get_value_of_col(&row.row, "story_cache").unwrap();
 
-            // note that this assumes usernames are still unique
             new_rows.push(TableRow {
                 table: "story_texts".to_string(),
                 row: vec![

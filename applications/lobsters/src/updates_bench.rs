@@ -75,9 +75,9 @@ pub fn run_mysql_migrations(db: &mut mysql::PooledConn, uid: usize) {
     )
     .unwrap();
 
-    normalize_url::apply(db);
+    //normalize_url::apply(db);
     //addusersettingshowemail::apply(db);
-    //story_text::apply(db);
+    story_text::apply(db);
     //helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
     //helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
 
