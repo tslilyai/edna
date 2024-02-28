@@ -10,55 +10,12 @@ pub fn apply(db: &mut mysql::PooledConn) {
     )
     .unwrap();
     helpers::query_drop("create index `index_id` on story_texts (`id`)", db).unwrap();
-    /*let stories = helpers::get_query_tablerows_str("stories", "SELECT * FROM stories", db).unwrap();
-    if stories.len() == 0 {
-        return;
-    }
-    let new_rows = update(stories);
-    let cols: Vec<String> = new_rows[0]
-        .row
-        .iter()
-        .map(|rv| rv.column().clone())
-        .collect();
-    let colstr = cols.join(",");
-    let mut all_stories = vec![];
-    for s in new_rows {
-        if s.table == "story_texts" {
-            let vals: Vec<String> = s
-                .row
-                .iter()
-                .map(|rv| {
-                    if rv.value().is_empty() {
-                        "\"\"".to_string()
-                    } else if rv.value() == "NULL" {
-                        "NULL".to_string()
-                    } else {
-                        for c in rv.value().chars() {
-                            if !c.is_numeric() {
-                                return format!("\"{}\"", rv.value().clone());
-                            }
-                        }
-                        rv.value().clone()
-                    }
-                })
-                .collect();
-            all_stories.push(format!("({})", vals.join(",")));
-        }
-    }
-
-    helpers::query_drop(
-        &format!(
-            "INSERT INTO story_texts ({}) VALUES {}",
-            colstr,
-            all_stories.join(","),
-        ),
-        db,
-    )
-    .unwrap();*/
-    helpers::query_drop("ALTER TABLE stories DROP COLUMN story_cache", db).unwrap();
-    helpers::query_drop("OPTIMIZE TABLE stories", db).unwrap();
-    //helpers::query_drop("OPTIMIZE TABLE story_texts", db).unwrap();
-
+    helpers::query_drop("create table storiesNew like stories", db).unwrap();
+    helpers::query_drop("alter table storiesNew drop column `story_cache`", db).unwrap();
+    helpers::query_drop("insert into storiesNew (`id`,`created_at`,`user_id`,`url`,`title`,`description`,`short_id`,`is_expired`,`upvotes`,`downvotes`,`is_moderated`,`hotness`,`markeddown_description`,`comments_count`,`merged_story_id`,`unavailable_at`,`twitter_id`,`user_is_author`) SELECT 
+`id`,`created_at`,`user_id`,`url`,`title`,`description`,`short_id`,`is_expired`,`upvotes`,`downvotes`,`is_moderated`,`hotness`,`markeddown_description`,`comments_count`,`merged_story_id`,`unavailable_at`,`twitter_id`,`user_is_author` from stories;", db).unwrap();
+    helpers::query_drop("DROP TABLE stories", db).unwrap();
+    helpers::query_drop("RENAME TABLE storiesNew to stories", db).unwrap();
     warn!("story_text apply: {}mus", start.elapsed().as_micros());
 }
 

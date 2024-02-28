@@ -675,13 +675,14 @@ impl EdnaDiffRecord {
             let new_value = new_value.unwrap_or(old_value);
             let item = &is.unwrap();
             let mut updates = vec![];
-            for (ix, rv) in old_value_row.iter().enumerate() {
-                assert_eq!(rv.column(), item[ix].column());
-                assert_eq!(rv.column(), new_value.row[ix].column());
+            for rv in old_value_row {
+                let col = rv.column();
+                let iv_orig = helpers::get_value_of_col(&item, &col).unwrap();
+                let nv_orig = helpers::get_value_of_col(&new_value.row, &col).unwrap();
                 // compare the stripped versions
                 let ov = rv.value().replace("\'", "");
-                let iv = item[ix].value().replace("\'", "");
-                let nv = new_value.row[ix].value().replace("\'", "");
+                let iv = iv_orig.replace("\'", "");
+                let nv = nv_orig.replace("\'", "");
 
                 if nv == iv && ov != nv {
                     updates.push(format!("`{}` = '{}'", rv.column(), rv.value()));
