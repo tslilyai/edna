@@ -75,15 +75,14 @@ pub fn run_mysql_migrations(db: &mut mysql::PooledConn, uid: usize) {
     )
     .unwrap();
 
-    //normalize_url::apply(db);
-    //addusersettingshowemail::apply(db);
+    normalize_url::apply(db);
+    addusersettingshowemail::apply(db);
     story_text::apply(db);
     helpers::query_drop(
         "UPDATE stories SET user_id = 10 WHERE user_id = 291940682",
         db,
     )
     .unwrap();
-
 }
 
 pub fn run_simple_reveal(
@@ -153,7 +152,7 @@ pub fn run_simple_reveal(
     // check state of db
     check_counts(user_stories, user_comments, db, uid);
 
-    let filename = format!("../../results/lobsters_results/reveal_stats.csv",);
+    let filename = format!("../../results/lobsters_results/reveal_stats_{}.csv", uid);
     // print out stats
     let mut f = OpenOptions::new()
         .create(true)
@@ -234,7 +233,7 @@ pub fn run_updates_test(
     sleep(Duration::from_secs(30));
 
     // record one-by-one, so they count as separate updates in Edna
-    //edna.record_update(normalize_url::update);
+    edna.record_update(normalize_url::update);
     edna.record_update(addusersettingshowemail::update);
     edna.record_update(story_text::update);
 
@@ -281,7 +280,7 @@ pub fn run_updates_test(
     }
     assert_eq!(story_text_count, story_count);
 
-    let filename = format!("../../results/lobsters_results/update_stats.csv",);
+    let filename = format!("../../results/lobsters_results/update_stats_{}.csv", uid);
     // print out stats
     let mut f = OpenOptions::new()
         .create(true)

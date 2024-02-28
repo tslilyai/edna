@@ -16,19 +16,39 @@ RUST_BACKTRACE=1 RUST_LOG=warn ../../target/release/lobsters \
     --test 'migrations' \
     --scale $scale \
     --txn \
-    &> output/migrations-txn.out
+    --uid 15921 \
+    &> output/migrations-exp.out
 echo "Ran reveal test with txn"
-exit
 
 mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
 mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
-RUST_BACKTRACE=1 RUST_LOG=warn ../../target/release/lobsters \
+RUST_LOG=error ../../target/release/lobsters \
+    --test 'reveal' \
+    --scale $scale \
+    --txn \
+    --uid 15921  \
+    &> output/reveal-txn-exp.out
+echo "Ran updates test with txn"
+
+mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+RUST_LOG=error ../../target/release/lobsters \
     --test 'updates' \
     --scale $scale \
     --txn \
-    &> output/updates-txn.out
+    --uid 10 \
+    &> output/updates-txn-cheap.out
 echo "Ran updates test with txn"
-exit
+
+mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+RUST_LOG=error ../../target/release/lobsters \
+    --test 'reveal' \
+    --scale $scale \
+    --txn \
+    --uid 10 \
+    &> output/reveal-txn-cheap.out
+echo "Ran updates test with txn"
 
 # CONCURRENT TEST
 for u in 2 13; do

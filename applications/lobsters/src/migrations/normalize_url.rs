@@ -31,41 +31,12 @@ pub fn apply(db: &mut mysql::PooledConn) {
         let id = helpers::get_value_of_col(&s.row, "id").unwrap();
         db.query_drop(
             &format!(
-                "UPDATE stories SET `normalized_url` = {} WHERE id = {}",
+                "UPDATE stories SET `normalized_url` = '{}' WHERE id = {}",
                 norm, id
             ),
-            //db,
         )
         .unwrap();
-        /*let vals: Vec<String> = s
-            .row
-            .iter()
-            .map(|rv| {
-                if rv.value().is_empty() {
-                    "\"\"".to_string()
-                } else if rv.value() == "NULL" {
-                    "NULL".to_string()
-                } else {
-                    for c in rv.value().chars() {
-                        if !c.is_numeric() {
-                            return format!("\"{}\"", rv.value().clone());
-                        }
-                    }
-                    rv.value().clone()
-                }
-            })
-            .collect();
-        all_stories.push(format!("({})", vals.join(",")));*/
     }
-    /*helpers::query_drop(
-        &format!(
-            "INSERT INTO stories ({}) VALUES {}",
-            colstr,
-            all_stories.join(","),
-        ),
-        db,
-    )
-    .unwrap();*/
     warn!("normalize_url apply: {}mus", start.elapsed().as_micros());
 }
 

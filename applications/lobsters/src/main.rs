@@ -53,6 +53,8 @@ struct Cli {
     use_txn: bool,
     #[structopt(long = "dryrun")]
     dryrun: bool,
+    #[structopt(long = "uid")]
+    uid: usize,
 }
 
 fn init_logger() {
@@ -114,11 +116,11 @@ fn main() {
         edna.register_principal(&user_id.to_string(), user_id.to_string());
     }
     if args.test == "updates" {
-        updates_bench::run_updates_test(&mut edna, &mut db, args.use_txn, 10 as usize);
+        updates_bench::run_updates_test(&mut edna, &mut db, args.use_txn, args.uid);
         return;
     }
     if args.test == "reveal" {
-        updates_bench::run_simple_reveal(&mut edna, &mut db, args.use_txn, 10 as usize);
+        updates_bench::run_simple_reveal(&mut edna, &mut db, args.use_txn, args.uid);
         return;
     }
 
