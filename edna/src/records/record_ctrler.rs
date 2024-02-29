@@ -781,6 +781,7 @@ impl RecordCtrler {
         user_data: Option<UserData>,
     ) -> Option<PrivKey> {
         info!("get_priv_key: user {} user share: {:?}", uid, user_data);
+        let allstart = time::Instant::now();
         if self.dryrun {
             if user_data != None {
                 panic!("Oops can't use this in dryrun");
@@ -855,10 +856,15 @@ impl RecordCtrler {
         };
         let priv_key = sss.reconstruct(&shares);
         let pkbytes = get_pk_bytes(priv_key.to_bytes_le().1);
-        info!(
+        warn!(
             "SSS reconstruct {}: {}mus",
             uid,
             start.elapsed().as_micros()
+        );
+        warn!(
+            "get priv key of uid: {}mus",
+            uid,
+            allstart.elapsed().as_micros()
         );
         return Some(pkbytes.to_vec());
     }
