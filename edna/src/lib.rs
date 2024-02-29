@@ -320,6 +320,52 @@ impl EdnaClient {
     }
 
     // UID is the foreign-key ID of the principal
+    pub fn apply_disguise_rust(
+        &mut self,
+        for_user: UID,
+        disguise_spec: DisguiseSpec,
+        table_infos: HashMap<TableName, TableInfo>,
+        guise_gen: PseudoprincipalGenerator,
+        password: Option<String>,
+        user_share: Option<(records::Share, records::Loc)>,
+        use_txn: bool,
+    ) -> Result<DID, mysql::Error> {
+        warn!("EDNA: APPLYING Disguise");
+        let disguise = Disguise {
+            user: if for_user == "NULL" {
+                None
+            } else {
+                Some(for_user)
+            },
+            table_disguises: disguise_spec,
+        };
+        let mut db = self.pool.get_conn()?;
+        if use_txn {
+            let txopts = TxOpts::default();
+            txopts.set_isolation_level(Some(Serializable));
+            let mut txn = db.start_transaction(txopts)?;
+            let res = self.disguiser.apply(
+                &disguise,
+                &table_infos,
+                &guise_gen,
+                &mut txn,
+                password,
+                user_share,
+            );
+            txn.commit()?;
+            return res;
+        } else {
+            return self.disguiser.apply(
+                &disguise,
+                &table_infos,
+                &guise_gen,
+                &mut db,
+                password,
+                user_share,
+            );
+        }
+    }
+    // UID is the foreign-key ID of the principal
     pub fn apply_disguise(
         &mut self,
         for_user: UID,
@@ -370,6 +416,57 @@ impl EdnaClient {
         }
     }
 
+    // UID is the foreign-key ID of the principal
+    pub fn reveal_disguise_rust(
+        &mut self,
+        uid: UID,
+        did: DID,
+        table_infos: HashMap<TableName, TableInfo>,
+        guise_gen: PseudoprincipalGenerator,
+        reveal_pps: Option<RevealPPType>,
+        allow_singlecolumn_reveals: bool,
+        password: Option<String>,
+        user_share: Option<(records::Share, records::Loc)>,
+        use_txn: bool,
+    ) -> Result<(), mysql::Error> {
+        warn!("EDNA: REVERSING Disguise {}", did);
+        let start = time::Instant::now();
+        let mut db = self.pool.get_conn()?;
+        let user = if uid == "NULL" { None } else { Some(&uid) };
+        if use_txn {
+            let txopts = TxOpts::default();
+            txopts.set_isolation_level(Some(Serializable));
+            let mut txn = db.start_transaction(txopts)?;
+            self.revealer.reveal(
+                user,
+                did,
+                &table_infos,
+                &guise_gen,
+                reveal_pps,
+                allow_singlecolumn_reveals,
+                &mut txn,
+                password,
+                user_share,
+            )?;
+            let txnstart = time::Instant::now();
+            txn.commit()?;
+            warn!("commit txn took {}mus", txnstart.elapsed().as_micros());
+        } else {
+            self.revealer.reveal(
+                user,
+                did,
+                &table_infos,
+                &guise_gen,
+                reveal_pps,
+                allow_singlecolumn_reveals,
+                &mut db,
+                password,
+                user_share,
+            )?;
+        }
+        warn!("reveal_disguise took {}mus", start.elapsed().as_micros());
+        Ok(())
+    }
     // UID is the foreign-key ID of the principal
     pub fn reveal_disguise(
         &mut self,

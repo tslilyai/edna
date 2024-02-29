@@ -862,7 +862,7 @@ impl RecordCtrler {
             start.elapsed().as_micros()
         );
         warn!(
-            "get priv key of uid: {}mus",
+            "get priv key of uid {}: {}mus",
             uid,
             allstart.elapsed().as_micros()
         );

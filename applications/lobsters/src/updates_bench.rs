@@ -1,7 +1,8 @@
 use crate::migrations::*;
-use edna::{helpers, EdnaClient};
+use edna::*;
 use log::warn;
 use mysql::prelude::*;
+use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::thread::sleep;
@@ -116,13 +117,23 @@ pub fn run_simple_reveal(
         user_comments = helpers::mysql_val_to_u64(&vals[0]).unwrap();
     }
 
+    let start = time::Instant::now();
+    let gdpr_spec: DisguiseSpec = serde_json::from_str(GDPR_JSON).unwrap();
+    let table_infos_orig: HashMap<TableName, TableInfo> =
+        serde_json::from_str(TABLEINFO_JSON).unwrap();
+    let guise_gen_orig: PseudoprincipalGenerator = serde_json::from_str(PPGEN_JSON).unwrap();
+    let table_infos: HashMap<TableName, TableInfo> =
+        serde_json::from_str(TABLEINFO_JSON_UPDATED).unwrap();
+    let guise_gen: PseudoprincipalGenerator = serde_json::from_str(PPGEN_JSON_UPDATED).unwrap();
+    warn!("deserialize took {}mus", start.elapsed().as_micros());
+
     // UNSUB
     let did = edna
-        .apply_disguise(
+        .apply_disguise_rust(
             uid.to_string(),
-            GDPR_JSON,
-            TABLEINFO_JSON,
-            PPGEN_JSON,
+            gdpr_spec,
+            table_infos_orig,
+            guise_gen_orig,
             None, //Some(uid.to_string()),
             None,
             use_txn,
@@ -135,11 +146,11 @@ pub fn run_simple_reveal(
 
     // RESUB
     let start = time::Instant::now();
-    edna.reveal_disguise(
+    edna.reveal_disguise_rust(
         uid.to_string(),
         did,
-        TABLEINFO_JSON,
-        PPGEN_JSON,
+        table_infos,
+        guise_gen,
         Some(edna::RevealPPType::Restore),
         true, // allow partial row reveals
         Some(uid.to_string()),
@@ -177,6 +188,16 @@ pub fn run_updates_test(
     use_txn: bool,
     uid: usize,
 ) {
+    let start = time::Instant::now();
+    let gdpr_spec: DisguiseSpec = serde_json::from_str(GDPR_JSON).unwrap();
+    let table_infos_orig: HashMap<TableName, TableInfo> =
+        serde_json::from_str(TABLEINFO_JSON).unwrap();
+    let guise_gen_orig: PseudoprincipalGenerator = serde_json::from_str(PPGEN_JSON).unwrap();
+    let table_infos: HashMap<TableName, TableInfo> =
+        serde_json::from_str(TABLEINFO_JSON_UPDATED).unwrap();
+    let guise_gen: PseudoprincipalGenerator = serde_json::from_str(PPGEN_JSON_UPDATED).unwrap();
+    warn!("deserialize took {}mus", start.elapsed().as_micros());
+
     let mut user_stories = 0;
     let mut user_comments = 0;
     let mut story_count = 0;
@@ -210,11 +231,11 @@ pub fn run_updates_test(
 
     // UNSUB
     let did = edna
-        .apply_disguise(
+        .apply_disguise_rust(
             uid.to_string(),
-            GDPR_JSON,
-            TABLEINFO_JSON,
-            PPGEN_JSON,
+            gdpr_spec,
+            table_infos_orig,
+            guise_gen_orig,
             None, //Some(uid.to_string()),
             None,
             use_txn,
@@ -247,11 +268,11 @@ pub fn run_updates_test(
 
     // RESUB
     let start = time::Instant::now();
-    edna.reveal_disguise(
+    edna.reveal_disguise_rust(
         uid.to_string(),
         did,
-        TABLEINFO_JSON_UPDATED,
-        PPGEN_JSON_UPDATED,
+        table_infos,
+        guise_gen,
         Some(edna::RevealPPType::Restore),
         true, // allow partial row reveals
         Some(uid.to_string()),
