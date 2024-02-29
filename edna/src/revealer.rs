@@ -80,6 +80,7 @@ impl Revealer {
         password: Option<String>,
         user_share: Option<(Share, Loc)>,
     ) -> Result<(), mysql::Error> {
+        let start = time::Instant::now();
         let mut privkey = vec![];
 
         if uid != None {
@@ -94,8 +95,13 @@ impl Revealer {
             info!("got priv key");
         }
 
-        warn!("Revealing disguise for {:?}", uid);
-        self.reveal_using_secretkey(
+        warn!(
+            "Revealing disguise for {:?} after getting key: {}mus",
+            uid,
+            start.elapsed().as_micros()
+        );
+        let start = time::Instant::now();
+        let res = self.reveal_using_secretkey(
             did,
             timap,
             pp_gen,
@@ -103,7 +109,12 @@ impl Revealer {
             allow_singlecolumn_reveals,
             privkey,
             db,
-        )
+        );
+        warn!(
+            "reveal using secretkey took {}mus",
+            start.elapsed().as_micros()
+        );
+        res
     }
 
     // Note: Decorrelations are not revealed if not using EdnaSpeaksForRecords
@@ -247,12 +258,12 @@ impl Revealer {
                 }
             }
         }
-        
+
         // Note: we do restore removed records first because of referential
         // integrity, which can be violated if we restore decorrelations before
         // remove. This also means that we violate referential integrity when we
         // remove before decor.
-        
+
         // reveal user removed records first for referential integrity
         self.reveal_remove_diffs_of_table(
             &pp_gen.table,
@@ -283,7 +294,11 @@ impl Revealer {
                         }
                     }
                     // then reveal this one
-                    self.reveal_remove_diffs_of_table(table, &remove_diffs_for_table, &mut reveal_args)?;
+                    self.reveal_remove_diffs_of_table(
+                        table,
+                        &remove_diffs_for_table,
+                        &mut reveal_args,
+                    )?;
                     all_tables.remove(table);
                 }
             }

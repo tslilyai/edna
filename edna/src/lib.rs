@@ -118,9 +118,9 @@ pub type DisguiseSpec = HashMap<TableName, Vec<Transformation>>;
 // how pseudoprincipals with to-references should be handled during reveal
 #[derive(Copy, Clone, PartialEq)]
 pub enum RevealPPType {
-    Delete, // remove referencing objects and pp
+    Delete,  // remove referencing objects and pp
     Restore, // restore ownership of referencing objects to np, remove pp
-    Retain, // keep referencing objects and pp
+    Retain,  // keep referencing objects and pp
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -377,13 +377,14 @@ impl EdnaClient {
         did: DID,
         table_info_json: &str,
         guise_gen_json: &str,
-        reveal_pps: Option<RevealPPType>, 
-        allow_singlecolumn_reveals: bool, 
+        reveal_pps: Option<RevealPPType>,
+        allow_singlecolumn_reveals: bool,
         password: Option<String>,
         user_share: Option<(records::Share, records::Loc)>,
         use_txn: bool,
     ) -> Result<(), mysql::Error> {
         warn!("EDNA: REVERSING Disguise {}", did);
+        let start = time::Instant::now();
         let table_infos: HashMap<TableName, TableInfo> =
             serde_json::from_str(table_info_json).unwrap();
         let guise_gen: PseudoprincipalGenerator = serde_json::from_str(guise_gen_json).unwrap();
@@ -404,7 +405,9 @@ impl EdnaClient {
                 password,
                 user_share,
             )?;
+            let txnstart = time::Instant::now();
             txn.commit()?;
+            warn!("commit txn took {}mus", txnstart.elapsed().as_micros());
         } else {
             self.revealer.reveal(
                 user,
@@ -418,6 +421,7 @@ impl EdnaClient {
                 user_share,
             )?;
         }
+        warn!("reveal_disguise took {}mus", start.elapsed().as_micros());
         Ok(())
     }
 
@@ -426,7 +430,9 @@ impl EdnaClient {
         F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static + Send + Sync,
     {
         let mut locked_llapi = self.llapi.lock().unwrap();
-        locked_llapi.record_ctrler.record_update(Arc::new(Mutex::new(f)));
+        locked_llapi
+            .record_ctrler
+            .record_update(Arc::new(Mutex::new(f)));
         drop(locked_llapi);
     }
 }
