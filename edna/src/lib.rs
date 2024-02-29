@@ -388,6 +388,11 @@ impl EdnaClient {
         let table_infos: HashMap<TableName, TableInfo> =
             serde_json::from_str(table_info_json).unwrap();
         let guise_gen: PseudoprincipalGenerator = serde_json::from_str(guise_gen_json).unwrap();
+        warn!(
+            "reveal_disguise deserialize took {}mus",
+            start.elapsed().as_micros()
+        );
+        let start = time::Instant::now();
         let mut db = self.pool.get_conn()?;
         let user = if uid == "NULL" { None } else { Some(&uid) };
         if use_txn {
