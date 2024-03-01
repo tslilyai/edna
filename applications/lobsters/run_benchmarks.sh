@@ -18,7 +18,7 @@ for i in `seq 5`; do
 	    --scale $scale \
 	    --txn \
 	    --uid 15921 \
-	    &> output/updates-exp.out
+	    &> output/updates-exp-$i.out
 	echo "Ran updatestest with txn"
 
 	mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
@@ -28,7 +28,7 @@ for i in `seq 5`; do
 	    --scale $scale \
 	    --txn \
 	    --uid 15921  \
-	    &> output/reveal-exp.out
+	    &> output/reveal-exp-$i.out
 	echo "Ran updates test with txn"
 
 	mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
@@ -38,7 +38,7 @@ for i in `seq 5`; do
 	    --scale $scale \
 	    --txn \
 	    --uid 10 \
-	    &> output/updates-cheap.out
+	    &> output/updates-cheap-$i.out
 	echo "Ran updates test with txn"
 
 	mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
@@ -48,7 +48,7 @@ for i in `seq 5`; do
 	    --scale $scale \
 	    --txn \
 	    --uid 10 \
-	    &> output/reveal-cheap.out
+	    &> output/reveal-cheap-$i.out
 	echo "Ran reveal test with txn"
 done
 exit

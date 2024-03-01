@@ -744,7 +744,7 @@ impl RecordCtrler {
 
             // we found a matching record for the disguise
             diff_records.append(&mut bag.diffrecs);
-            info!(
+            warn!(
                 "Edna: Decrypted diff, pk records added {}, {}: {}mus",
                 bag.diffrecs.len(),
                 bag.chainrecs.len(),
