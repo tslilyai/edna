@@ -4,7 +4,6 @@ use edna::{helpers, RowVal, TableRow};
 use log::warn;
 use std::time;
 use url::Url;
-use mysql::prelude::*;
 use urlnorm::UrlNormalizer;
 
 pub fn apply(db: &mut mysql::PooledConn) {
@@ -19,24 +18,14 @@ pub fn apply(db: &mut mysql::PooledConn) {
         return;
     }
     let new_rows = update(stories);
-    /*let cols: Vec<String> = new_rows[0]
-        .row
-        .iter()
-        .map(|rv| rv.column().clone())
-        .collect();
-    let colstr = cols.join(",");
-    let mut all_stories = vec![];*/
+    let mut values = vec![];
     for s in new_rows {
         let norm = helpers::get_value_of_col(&s.row, "normalized_url").unwrap();
         let id = helpers::get_value_of_col(&s.row, "id").unwrap();
-        db.query_drop(
-            &format!(
-                "UPDATE stories SET `normalized_url` = '{}' WHERE id = {}",
-                norm, id
-            ),
-        )
-        .unwrap();
+        let user_id = helpers::get_value_of_col(&s.row, "user_id").unwrap();
+        values.push(format!("({},{},{})", id, norm, user_id));
     }
+    helpers::query_drop(&format!("INSERT INTO stories (id, normalized_url, user_id) VALUES {} ON DUPLICATE KEY UPDATE normalized_url=VALUES(normalized_url)", values.join(",")), db).unwrap();
     warn!("normalize_url apply: {}mus", start.elapsed().as_micros());
 }
 
