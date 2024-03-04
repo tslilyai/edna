@@ -212,6 +212,17 @@ impl RecordCtrler {
         elbytes += size_of_val(&self.enc_locators_map);
         error!("enclocs_map {}", elbytes);
 
+        let mut replaylogbytes = 0;
+        for u in &self.updates {
+            replaylogbytes += size_of_val(&*u);
+            error!("replaylogbytes {}", replaylogbytes);
+            let upfn = u.upfn.lock().unwrap();
+            replaylogbytes += size_of_val(&*upfn);
+            error!("replaylogbytes {}", replaylogbytes);
+        }
+        replaylogbytes += size_of_val(&self.updates);
+        error!("replaylogbytes {}", replaylogbytes);
+
         let mut ssbytes = 0;
         for (l, ss) in self.shares_map.iter() {
             ssbytes += size_of_val(&l);
@@ -733,22 +744,30 @@ impl RecordCtrler {
         }
         if let Some(encbag) = self.enc_map.get(&lc.loc) {
             info!("Getting records of user {} with lc {}", lc.uid, lc.loc);
-            let start = time::Instant::now();
+            let initstart = time::Instant::now();
             // decrypt record with privkey provided by client
             let (succeeded, plaintext) = decrypt_encdata(encbag, privkey, self.dryrun);
+            warn!(
+                "Edna: Decrypt encdata: {}mus",
+                initstart.elapsed().as_micros(),
+            );
             if !succeeded {
                 info!("Failed to decrypt bag {} with {}", lc.uid, privkey.len());
                 return (diff_records, pk_records);
             }
+            let start = time::Instant::now();
             let mut bag: Bag = bincode::deserialize(&plaintext).unwrap();
-
+            warn!(
+                "Edna: Deserialize encdata: {}mus",
+                start.elapsed().as_micros(),
+            );
             // we found a matching record for the disguise
             diff_records.append(&mut bag.diffrecs);
             warn!(
                 "Edna: Decrypted diff, pk records added {}, {}: {}mus",
                 bag.diffrecs.len(),
                 bag.chainrecs.len(),
-                start.elapsed().as_micros(),
+                initstart.elapsed().as_micros(),
             );
 
             // get ALL new_uids regardless of disguise that record came from
