@@ -159,6 +159,7 @@ impl RecordCtrler {
         }
 
         // TODO get from persistent enc locs maps
+        // TODO get from updates
 
         let share_rows = RecordPersister::get_share_store_rows(db);
         for share_info in share_rows {
@@ -1073,11 +1074,13 @@ impl RecordCtrler {
         uids
     }
 
-    pub fn record_update(&mut self, f: UpdateFn) {
-        self.updates.push(Update {
+    pub fn record_update<Q: Queryable>(&mut self, f: UpdateFn, db: &mut Q) {
+        let u = Update {
             t: self.start_time.elapsed().as_secs(),
             upfn: f.clone(),
-        });
+        };
+        RecordPersister::persist_update(&u, db);
+        self.updates.push(u);
         // TODO truncate old updates
     }
 

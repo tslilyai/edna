@@ -533,9 +533,10 @@ impl EdnaClient {
     {
         let start = time::Instant::now();
         let mut locked_llapi = self.llapi.lock().unwrap();
+        let mut db = self.pool.get_conn().unwrap();
         locked_llapi
             .record_ctrler
-            .record_update(Arc::new(Mutex::new(f)));
+            .record_update(Arc::new(Mutex::new(f)), &mut db);
         drop(locked_llapi);
         warn!("record_update took {}mus", start.elapsed().as_micros());
     }

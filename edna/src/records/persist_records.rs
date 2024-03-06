@@ -1,11 +1,12 @@
 use crate::crypto::*;
 use crate::helpers::*;
 use crate::records::*;
+use crate::Update;
 use crate::UID;
 use base64;
 use bincode;
 use crypto_box::PublicKey;
-use log::{error};
+use log::error;
 use mysql::prelude::*;
 use num_bigint::BigInt;
 use std::collections::HashSet;
@@ -18,6 +19,7 @@ const PRINCIPAL_TABLE: &'static str = "EdnaPrincipals";
 const SHARES_TABLE: &'static str = "EdnaShares";
 const BAGTABLE: &'static str = "EdnaBags";
 const ENCLOCSTABLE: &'static str = "EdnaEncLocs";
+const UPDATESTABLE: &'static str = "EdnaUpdates";
 const UID_COL: &'static str = "uid";
 
 pub struct RecordPersister {}
@@ -57,6 +59,12 @@ impl RecordPersister {
         db.query_drop(format!(
         "CREATE TABLE IF NOT EXISTS {} (id BIGINT UNSIGNED, enclocs MEDIUMBLOB, PRIMARY KEY (id)) ENGINE = InnoDB;",
         ENCLOCSTABLE)).unwrap();
+
+        // create updates table
+        db.query_drop(format!(
+        "CREATE TABLE IF NOT EXISTS {} (fnptr varchar(64), time BIGINT UNSIGNED) ENGINE = InnoDB;",
+        UPDATESTABLE))
+            .unwrap();
     }
 
     pub fn get_space_overhead(db: &mut mysql::PooledConn, dbname: &str) -> usize {
@@ -232,13 +240,18 @@ impl RecordPersister {
             SHARES_TABLE,
             values.join(", "),
         );
-        //debug!("Persist Principals insert q {}", insert_q);
         db.query_drop(&insert_q).unwrap();
-        //debug!(
-        //"Edna persist {} shares: {}",
-        //shares_to_insert.len(),
-        //start.elapsed().as_micros()
-        //);
+    }
+
+    pub fn persist_update<Q: Queryable>(up: &Update, db: &mut Q) {
+        let f = up.upfn.lock().unwrap();
+        let insert_q = format!(
+            "INSERT INTO {} (fnptr, time) VALUES ({:p}, {});",
+            UPDATESTABLE,
+            &(*f),
+            up.t,
+        );
+        db.query_drop(&insert_q).unwrap();
     }
 
     pub fn persist_inserted_principals<Q: Queryable>(
