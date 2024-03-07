@@ -244,21 +244,6 @@ impl Revealer {
             }
         }
 
-        // reveal all modify diff records
-        for dr in &drs {
-            if dr.did == did && dr.record.typ == MODIFY {
-                info!("Reversing modify record {:?}\n", dr.record);
-                reveal_args.uid = dr.uid.clone();
-                let revealed = dr.record.reveal(&mut reveal_args)?;
-                if revealed {
-                    info!("Modify Diff Record revealed!\n");
-                } else {
-                    success = false;
-                    info!("Failed to reveal modify record");
-                }
-            }
-        }
-
         // Note: we do restore removed records first because of referential
         // integrity, which can be violated if we restore decorrelations before
         // remove. This also means that we violate referential integrity when we
@@ -300,6 +285,21 @@ impl Revealer {
                         &mut reveal_args,
                     )?;
                     all_tables.remove(table);
+                }
+            }
+        }
+
+        // reveal all modify diff records
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == MODIFY {
+                info!("Reversing modify record {:?}\n", dr.record);
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
+                if revealed {
+                    info!("Modify Diff Record revealed!\n");
+                } else {
+                    success = false;
+                    info!("Failed to reveal modify record");
                 }
             }
         }
