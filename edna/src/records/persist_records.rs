@@ -246,7 +246,7 @@ impl RecordPersister {
     pub fn persist_update<Q: Queryable>(up: &Update, db: &mut Q) {
         let f = up.upfn.lock().unwrap();
         let insert_q = format!(
-            "INSERT INTO {} (fnptr, time) VALUES ({:p}, {});",
+            "INSERT INTO {} (fnptr, time) VALUES ('{:p}', {});",
             UPDATESTABLE,
             &(*f),
             up.t,

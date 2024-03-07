@@ -23,7 +23,7 @@ pub fn apply(db: &mut mysql::PooledConn) {
         let norm = helpers::get_value_of_col(&s.row, "normalized_url").unwrap();
         let id = helpers::get_value_of_col(&s.row, "id").unwrap();
         let user_id = helpers::get_value_of_col(&s.row, "user_id").unwrap();
-        values.push(format!("({},{},{})", id, norm, user_id));
+        values.push(format!("({},'{}',{})", id, norm, user_id));
     }
     helpers::query_drop(&format!("INSERT INTO stories (id, normalized_url, user_id) VALUES {} ON DUPLICATE KEY UPDATE normalized_url=VALUES(normalized_url)", values.join(",")), db).unwrap();
     warn!("normalize_url apply: {}mus", start.elapsed().as_micros());

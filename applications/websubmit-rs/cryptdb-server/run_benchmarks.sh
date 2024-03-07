@@ -4,9 +4,9 @@ cargo build --release
 mkdir output &> /dev/null || true
 
 # spin off proxy
-sudo killall proxy
-cd ../../proxy; ./run.sh
-cd ../websubmit-rs/cryptdb-server/
+#sudo killall proxy
+#cd ../../proxy; ./run.sh
+#cd ../websubmit-rs/cryptdb-server/
 
 crypto=true
 schema="src/schema_nocrypto.sql"

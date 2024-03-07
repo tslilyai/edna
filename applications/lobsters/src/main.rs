@@ -54,7 +54,7 @@ struct Cli {
     use_txn: bool,
     #[structopt(long = "dryrun")]
     dryrun: bool,
-    #[structopt(long = "uid")]
+    #[structopt(long = "uid", default_value = "1")]
     uid: usize,
 }
 
