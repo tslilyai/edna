@@ -5,7 +5,7 @@ use crate::revealer::RevealArgs;
 use crate::*;
 use crate::{RevealPPType, TableInfo, TableRow, DID, UID};
 use crypto_box::PublicKey;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use mysql::from_value;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -161,7 +161,7 @@ impl EdnaDiffRecord {
             is_anon: false,
             enc_locators_index: self.enc_locators_index,
         };
-        info!("Going to reveal principal {}", uid);
+        warn!("Going to reveal principal {}", uid);
         llapi.register_saved_principal(
             &uid.to_string(),
             false,
@@ -220,7 +220,7 @@ impl EdnaDiffRecord {
             let old_uid =
                 sfchain_record::find_old_uid(args.edges, &r.new_uid, args.recorrelated_pps);
             let old_uid = old_uid.unwrap_or(r.old_uid.clone());
-            info!(
+            warn!(
                 "reveal_new_pps: Going to check old {} -> pp {}",
                 old_uid, r.new_uid
             );
@@ -272,20 +272,20 @@ impl EdnaDiffRecord {
             }
         }
 
-        for (child_table, tinfo) in &args.timap {
+        for (child_table, twarn) in &args.timap {
             if child_table == &args.pp_gen.table {
                 continue;
             }
-            if tinfo.owner_fks.len() == 0 {
+            if twarn.owner_fks.len() == 0 {
                 continue;
             }
             // get count of children SO WE DON'T UPDATE if we don't need
             // to (select is cheaper!)
             let start = time::Instant::now();
-            let all_select = if tinfo.owner_fks.len() == 1 {
-                format!("{} {}", tinfo.owner_fks[0].from_col, all_pp_select)
+            let all_select = if twarn.owner_fks.len() == 1 {
+                format!("{} {}", twarn.owner_fks[0].from_col, all_pp_select)
             } else {
-                tinfo
+                twarn
                     .owner_fks
                     .iter()
                     .map(|fk| format!("{} {}", fk.from_col, all_pp_select))
@@ -293,7 +293,7 @@ impl EdnaDiffRecord {
                     .join(" OR ")
             };
 
-            let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, all_select);
+            let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", twarn.table, all_select);
             //warn!("Check count of pseudoprincipals {}", checkstmt);
             let res = args.db.query_iter(checkstmt.clone()).unwrap();
             let mut count: u64 = 0;
@@ -306,12 +306,12 @@ impl EdnaDiffRecord {
                 start.elapsed().as_micros()
             );
             if count == 0 {
-                info!("Don't update, found 0 children");
+                warn!("Don't update, found 0 children");
                 continue;
             }
             if args.reveal_pps == RevealPPType::Delete {
                 helpers::query_drop(
-                    &format!("DELETE FROM {} WHERE {}", tinfo.table, all_select),
+                    &format!("DELETE FROM {} WHERE {}", twarn.table, all_select),
                     args.db,
                 )?;
             } else {
@@ -325,10 +325,10 @@ impl EdnaDiffRecord {
                         format!("IN ({})", new_uids_str)
                     };
 
-                    let selection = if tinfo.owner_fks.len() == 1 {
-                        format!("{} {}", tinfo.owner_fks[0].from_col, pp_select)
+                    let selection = if twarn.owner_fks.len() == 1 {
+                        format!("{} {}", twarn.owner_fks[0].from_col, pp_select)
                     } else {
-                        tinfo
+                        twarn
                             .owner_fks
                             .iter()
                             .map(|fk| format!("{} {}", fk.from_col, pp_select))
@@ -337,10 +337,10 @@ impl EdnaDiffRecord {
                     };
 
                     // if only one owner col, skip the case
-                    let updates = if tinfo.owner_fks.len() == 1 {
-                        format!("{} = {}", tinfo.owner_fks[0].from_col, old_uid)
+                    let updates = if twarn.owner_fks.len() == 1 {
+                        format!("{} = {}", twarn.owner_fks[0].from_col, old_uid)
                     } else {
-                        tinfo
+                        twarn
                             .owner_fks
                             .iter()
                             .map(|fk| {
@@ -353,7 +353,7 @@ impl EdnaDiffRecord {
                             .join(", ")
                     };
                     helpers::query_drop(
-                        &format!("UPDATE {} SET {} WHERE {}", tinfo.table, updates, selection),
+                        &format!("UPDATE {} SET {} WHERE {}", twarn.table, updates, selection),
                         args.db,
                     )?;
                 }
@@ -420,13 +420,13 @@ impl EdnaDiffRecord {
                 let mut start = time::Instant::now();
                 success &= self.remove_or_update_rows(&new_values, &mut old_values, args)?;
                 if success {
-                    info!(
+                    warn!(
                         "Removed {} new non-pp rows: {}mus",
                         new_values.len(),
                         start.elapsed().as_micros()
                     );
                 } else {
-                    info!(
+                    warn!(
                         "Failed to remove or update non-pp rows: {}mus",
                         start.elapsed().as_micros()
                     );
@@ -443,9 +443,9 @@ impl EdnaDiffRecord {
                             args,
                         )?;
                         if success {
-                            info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
+                            warn!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
                         } else {
-                            info!(
+                            warn!(
                                 "Failed to restore old_value {:?}: {}mus",
                                 ov,
                                 start.elapsed().as_micros()
@@ -463,9 +463,9 @@ impl EdnaDiffRecord {
                             args,
                         )?;
                         if success {
-                            info!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
+                            warn!("Restored {:?}: {}mus", ov, start.elapsed().as_micros());
                         } else {
-                            info!(
+                            warn!(
                                 "Failed to restore old_value {:?}: {}mus",
                                 ov,
                                 start.elapsed().as_micros()
@@ -483,21 +483,21 @@ impl EdnaDiffRecord {
     /// get_count_of_children checks for the number of children of this table referring to this fk.
     fn get_count_of_children<Q: Queryable>(
         new_fk_value: &UID,
-        tinfo: &TableInfo,
+        twarn: &TableInfo,
         db: &mut Q,
     ) -> Result<u64, mysql::Error> {
-        if tinfo.owner_fks.len() == 0 {
+        if twarn.owner_fks.len() == 0 {
             return Ok(0);
         }
         let fnstart = time::Instant::now();
-        let selection = tinfo
+        let selection = twarn
             .owner_fks
             .iter()
             .map(|c| format!("`{}` = {}", c.from_col, new_fk_value))
             .collect::<Vec<String>>()
             .join(" OR ");
 
-        let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, selection);
+        let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", twarn.table, selection);
         let res = db.query_iter(checkstmt.clone()).unwrap();
         let mut count: u64 = 0;
         for row in res {
@@ -507,7 +507,7 @@ impl EdnaDiffRecord {
         warn!(
             "get_count_of_children: {} children of table {} point to id {}: {}mus",
             count,
-            tinfo.table,
+            twarn.table,
             new_fk_value,
             fnstart.elapsed().as_micros()
         );
@@ -527,14 +527,14 @@ impl EdnaDiffRecord {
         args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
         let fnstart = time::Instant::now();
-        info!("Try to {:?} old value! {:?}", restore_or_update, old_value);
+        warn!("Try to {:?} old value! {:?}", restore_or_update, old_value);
         let table = &old_value.table;
         let mut old_value_row = old_value.row.clone();
         let mut restore_or_update = restore_or_update;
 
         // get current obj in db
-        let table_info = args.timap.get(table).unwrap();
-        let ids = helpers::get_ids(&table_info.id_cols, &old_value_row);
+        let table_warn = args.timap.get(table).unwrap();
+        let ids = helpers::get_ids(&table_warn.id_cols, &old_value_row);
         let item_selection = helpers::get_select_of_ids_str(&ids);
 
         let is = match item_selected {
@@ -543,11 +543,11 @@ impl EdnaDiffRecord {
                     &helpers::str_select_statement(table, table, &item_selection.to_string()),
                     args.db,
                 )?;
-                info!("restore old objs: going to restore {:?}", old_value_row);
+                warn!("restore old objs: going to restore {:?}", old_value_row);
 
                 // CHECK 1: If we're going to restore, don't reinsert if the item already exists
                 if restore_or_update == RestoreOrUpdate::RESTORE && !is.is_empty() {
-                    info!(
+                    warn!(
                         "restore old objs: found objects for {}, going to update instead!",
                         item_selection
                     );
@@ -561,7 +561,7 @@ impl EdnaDiffRecord {
         };
 
         // CHECK 2: Referential integrity to non-owners
-        for fk in &table_info.other_fks {
+        for fk in &table_warn.other_fks {
             // if original entity does not exist, do not reveal
             let curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
             if curval.to_lowercase() == "null" {
@@ -576,7 +576,7 @@ impl EdnaDiffRecord {
                 fk.to_col,
                 helpers::to_mysql_valstr(&curval)
             );
-            info!("other fk selection: {}", selection.to_string());
+            warn!("other fk selection: {}", selection.to_string());
             let res = args.db.query_iter(selection.clone()).unwrap();
             let mut count: u64 = 0;
             for row in res {
@@ -600,10 +600,10 @@ impl EdnaDiffRecord {
         // there's some speaks-for path to the stored UID in the diff, and
         // we rewrite this col to the correct restored UID.
         if table != &args.pp_gen.table {
-            for fk in &table_info.owner_fks {
+            for fk in &table_warn.owner_fks {
                 let mut curval = helpers::get_value_of_col(&old_value_row, &fk.from_col).unwrap();
                 if args.recorrelated_pps.contains(&curval) {
-                    info!("Recorrelated pps contained the old_uid {}", curval);
+                    warn!("Recorrelated pps contained the old_uid {}", curval);
 
                     // find the most recent UID in the path up to this one
                     // that should exist in the DB
@@ -621,7 +621,7 @@ impl EdnaDiffRecord {
                     args.pp_gen.id_col,
                     helpers::to_mysql_valstr(&curval)
                 );
-                info!("owner fk selection: {}", selection.to_string());
+                warn!("owner fk selection: {}", selection.to_string());
                 let selected = helpers::get_query_rows_str_q::<Q>(&selection, args.db)?;
 
                 if selected.is_empty() {
@@ -634,7 +634,7 @@ impl EdnaDiffRecord {
                     return Ok(false);
                 }
             }
-            info!("rewritten old_value_row = {:?}", old_value_row);
+            warn!("rewritten old_value_row = {:?}", old_value_row);
         }
 
         // We've check for uniqueness and referential integrity; now either insert or update
@@ -733,11 +733,11 @@ impl EdnaDiffRecord {
         let mut success = true;
         for new_value in new_values {
             let table = &new_value.table;
-            info!("Going to try to remove new row! {:?}", new_value);
+            warn!("Going to try to remove new row! {:?}", new_value);
 
             // get current obj in db
-            let table_info = args.timap.get(table).unwrap();
-            let ids = helpers::get_ids(&table_info.id_cols, &new_value.row);
+            let table_warn = args.timap.get(table).unwrap();
+            let ids = helpers::get_ids(&table_warn.id_cols, &new_value.row);
             let selection = helpers::get_select_of_ids_str(&ids);
             let selected = helpers::get_query_rows_str_q::<Q>(
                 &helpers::str_select_statement(table, table, &selection.to_string()),
@@ -746,7 +746,7 @@ impl EdnaDiffRecord {
 
             // CHECK 1: Is the item already removed?
             if selected.is_empty() {
-                info!(
+                warn!(
                     "remove_or_update_rows: No new item to remove! {}: {}mus",
                     selection,
                     fnstart.elapsed().as_micros()
@@ -765,7 +765,11 @@ impl EdnaDiffRecord {
             // value
             let mut should_delete = true;
             for ov in &old_values.clone() {
-                let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
+                // this can happen if we update the old value to multiple values
+                if &ov.table != table {
+                    continue;
+                }
+                let old_ids = helpers::get_ids(&table_warn.id_cols, &ov.row);
                 if ids == old_ids {
                     // we found a match, make sure not to delete this item even if we fail to restore it since we're updating the old value here!
                     should_delete = false;
@@ -785,9 +789,9 @@ impl EdnaDiffRecord {
             // that we've already tried to rewrite the new value to.
             if should_delete {
                 // retain if things refer to it
-                for (_, tinfo) in &args.timap {
+                for (_, twarn) in &args.timap {
                     let nchildren =
-                        EdnaDiffRecord::get_count_of_children(&ids[0].value(), &tinfo, args.db)?;
+                        EdnaDiffRecord::get_count_of_children(&ids[0].value(), &twarn, args.db)?;
                     if nchildren == 0 {
                         let delete_q = format!("DELETE FROM {} WHERE {}", &table, selection);
                         helpers::query_drop(&delete_q, args.db)?;
