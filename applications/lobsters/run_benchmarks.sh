@@ -10,7 +10,7 @@ sql=/data/lobsters_edna_messages_and_tags.sql;
 scale=2.75
 
 # UPDATE TEST
-for i in `seq 2`; do
+for i in `seq 5`; do
 	mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
 	mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
 	RUST_BACKTRACE=1 RUST_LOG=error ../../target/release/lobsters \
