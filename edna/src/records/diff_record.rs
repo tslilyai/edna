@@ -434,7 +434,6 @@ impl EdnaDiffRecord {
                 start = time::Instant::now();
                 let mut rows_for_table: HashMap<String, Vec<TableRow>> = HashMap::new();
                 for ov in &old_values {
-                    // restore users first
                     match rows_for_table.get_mut(&ov.table) {
                         Some(ds) => ds.push(ov.clone()),
                         None => {
@@ -442,6 +441,8 @@ impl EdnaDiffRecord {
                         }
                     }
                 }
+
+                // restore users first
                 if let Some(uvs) = rows_for_table.get(&args.pp_gen.table) {
                     success &= self.restore_old_values(&args.pp_gen.table, uvs.clone(), args)?;
                     if success {
@@ -633,13 +634,13 @@ impl EdnaDiffRecord {
             vals.push(format!("({})", row.join(",")));
         }
         let valstr = vals.join(",");
-        let updates: Vec<String> = cols.iter().map(|c| format!("{} = new.{}", c, c)).collect();
+        //let updates: Vec<String> = cols.iter().map(|c| format!("{} = new.{}", c, c)).collect();
         let insert_q = format!(
-            "INSERT INTO {} ({}) VALUES ({}) as new ON DUPLICATE KEY UPDATE {}",
+            "INSERT INTO {} ({}) VALUES ({});", // as new ON DUPLICATE KEY UPDATE {}",
             table,
             colstr,
             valstr,
-            updates.join(",")
+            //updates.join(",")
         );
         helpers::query_drop(&insert_q, args.db)?;
         warn!(
