@@ -642,6 +642,7 @@ impl EdnaDiffRecord {
             valstr,
             //updates.join(",")
         );
+        warn!("insert q {}", insert_q);
         helpers::query_drop(&insert_q, args.db)?;
         warn!(
             "restore old objs: {}: {}mus",
