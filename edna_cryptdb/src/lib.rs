@@ -29,6 +29,13 @@ pub type DID = u64;
 pub type UID = String;
 pub type ColName = String;
 pub type TableName = String;
+pub type UpdateFn = Arc<Mutex<dyn Fn(Vec<TableRow>) -> Vec<TableRow> + Send + Sync>>;
+
+#[derive(Clone)]
+pub struct Update {
+    t: u64,
+    upfn: UpdateFn,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PseudoprincipalGenerator {
@@ -154,11 +161,7 @@ pub struct EdnaClient {
 }
 
 impl EdnaClient {
-    pub fn new(
-        url: &str,
-        in_memory: bool,
-        dryrun: bool,
-    ) -> EdnaClient {
+    pub fn new(url: &str, in_memory: bool, dryrun: bool) -> EdnaClient {
         let pool = mysql::Pool::new(Opts::from_url(url).unwrap()).unwrap();
         let llapi = Arc::new(Mutex::new(lowlevel_api::LowLevelAPI::new(
             pool.clone(),
@@ -174,11 +177,11 @@ impl EdnaClient {
                 pool.clone(),
                 in_memory,
                 true, // reset each time for now
-                !dryrun, 
+                !dryrun,
             ),
-            revealer: revealer::Revealer::new(llapi.clone(), pool.clone(), !dryrun),
+            revealer: revealer::Revealer::new(llapi.clone(), pool.clone()),
             llapi: llapi,
-            dryrun: dryrun
+            dryrun: dryrun,
         }
     }
 
@@ -244,7 +247,7 @@ impl EdnaClient {
         let mut db = self.pool.get_conn().unwrap();
         db.query_drop(format!("LOGOUT")).unwrap();
     }
-    
+
     pub fn register_principal(&mut self, uid: &UID, password: String) -> records::UserData {
         let mut locked_llapi = self.llapi.lock().unwrap();
         let user_share = locked_llapi.register_principal(uid, password);
@@ -443,6 +446,7 @@ impl EdnaClient {
                 &table_infos,
                 &guise_gen,
                 reveal_pps,
+                true,
                 &mut txn,
                 password,
                 user_share,
@@ -455,6 +459,7 @@ impl EdnaClient {
                 &table_infos,
                 &guise_gen,
                 reveal_pps,
+                true,
                 &mut db,
                 password,
                 user_share,
@@ -467,6 +472,13 @@ impl EdnaClient {
     where
         F: Fn(Vec<TableRow>) -> Vec<TableRow> + 'static + Send + Sync,
     {
-        self.revealer.record_update(Box::new(f));
+        let start = time::Instant::now();
+        let mut locked_llapi = self.llapi.lock().unwrap();
+        let mut db = self.pool.get_conn().unwrap();
+        locked_llapi
+            .record_ctrler
+            .record_update(Arc::new(Mutex::new(f)), &mut db);
+        drop(locked_llapi);
+        warn!("record_update took {}mus", start.elapsed().as_micros());
     }
 }

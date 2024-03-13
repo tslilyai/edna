@@ -2,7 +2,7 @@ use crate::crypto::*;
 use crate::helpers::*;
 use crate::records::*;
 use crate::TableRow;
-use crate::{DID, UID};
+use crate::{Update, UpdateFn, DID, UID};
 use crypto_box::{PublicKey, SecretKey};
 use log::{error, info, warn};
 use mysql::prelude::*;
@@ -36,23 +36,27 @@ pub struct PrincipalData {
     pub enc_locators_index: Index,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bag {
     pub diffrecs: Vec<DiffRecordWrapper>,
     pub chainrecs: HashMap<UID, SFChainRecord>,
+    pub t: u64,
     pub random_padding: Vec<u8>,
 }
 
 impl Bag {
-    pub fn new() -> Bag {
+    pub fn new(start_time: time::Instant) -> Bag {
         let mut rng = rand::thread_rng();
         let size = rng.gen_range(512..4096);
         let mut padding: Vec<u8> = repeat(0u8).take(size).collect();
         rng.fill_bytes(&mut padding[..]);
 
-        let mut bag: Bag = Default::default();
-        bag.random_padding = padding;
-        bag
+        Bag {
+            random_padding: padding,
+            t: start_time.elapsed().as_secs(),
+            chainrecs: HashMap::new(),
+            diffrecs: vec![],
+        }
     }
 }
 
@@ -79,6 +83,9 @@ pub struct Locator {
 
 #[derive(Clone)]
 pub struct RecordCtrler {
+    pub start_time: time::Instant,
+    updates: Vec<Update>,
+
     // principal records are stored indexed by some large random num
     principal_data: HashMap<UID, PrincipalData>,
 
@@ -129,6 +136,8 @@ impl RecordCtrler {
         let prime = BigInt::from_bytes_le(num_bigint::Sign::Plus, &prime_arr);
 
         let mut tctrler = RecordCtrler {
+            start_time: time::Instant::now(),
+            updates: vec![],
             principal_data: HashMap::new(),
             enc_map: HashMap::new(),
             enc_locators_map: HashMap::new(),
@@ -436,9 +445,17 @@ impl RecordCtrler {
 
         // XXX PROXY CRYPTDB super hacky
         let pubkey_vec = pubkey.as_bytes().to_vec();
-        warn!("Proxy: Register principal pubkey {} privkey {}", base64::encode(&pubkey_vec), base64::encode(secretkey.as_bytes().to_vec()));
+        warn!(
+            "Proxy: Register principal pubkey {} privkey {}",
+            base64::encode(&pubkey_vec),
+            base64::encode(secretkey.as_bytes().to_vec())
+        );
         if uid.contains("malte") {
-            query_drop(&format!("REGISTER {} ADMIN", base64::encode(&pubkey_vec)), db).unwrap();
+            query_drop(
+                &format!("REGISTER {} ADMIN", base64::encode(&pubkey_vec)),
+                db,
+            )
+            .unwrap();
         } else {
             query_drop(&format!("REGISTER {}", base64::encode(&pubkey_vec)), db).unwrap();
         }
@@ -536,17 +553,13 @@ impl RecordCtrler {
         new_uid: &UID,
         pp: TableRow,
         did: DID,
-        db: &mut Q
+        db: &mut Q,
     ) -> PrivKey {
         let start = time::Instant::now();
         let anon_uidstr = new_uid.trim_matches('\'');
         // save the anon principal as a new principal with a public key
-        let (secretkey, pubkey) = self.register_principal(
-            &anon_uidstr.to_string(),
-            true,
-            db,
-            false,
-        );
+        let (secretkey, pubkey) =
+            self.register_principal(&anon_uidstr.to_string(), true, db, false);
         info!(
             "Registering anon principal {} with secretkey {} and pubkey {}",
             anon_uidstr.to_string(),
@@ -565,6 +578,7 @@ impl RecordCtrler {
         // we also need to record a diff record for the pp
         // so we can delete the pp when we reverse this disguise
         let pp_record = new_generic_diff_record_wrapper(
+            self.start_time,
             old_uid,
             did,
             edna_diff_record_to_bytes(&new_pseudoprincipal_record(
@@ -612,6 +626,7 @@ impl RecordCtrler {
         let start = time::Instant::now();
         let p = self.principal_data.get_mut(uid).unwrap();
         let precord = new_generic_diff_record_wrapper(
+            self.start_time,
             uid,
             did,
             edna_diff_record_to_bytes(&new_remove_principal_record(&p)),
@@ -666,7 +681,7 @@ impl RecordCtrler {
                 );
             }
             None => {
-                let mut new_bag = Bag::new();
+                let mut new_bag = Bag::new(self.start_time);
                 new_bag.chainrecs.insert(pppk.new_uid.clone(), pppk.clone());
                 info!(
                     "Got new_bag for {} and {} with and privkeys {}",
@@ -692,7 +707,7 @@ impl RecordCtrler {
                 bag.diffrecs.push(record.clone());
             }
             None => {
-                let mut new_bag = Bag::new();
+                let mut new_bag = Bag::new(self.start_time);
                 info!("Got new bag for {} diff records", record.uid);
                 new_bag.diffrecs.push(record.clone());
                 self.tmp_bags.insert(record.uid.clone(), new_bag);
@@ -1040,6 +1055,29 @@ impl RecordCtrler {
         }
         uids
     }
+
+    pub fn record_update<Q: Queryable>(&mut self, f: UpdateFn, db: &mut Q) {
+        let u = Update {
+            t: self.start_time.elapsed().as_secs(),
+            upfn: f.clone(),
+        };
+        RecordPersister::persist_update(&u, db);
+        self.updates.push(u);
+        // TODO truncate old updates
+    }
+
+    pub fn get_updates_since(&self, t: u64) -> Vec<Update> {
+        // note that they should already been sorted in ascending order
+        let mut i = 0;
+        while i < self.updates.len() {
+            // time since start is greater
+            if self.updates[i].t >= t {
+                break;
+            }
+            i += 1;
+        }
+        return self.updates[i..].to_vec();
+    }
 }
 
 #[cfg(test)]
@@ -1094,6 +1132,7 @@ mod tests {
                 let d = ctrler.start_disguise(Some(u.to_string()));
                 for i in 0..iters {
                     let mut remove_record = new_generic_diff_record_wrapper(
+                        self.start_time,
                         &u.to_string(),
                         d,
                         edna_diff_record_to_bytes(&new_delete_record(TableRow {
@@ -1168,6 +1207,7 @@ mod tests {
             for i in 1..iters {
                 let d = ctrler.start_disguise(Some(u.to_string()));
                 let remove_record = new_generic_diff_record_wrapper(
+                    self.start_time,
                     &u.to_string(),
                     d,
                     edna_diff_record_to_bytes(&new_delete_record(TableRow {
@@ -1187,7 +1227,13 @@ mod tests {
                     table: pseudoprincipal_name.clone(),
                     row: vec![RowVal::new("uid".to_string(), anon_uid.to_string())],
                 };
-                ctrler.register_pseudoprincipal(&u.to_string(), &anon_uid.to_string(), pp, d, &mut db);
+                ctrler.register_pseudoprincipal(
+                    &u.to_string(),
+                    &anon_uid.to_string(),
+                    pp,
+                    d,
+                    &mut db,
+                );
                 ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
             }
 

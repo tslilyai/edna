@@ -2,39 +2,33 @@ use crate::lowlevel_api::*;
 use crate::records::*;
 use crate::*;
 use log::{info, warn};
+use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
-
-pub type UpdateFn = Box<dyn Fn(Vec<TableRow>) -> Vec<TableRow> + Send + Sync>;
 
 pub struct RevealArgs<'a, Q: Queryable> {
-    pub timap: &'a HashMap<String, TableInfo>,
+    pub timap: HashMap<String, TableInfo>,
     pub pp_gen: &'a PseudoprincipalGenerator,
     pub recorrelated_pps: &'a HashSet<UID>,
     pub edges: &'a HashMap<UID, Vec<SFChainRecord>>,
     pub uid: UID,
     pub did: DID,
     pub reveal_pps: RevealPPType,
-    pub llapi: &'a mut LowLevelAPI,
+    pub allow_singlecolumn_reveals: bool,
+    pub llapi_locked: &'a mut LowLevelAPI,
     pub db: &'a mut Q,
+    pub updates: Vec<Update>,
 }
 pub struct Revealer {
     pub llapi: Arc<Mutex<LowLevelAPI>>,
     pub pool: mysql::Pool,
-    start: Instant,
-    updates: Vec<(u64, UpdateFn)>,
-    dryrun: bool,
 }
 
 impl Revealer {
-    pub fn new(llapi: Arc<Mutex<LowLevelAPI>>, pool: mysql::Pool, dryrun: bool) -> Revealer {
+    pub fn new(llapi: Arc<Mutex<LowLevelAPI>>, pool: mysql::Pool) -> Revealer {
         let revealer = Revealer {
             llapi: llapi,
             pool: pool,
-            start: Instant::now(),
-            updates: vec![],
-            dryrun: dryrun,
         };
         revealer
     }
@@ -45,29 +39,46 @@ impl Revealer {
         dsmap: &HashMap<String, Vec<(String, EdnaDiffRecord)>>,
         args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
+        info!("Revealing remove diffs of table {}", table);
         match dsmap.get(table) {
             Some(ds) => {
-                let mut success = true;
+                let mut bigdiff = EdnaDiffRecord {
+                    typ: REMOVE,
+                    // old and new rows
+                    old_values: vec![],
+                    new_values: vec![],
+                    pubkey: vec![],
+                    enc_locators_index: 0,
+                    old_uid: "".to_string(),
+                    new_uid: "".to_string(),
+                    t: 0,
+                };
                 for (uid, d) in ds {
                     // don't restore deleted pseudoprincipals that have been recorrelated!
-                    if args.recorrelated_pps.contains(uid) && &d.new_uid == uid {
+                    if args.recorrelated_pps.contains(uid) && table == args.pp_gen.table {
                         info!(
                             "Skipping restoration of deleted recorrelated pp {}, table {}!",
                             uid, table
                         );
                         continue;
                     }
-                    info!("Reversing remove record {:?}\n", d);
-                    args.uid = uid.clone();
-                    let revealed = d.reveal(args)?;
-                    if revealed {
-                        info!("Remove Record revealed!\n");
+                    bigdiff.old_values.append(&mut d.old_values.clone());
+                    bigdiff.new_values.append(&mut d.new_values.clone());
+                    if bigdiff.t == 0 {
+                        bigdiff.t = d.t;
                     } else {
-                        info!("Failed to reveal remove record");
+                        bigdiff.t = min(d.t, bigdiff.t);
                     }
-                    success &= revealed;
+                    //info!("Reversing remove record {:?}\n", d);
+                    //args.uid = uid.clone();
+                    //let revealed = d.reveal(args)?;
+                    //if revealed {
+                    //    info!("Remove Record revealed!\n");
+                    //} else {
+                    //    info!("Failed to reveal remove record");
+                    // }
                 }
-                Ok(success)
+                bigdiff.reveal(args)
             }
             None => Ok(true),
         }
@@ -77,34 +88,49 @@ impl Revealer {
         &mut self,
         uid: Option<&UID>,
         did: DID,
-        table_info: &HashMap<String, TableInfo>,
+        timap: &HashMap<String, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
+        allow_singlecolumn_reveals: bool,
         db: &mut Q,
         password: Option<String>,
         user_share: Option<(Share, Loc)>,
     ) -> Result<(), mysql::Error> {
+        let start = time::Instant::now();
         let mut privkey = vec![];
 
         if uid != None {
-            let llapi = self.llapi.lock().unwrap();
+            let llapi_locked = self.llapi.lock().unwrap();
 
-            let priv_key = llapi.get_priv_key(&(uid.clone().unwrap()), password, user_share);
+            let priv_key = llapi_locked.get_priv_key(&(uid.clone().unwrap()), password, user_share);
             if let Some(key) = priv_key {
-                // PROXY: login user
-                if !self.dryrun {
-                    db.query_drop(format!("LOGIN {}", base64::encode(&key)))
-                        .unwrap();
-                }
                 privkey = key;
             }
-            drop(llapi);
+            drop(llapi_locked);
 
             info!("got priv key");
         }
 
-        warn!("Revealing disguise for {:?}", uid);
-        self.reveal_using_secretkey(did, table_info, pp_gen, reveal_pps, privkey, db)
+        warn!(
+            "Revealing disguise for {:?} after getting key: {}mus",
+            uid,
+            start.elapsed().as_micros()
+        );
+        let start = time::Instant::now();
+        let res = self.reveal_using_secretkey(
+            did,
+            timap,
+            pp_gen,
+            reveal_pps,
+            allow_singlecolumn_reveals,
+            privkey,
+            db,
+        );
+        warn!(
+            "reveal using secretkey took {}mus",
+            start.elapsed().as_micros()
+        );
+        res
     }
 
     // Note: Decorrelations are not revealed if not using EdnaSpeaksForRecords
@@ -112,9 +138,10 @@ impl Revealer {
     pub fn reveal_using_secretkey<Q: Queryable>(
         &mut self,
         did: DID,
-        table_info: &HashMap<String, TableInfo>,
+        timap: &HashMap<String, TableInfo>,
         pp_gen: &PseudoprincipalGenerator,
         reveal_pps: Option<RevealPPType>,
+        allow_singlecolumn_reveals: bool,
         privkey: records::PrivKey,
         db: &mut Q,
     ) -> Result<(), mysql::Error> {
@@ -122,33 +149,24 @@ impl Revealer {
         // columns that are fks to the users table that have since been
         // decorrelated (would need to check all possible pps as fks)
         let fnstart = time::Instant::now();
-        
-        // PROXY: login user
-        if !self.dryrun {
-            if privkey.len() > 0 {
-                db.query_drop(format!("LOGIN {}", base64::encode(&privkey)))
-                    .unwrap();
-            }
-        }
-
-
         let start = time::Instant::now();
-        let (drws, pks) = self
-            .llapi
-            .lock()
-            .unwrap()
-            .get_recs_and_privkeys(&privkey);
+        let mut llapi_locked = self.llapi.lock().unwrap();
+        let (drws, pks) = llapi_locked.get_recs_and_privkeys(&privkey);
         warn!(
             "Edna: Get records for reveal: {}mus",
             start.elapsed().as_micros()
         );
         let reveal_pps = reveal_pps.unwrap_or(RevealPPType::Restore);
+        let mut oldest_t = 0;
         let drs: HashSet<EdnaDiffRecordWrapper> = drws
             .iter()
-            .map(|drw| EdnaDiffRecordWrapper {
-                did: drw.did,
-                uid: drw.uid.clone(),
-                record: edna_diff_record_from_bytes(&drw.record_data),
+            .map(|drw| {
+                oldest_t = min(oldest_t, drw.t);
+                EdnaDiffRecordWrapper {
+                    did: drw.did,
+                    uid: drw.uid.clone(),
+                    record: edna_diff_record_from_bytes(&drw.record_data, drw.t),
+                }
             })
             .collect();
 
@@ -182,18 +200,20 @@ impl Revealer {
             start.elapsed().as_micros()
         );
 
-        let mut llapi = self.llapi.lock().unwrap();
-        llapi.start_reveal(did);
+        llapi_locked.start_reveal(did);
+        let updates = llapi_locked.get_updates_since(oldest_t);
         let mut reveal_args = RevealArgs {
-            timap: &table_info,
+            timap: timap.clone(),
             pp_gen: &pp_gen,
             recorrelated_pps: &recorrelated_pps,
             edges: &edges,
             uid: String::new(),
             did: did,
             reveal_pps: reveal_pps,
-            llapi: &mut llapi,
+            allow_singlecolumn_reveals: allow_singlecolumn_reveals,
+            llapi_locked: &mut llapi_locked,
             db: db,
+            updates: updates,
         };
 
         // first, reveal any removed principals
@@ -239,7 +259,11 @@ impl Revealer {
                 }
             }
         }
-        let mut removed_revealed = HashSet::new();
+
+        // Note: we do restore removed records first because of referential
+        // integrity, which can be violated if we restore decorrelations before
+        // remove. This also means that we violate referential integrity when we
+        // remove before decor.
 
         // reveal user removed records first for referential integrity
         self.reveal_remove_diffs_of_table(
@@ -247,7 +271,54 @@ impl Revealer {
             &remove_diffs_for_table,
             &mut reveal_args,
         )?;
-        removed_revealed.insert(pp_gen.table.clone());
+        // insert all non-user removed records
+        let mut all_tables = remove_diffs_for_table.keys().collect::<HashSet<_>>();
+        all_tables.remove(&pp_gen.table);
+        let all_tables_copy = all_tables.clone();
+        while all_tables.len() > 0 {
+            for table in &all_tables_copy {
+                // need to check that we haven't revealed this table yet
+                if all_tables.contains(table) {
+                    // reveal all referenced tables first
+                    // note: we assume no circularity
+                    let ti = timap.get(&table.to_string()).unwrap();
+                    for fk in &ti.other_fks {
+                        let reftab = &fk.to_table;
+                        // if we haven't revealed the referenced table yet, reveal it!
+                        if all_tables.contains(reftab) {
+                            self.reveal_remove_diffs_of_table(
+                                reftab,
+                                &remove_diffs_for_table,
+                                &mut reveal_args,
+                            )?;
+                            all_tables.remove(reftab);
+                        }
+                    }
+                    // then reveal this one
+                    self.reveal_remove_diffs_of_table(
+                        table,
+                        &remove_diffs_for_table,
+                        &mut reveal_args,
+                    )?;
+                    all_tables.remove(table);
+                }
+            }
+        }
+
+        // reveal all modify diff records
+        for dr in &drs {
+            if dr.did == did && dr.record.typ == MODIFY {
+                info!("Reversing modify record {:?}\n", dr.record);
+                reveal_args.uid = dr.uid.clone();
+                let revealed = dr.record.reveal(&mut reveal_args)?;
+                if revealed {
+                    info!("Modify Diff Record revealed!\n");
+                } else {
+                    success = false;
+                    info!("Failed to reveal modify record");
+                }
+            }
+        }
 
         // revealing in order of disguising: undo all decor
         // but only if we aren't going to do so anyways
@@ -268,45 +339,6 @@ impl Revealer {
             }
         }
 
-        // reveal all modify diff records
-        for dr in &drs {
-            if dr.did == did && dr.record.typ == MODIFY {
-                info!("Reversing modify record {:?}\n", dr.record);
-                reveal_args.uid = dr.uid.clone();
-                let revealed = dr.record.reveal(&mut reveal_args)?;
-                if revealed {
-                    info!("Modify Diff Record revealed!\n");
-                } else {
-                    success = false;
-                    info!("Failed to reveal modify record");
-                }
-            }
-        }
-
-        // insert all non-user removed records
-        for table in remove_diffs_for_table.keys() {
-            if removed_revealed.contains(table) {
-                continue;
-            }
-            // reveal all referenced tables first
-            let ti = table_info.get(table).unwrap();
-            for fk in &ti.other_fks {
-                let reftab = &fk.to_table;
-                if removed_revealed.contains(reftab) {
-                    continue;
-                }
-                self.reveal_remove_diffs_of_table(
-                    reftab,
-                    &remove_diffs_for_table,
-                    &mut reveal_args,
-                )?;
-                removed_revealed.insert(reftab.clone());
-            }
-            // then reveal this one
-            self.reveal_remove_diffs_of_table(table, &remove_diffs_for_table, &mut reveal_args)?;
-            removed_revealed.insert(table.clone());
-        }
-
         // reveal (by deleting) new pseudoprincipals
         // note that we do this after recorrelation in case a shared data item
         // introduced a record referring to a pseudoprincipal
@@ -318,20 +350,16 @@ impl Revealer {
         }
         success &= EdnaDiffRecord::reveal_new_pps(&pp_records, &mut reveal_args)?;
 
-        llapi.cleanup_records_of_disguise(did, &privkey);
+        llapi_locked.cleanup_records_of_disguise(did, &privkey);
         if !success {
             info!(
                 "Reveal records failed, clearing anyways: {}mus",
                 fnstart.elapsed().as_micros()
             );
         }
-        llapi.end_reveal(did);
+        llapi_locked.end_reveal(did);
+        drop(llapi_locked);
         warn!("Reveal records total: {}mus", fnstart.elapsed().as_micros());
         Ok(())
-    }
-
-    pub fn record_update(&mut self, f: UpdateFn) {
-        self.updates
-            .push((self.start.elapsed().as_secs(), Box::new(f)));
     }
 }

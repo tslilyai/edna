@@ -104,7 +104,6 @@ pub fn decrypt_encdata(ed: &EncData, privkey: &PrivKey, dryrun: bool) -> (bool, 
     }
 }
 
-
 pub fn encrypt_with_pubkey(pubkey: &Option<&PublicKey>, bytes: &Vec<u8>, dryrun: bool) -> EncData {
     let start = time::Instant::now();
     if dryrun {

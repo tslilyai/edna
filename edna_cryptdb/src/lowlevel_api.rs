@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
  */
 pub struct LowLevelAPI {
     pub pool: mysql::Pool,
-    record_ctrler: RecordCtrler,
+    pub record_ctrler: RecordCtrler,
 }
 
 impl LowLevelAPI {
@@ -160,7 +160,12 @@ impl LowLevelAPI {
     // restoring.
     //----------------------------------------------------------------------------
     pub fn save_diff_record(&mut self, uid: UID, did: DID, data: Vec<u8>) {
-        let tok = records::new_generic_diff_record_wrapper(&uid, did, data);
+        let tok = records::new_generic_diff_record_wrapper(
+            self.record_ctrler.start_time,
+            &uid,
+            did,
+            data,
+        );
         self.record_ctrler.insert_diff_record_wrapper(&tok);
     }
 
@@ -178,8 +183,13 @@ impl LowLevelAPI {
         new_uid: &UID,
         pp: TableRow,
     ) -> PrivKey {
-        self.record_ctrler
-            .register_pseudoprincipal(old_uid, new_uid, pp, did, &mut self.pool.get_conn().unwrap())
+        self.record_ctrler.register_pseudoprincipal(
+            old_uid,
+            new_uid,
+            pp,
+            did,
+            &mut self.pool.get_conn().unwrap(),
+        )
     }
 
     pub fn save_decor_record(
@@ -214,5 +224,9 @@ impl LowLevelAPI {
 
     pub fn principal_is_anon(&self, uid: &UID) -> bool {
         self.record_ctrler.principal_is_anon(uid)
+    }
+
+    pub fn get_updates_since(&self, t: u64) -> Vec<Update> {
+        self.record_ctrler.get_updates_since(t)
     }
 }
