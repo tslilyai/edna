@@ -58,6 +58,7 @@ fn test_normal_execution() {
         "EdnaRemovedSharedObjects",
         "EdnaShares",
         "EdnaEncLocs",
+        "EdnaUpdates",
     ];
     assert_eq!(results.len(), tables.len());
     for tab in results {
