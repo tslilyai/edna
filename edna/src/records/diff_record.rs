@@ -635,7 +635,7 @@ impl EdnaDiffRecord {
         let valstr = vals.join(",");
         let updates: Vec<String> = cols.iter().map(|c| format!("{} = new.{}", c, c)).collect();
         let insert_q = format!(
-            "INSERT INTO {} ({}) VALUES ({}) as new ON DUPLICATE KEY UPDATE SET {}",
+            "INSERT INTO {} ({}) VALUES ({}) as new ON DUPLICATE KEY UPDATE {}",
             table,
             colstr,
             valstr,
