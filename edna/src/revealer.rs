@@ -42,7 +42,17 @@ impl Revealer {
         info!("Revealing remove diffs of table {}", table);
         match dsmap.get(table) {
             Some(ds) => {
-                let mut success = true;
+                let mut bigdiff = EdnaDiffRecord {
+                    typ: REMOVE,
+                    // old and new rows
+                    old_values: vec![],
+                    new_values: vec![],
+                    pubkey: vec![],
+                    enc_locators_index: 0,
+                    old_uid: "".to_string(),
+                    new_uid: "".to_string(),
+                    t: 0,
+                };
                 for (uid, d) in ds {
                     // don't restore deleted pseudoprincipals that have been recorrelated!
                     if args.recorrelated_pps.contains(uid) && table == args.pp_gen.table {
@@ -52,17 +62,23 @@ impl Revealer {
                         );
                         continue;
                     }
-                    info!("Reversing remove record {:?}\n", d);
-                    args.uid = uid.clone();
-                    let revealed = d.reveal(args)?;
-                    if revealed {
-                        info!("Remove Record revealed!\n");
+                    bigdiff.old_values.append(&mut d.old_values.clone());
+                    bigdiff.new_values.append(&mut d.new_values.clone());
+                    if bigdiff.t == 0 {
+                        bigdiff.t = d.t;
                     } else {
-                        info!("Failed to reveal remove record");
+                        bigdiff.t = min(d.t, bigdiff.t);
                     }
-                    success &= revealed;
+                    //info!("Reversing remove record {:?}\n", d);
+                    //args.uid = uid.clone();
+                    //let revealed = d.reveal(args)?;
+                    //if revealed {
+                    //    info!("Remove Record revealed!\n");
+                    //} else {
+                    //    info!("Failed to reveal remove record");
+                    // }
                 }
-                Ok(success)
+                bigdiff.reveal(args)
             }
             None => Ok(true),
         }
