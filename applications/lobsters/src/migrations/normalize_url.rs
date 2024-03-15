@@ -32,11 +32,12 @@ pub fn apply(db: &mut mysql::PooledConn) {
 pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
     let start = time::Instant::now();
     let mut new_rows = vec![];
+    let startnorm = time::Instant::now();
+    let norm = UrlNormalizer::default();
+    warn!("get URL normalizer: {}mus", startnorm.elapsed().as_micros());
+
     for row in rows {
         if row.table == "stories" {
-            let startnorm = time::Instant::now();
-            let norm = UrlNormalizer::default();
-            warn!("get URL normalizer: {}mus", startnorm.elapsed().as_micros());
             let url = helpers::get_value_of_col(&row.row, "url").unwrap();
             if url == "" || url == "NULL" {
                 new_rows.push(row.clone());
