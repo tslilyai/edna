@@ -32,12 +32,19 @@ pub fn apply(db: &mut mysql::PooledConn) {
 pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
     let start = time::Instant::now();
     let mut new_rows = vec![];
-    let startnorm = time::Instant::now();
-    let norm = UrlNormalizer::default();
-    warn!("get URL normalizer: {}mus", startnorm.elapsed().as_micros());
-
+    let mut story_rows = vec![];
     for row in rows {
         if row.table == "stories" {
+            story_rows.push(row);
+        } else {
+            new_rows.push(row.clone());
+        }
+    }
+    if story_rows.len() > 0 {
+        let startnorm = time::Instant::now();
+        let norm = UrlNormalizer::default();
+        warn!("get URL normalizer: {}mus", startnorm.elapsed().as_micros());
+        for row in story_rows {
             let url = helpers::get_value_of_col(&row.row, "url").unwrap();
             if url == "" || url == "NULL" {
                 new_rows.push(row.clone());
@@ -65,8 +72,6 @@ pub fn update(rows: Vec<TableRow>) -> Vec<TableRow> {
                 table: "stories".to_string(),
                 row: story_row,
             })
-        } else {
-            new_rows.push(row.clone());
         }
     }
     warn!("normalize_url update: {}mus", start.elapsed().as_micros());
