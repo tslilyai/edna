@@ -538,8 +538,13 @@ impl EdnaDiffRecord {
                     fk.to_col,
                     helpers::to_mysql_valstr(&curval)
                 );
-                warn!("other fk selection: {}", selection.to_string());
+                let start = time::Instant::now();
                 let res = args.db.query_iter(selection.clone()).unwrap();
+                warn!(
+                    "other fk selection {}: {}mus",
+                    selection.to_string(),
+                    start.elapsed().as_micros()
+                );
                 let mut count: u64 = 0;
                 for row in res {
                     count = from_value(row.unwrap().unwrap()[0].clone());

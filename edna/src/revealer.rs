@@ -274,9 +274,11 @@ impl Revealer {
         // insert all non-user removed records
         let mut all_tables = remove_diffs_for_table.keys().collect::<HashSet<_>>();
         all_tables.remove(&pp_gen.table);
-        let all_tables_copy = all_tables.clone();
+        let mut all_tables_vec: Vec<_> = all_tables.clone().into_iter().collect();
+        // make iteration deterministic
+        all_tables_vec.sort();
         while all_tables.len() > 0 {
-            for table in &all_tables_copy {
+            for table in &all_tables_vec {
                 // need to check that we haven't revealed this table yet
                 if all_tables.contains(table) {
                     // reveal all referenced tables first
