@@ -892,7 +892,7 @@ impl Disguiser {
         helpers::query_drop(&q, db).unwrap();
 
         let mut index = 0;
-        let mut values = vec![];
+        let mut values: HashMap<Vec<RowVal>, Vec<RowVal>> = HashMap::new();
         for (_owners, groups) in &owner_groups {
             /*
              * DECOR OBJECT MODIFICATIONS
@@ -920,9 +920,20 @@ impl Disguiser {
 
                         for i in items {
                             // A. DECOR DIFF
-                            let mut i_with_pps = i.clone();
                             let ix = i.iter().position(|r| &r.column() == user_fk_col).unwrap();
-                            i_with_pps[ix] = RowVal::new(i[ix].column(), new_uid.clone());
+                            let ids = get_ids(&child_tableinfo.id_cols, &i);
+                            let i_with_pps = match values.get_mut(&ids) {
+                                Some(obj) => {
+                                    obj[ix] = RowVal::new(i[ix].column(), new_uid.clone());
+                                    obj.clone()
+                                }
+                                None => {
+                                    let mut i_with_pps = i.clone();
+                                    i_with_pps[ix] = RowVal::new(i[ix].column(), new_uid.clone());
+                                    values.insert(ids, i_with_pps);
+                                    i_with_pps
+                                }
+                            };
                             // note that we may have multiple decor records for
                             // each pp, since the pp may own multiple items
                             llapi.save_decor_record(
@@ -947,7 +958,6 @@ impl Disguiser {
 
                             // B. UPDATE CHILD FOREIGN KEY
                             //let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
-                            values.push(i_with_pps);
                             //let q = format!(
                             //"UPDATE {} SET {} = '{}' WHERE {}",
                             //child_tableinfo.table, user_fk_col, new_uid, i_select
@@ -958,11 +968,13 @@ impl Disguiser {
             }
         }
         if values.len() > 0 {
-            let cols: Vec<String> = values[0].iter().map(|rv| rv.column().clone()).collect();
-            let colstr = cols.join(",");
             let mut vals = vec![];
-            for tr in values {
-                let row: Vec<String> = tr
+            let mut cols: Vec<String> = vec![];
+            for (_, v) in values {
+                if cols.len() == 0 {
+                    cols = v.iter().map(|rv| rv.column().clone()).collect();
+                }
+                let row: Vec<String> = v
                     .iter()
                     .map(|rv| {
                         if rv.value().is_empty() {
@@ -981,8 +993,8 @@ impl Disguiser {
                     .collect();
                 vals.push(format!("({})", row.join(",")));
             }
+            let colstr = cols.join(",");
             let valstr = vals.join(",");
-
             let updates: Vec<String> = cols
                 .iter()
                 .map(|c| format!("{} = VALUES({})", c, c))
