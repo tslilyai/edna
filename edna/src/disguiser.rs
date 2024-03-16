@@ -930,7 +930,7 @@ impl Disguiser {
                                 None => {
                                     let mut i_with_pps = i.clone();
                                     i_with_pps[ix] = RowVal::new(i[ix].column(), new_uid.clone());
-                                    values.insert(ids, i_with_pps);
+                                    values.insert(ids, i_with_pps.clone());
                                     i_with_pps
                                 }
                             };
