@@ -58,14 +58,20 @@ impl Disguiser {
         let engine = if in_memory { "MEMORY" } else { "InnoDB" };
 
         if reset {
-            helpers::query_drop(&format!("DROP TABLE IF EXISTS {}", REMOVED_SHARED_TABLE), &mut db)
-                .unwrap();
+            helpers::query_drop(
+                &format!("DROP TABLE IF EXISTS {}", REMOVED_SHARED_TABLE),
+                &mut db,
+            )
+            .unwrap();
         }
         // create table
-        helpers::query_drop(&format!(
+        helpers::query_drop(
+            &format!(
             "CREATE TABLE IF NOT EXISTS {} (object varchar(2048), data varchar(2048)) ENGINE = {};",
             REMOVED_SHARED_TABLE, engine
-        ), &mut db)
+        ),
+            &mut db,
+        )
         .unwrap();
 
         let obj_rows =
@@ -886,6 +892,7 @@ impl Disguiser {
         helpers::query_drop(&q, db).unwrap();
 
         let mut index = 0;
+        let mut values = vec![];
         for (_owners, groups) in &owner_groups {
             /*
              * DECOR OBJECT MODIFICATIONS
@@ -926,7 +933,7 @@ impl Disguiser {
                                 },
                                 TableRow {
                                     table: child_tableinfo.table.to_string(),
-                                    row: i_with_pps,
+                                    row: i_with_pps.clone(),
                                 },
                                 did,
                             );
@@ -939,16 +946,55 @@ impl Disguiser {
                             // sfc_records.push(new_sfchain_record)
 
                             // B. UPDATE CHILD FOREIGN KEY
-                            let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
-                            let q = format!(
-                                "UPDATE {} SET {} = '{}' WHERE {}",
-                                child_tableinfo.table, user_fk_col, new_uid, i_select
-                            );
-                            helpers::query_drop(&q, db).unwrap();
+                            //let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
+                            values.push(i_with_pps);
+                            //let q = format!(
+                            //"UPDATE {} SET {} = '{}' WHERE {}",
+                            //child_tableinfo.table, user_fk_col, new_uid, i_select
+                            //);
                         }
                     }
                 }
             }
+        }
+        if values.len() > 0 {
+            let cols: Vec<String> = values[0].iter().map(|rv| rv.column().clone()).collect();
+            let colstr = cols.join(",");
+            let mut vals = vec![];
+            for tr in values {
+                let row: Vec<String> = tr
+                    .iter()
+                    .map(|rv| {
+                        if rv.value().is_empty() {
+                            "\"\"".to_string()
+                        } else if rv.value() == "NULL" {
+                            "NULL".to_string()
+                        } else {
+                            for c in rv.value().chars() {
+                                if !c.is_numeric() {
+                                    return format!("\"{}\"", rv.value().clone());
+                                }
+                            }
+                            rv.value().clone()
+                        }
+                    })
+                    .collect();
+                vals.push(format!("({})", row.join(",")));
+            }
+            let valstr = vals.join(",");
+
+            let updates: Vec<String> = cols.iter().map(|c| format!("{} = new.{}", c, c)).collect();
+            helpers::query_drop(
+                &format!(
+                    "INSERT INTO {} ({}) VALUES {} ON DUPLICATE KEY UPDATE {}",
+                    child_tableinfo.table,
+                    colstr,
+                    valstr,
+                    updates.join(",")
+                ),
+                db,
+            )
+            .unwrap();
         }
     }
 
