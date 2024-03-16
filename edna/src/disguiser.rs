@@ -983,7 +983,10 @@ impl Disguiser {
             }
             let valstr = vals.join(",");
 
-            let updates: Vec<String> = cols.iter().map(|c| format!("{} = new.{}", c, c)).collect();
+            let updates: Vec<String> = cols
+                .iter()
+                .map(|c| format!("{} = VALUES({})", c, c))
+                .collect();
             helpers::query_drop(
                 &format!(
                     "INSERT INTO {} ({}) VALUES {} ON DUPLICATE KEY UPDATE {}",
