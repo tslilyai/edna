@@ -641,13 +641,16 @@ impl EdnaDiffRecord {
             vals.push(format!("({})", row.join(",")));
         }
         let valstr = vals.join(",");
-        //let updates: Vec<String> = cols.iter().map(|c| format!("{} = new.{}", c, c)).collect();
+        let updates: Vec<String> = cols
+            .iter()
+            .map(|c| format!("{} = VALUES({})", c, c))
+            .collect();
         let insert_q = format!(
-            "INSERT IGNORE INTO {} ({}) VALUES {};", // as new ON DUPLICATE KEY UPDATE {}",
+            "INSERT INTO {} ({}) VALUES {} ON DUPLICATE KEY UPDATE {}",
             table,
             colstr,
             valstr,
-            //updates.join(",")
+            updates.join(",")
         );
         helpers::query_drop(&insert_q, args.db)?;
         warn!(
