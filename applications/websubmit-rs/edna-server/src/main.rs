@@ -140,7 +140,14 @@ fn rocket(args: &args::Args) -> Rocket<Build> {
         .mount("/anon/edit", routes![privacy::edit_as_pseudoprincipal])
 }
 
-fn populate_db(user2apikey: &mut HashMap<String, String>, account_durations: &mut Vec<Duration>, args: &args::Args, client: &Client, db: &mut mysql::Conn, log: slog::Logger) {
+fn populate_db(
+    user2apikey: &mut HashMap<String, String>,
+    account_durations: &mut Vec<Duration>,
+    args: &args::Args,
+    client: &Client,
+    db: &mut mysql::Conn,
+    log: slog::Logger,
+) {
     // create admin
     info!(log, "Creating admin");
     let postdata = serde_urlencoded::to_string(&vec![("email", config::ADMIN.0)]).unwrap();
@@ -175,6 +182,7 @@ fn populate_db(user2apikey: &mut HashMap<String, String>, account_durations: &mu
 
     // initialize for testing
     if args.prime {
+        let anum = 1;
         for l in 0..args.nlec {
             db.query_drop(&format!("INSERT INTO lectures VALUES ({}, 'lec{}');", l, l))
                 .unwrap();
@@ -199,8 +207,8 @@ fn populate_db(user2apikey: &mut HashMap<String, String>, account_durations: &mu
                     assert_eq!(response.status(), Status::SeeOther);
 
                     // insert answers
-                    db.query_drop(&format!("INSERT INTO answers VALUES ('{}@mail.edu', {}, {}, 'lec{}q{}answer{}', '1000-01-01 00:00:00');", 
-                        u, l, q, l, q, u)).unwrap();
+                    db.query_drop(&format!("INSERT INTO answers VALUES ({}, '{}@mail.edu', {}, {}, 'lec{}q{}answer{}', '1000-01-01 00:00:00');", 
+                        anum++, u, l, q, l, q, u)).unwrap();
 
                     // logout
                     let response = client.post("/apikey/logout").dispatch();
@@ -268,7 +276,14 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     let client = Client::tracked(rocket).expect("valid rocket instance");
     let mut db = mysql::Conn::new(Opts::from_url(&url).unwrap()).unwrap();
     let mut user2apikey = HashMap::new();
-    populate_db(&mut user2apikey, &mut account_durations, args, &client, &mut db, log.clone());
+    populate_db(
+        &mut user2apikey,
+        &mut account_durations,
+        args,
+        &client,
+        &mut db,
+        log.clone(),
+    );
 
     /************
      * admin read
@@ -366,14 +381,14 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             .dispatch();
         assert_eq!(response.status(), Status::SeeOther);
         edit_durations.push(start.elapsed());
-        
+
         // delete account
         let start = time::Instant::now();
         let response = client.post("/delete").header(ContentType::Form).dispatch();
         assert_eq!(response.status(), Status::SeeOther);
         delete_durations.push(start.elapsed());
     }
-    
+
     /**********************************
      * anonymization
      ***********************************/
@@ -390,7 +405,14 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             &schema,
         );
     }
-    populate_db(&mut user2apikey, &mut account_durations, args, &client, &mut db, log.clone());
+    populate_db(
+        &mut user2apikey,
+        &mut account_durations,
+        args,
+        &client,
+        &mut db,
+        log.clone(),
+    );
 
     // login as the admin
     let postdata =
@@ -447,8 +469,15 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     let mut db = mysql::Conn::new(Opts::from_url(&url).unwrap()).unwrap();
     let mut user2apikey = HashMap::new();
     let log = new_logger();
-    populate_db(&mut user2apikey, &mut account_durations, args, &client, &mut db, log.clone());
-    
+    populate_db(
+        &mut user2apikey,
+        &mut account_durations,
+        args,
+        &client,
+        &mut db,
+        log.clone(),
+    );
+
     /************
      * admin read
      *************/
@@ -757,7 +786,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         );
         let answer: String = from_value(rowvals[3].clone());
         if answer.contains("new_answer") {
-            found_new = true; 
+            found_new = true;
         }
     }
     assert!(found_new);
@@ -818,7 +847,10 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         let answer: String = from_value(rowvals[0].clone());
         rows.push(answer);
     }
-    assert_eq!(rows.len(), args.nlec * args.nqs * (args.nusers - min(args.nusers, NITERS)));
+    assert_eq!(
+        rows.len(),
+        args.nlec * args.nqs * (args.nusers - min(args.nusers, NITERS))
+    );
     let res = db.query_iter("SELECT * FROM users;").unwrap();
     let mut rows = vec![];
     for row in res {
