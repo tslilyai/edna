@@ -40,7 +40,7 @@ impl Revealer {
         args: &mut RevealArgs<Q>,
         typ: u8,
     ) -> Result<bool, mysql::Error> {
-        info!("Revealing remove diffs of table {}", table);
+        info!("Revealing diffs of table {}", table);
         let tinfo = args.timap.get(table).unwrap();
         match dsmap.get(table) {
             Some(ds) => {
@@ -69,28 +69,6 @@ impl Revealer {
                         continue;
                     }
 
-                    // get the latest value of any new row
-                    for nv in &d.new_values {
-                        let ids = helpers::get_ids(&tinfo.id_cols, &nv.row);
-                        match new_vals_map.get_mut(&ids) {
-                            Some(obj) => {
-                                // get latest new value
-                                if d.t > last_new_t {
-                                    for (ix, r) in nv.row.iter().enumerate() {
-                                        if r != &obj.row[ix] {
-                                            obj.row[ix] = nv.row[ix].clone();
-                                        }
-                                    }
-                                    last_new_t = d.t;
-                                }
-                            }
-                            None => {
-                                new_vals_map.insert(ids, nv.clone());
-                                last_new_t = d.t;
-                            }
-                        }
-                    }
-
                     // get the oldest value of any old row
                     for ov in &d.old_values {
                         let ids = helpers::get_ids(&tinfo.id_cols, &ov.row);
@@ -109,6 +87,36 @@ impl Revealer {
                             None => {
                                 old_vals_map.insert(ids, ov.clone());
                                 first_old_t = d.t;
+                            }
+                        }
+                    }
+
+                    // get the latest value of any new row
+                    for nv in &d.new_values {
+                        let ids = helpers::get_ids(&tinfo.id_cols, &nv.row);
+                        match new_vals_map.get_mut(&ids) {
+                            Some(obj) => {
+                                // get latest new value
+                                if d.t > last_new_t {
+                                    for (ix, r) in nv.row.iter().enumerate() {
+                                        if r != &obj.row[ix] {
+                                            // update new row only if it doesn't match the original
+                                            // row, or there is no original row
+                                            if let Some(ov) = old_vals_map.get(&ids) {
+                                                if &ov.row[ix] != r {
+                                                    obj.row[ix] = nv.row[ix].clone();
+                                                }
+                                            } else {
+                                                obj.row[ix] = nv.row[ix].clone();
+                                            }
+                                        }
+                                    }
+                                    last_new_t = d.t;
+                                }
+                            }
+                            None => {
+                                new_vals_map.insert(ids, nv.clone());
+                                last_new_t = d.t;
                             }
                         }
                     }
