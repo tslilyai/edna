@@ -1295,11 +1295,12 @@ fn test_apply_schema_change_anon_gdpr_anon_gdpr_between() {
     // moderations recorrelated
     for u in 1..USER_ITERS + 1 {
         let mut results = vec![];
-        let res = db
-            .query_iter(format!(
+        q = format!(
                 r"SELECT id FROM moderations WHERE moderator_user_id={} OR user_id={}",
                 u, u
-            ))
+            );
+        let res = db
+            .query_iter(q)
             .unwrap();
         for row in res {
             let vals = row.unwrap().unwrap();
@@ -1307,6 +1308,7 @@ fn test_apply_schema_change_anon_gdpr_anon_gdpr_between() {
             let id = helpers::mysql_val_to_string(&vals[0]);
             results.push(id);
         }
+        warn!("{}: {} results"), q, results);
         assert!(results.len() > 0);
     }
     let mut stories_results = vec![];
