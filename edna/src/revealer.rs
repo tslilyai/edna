@@ -96,27 +96,22 @@ impl Revealer {
                         let ids = helpers::get_ids(&tinfo.id_cols, &nv.row);
                         match new_vals_map.get_mut(&ids) {
                             Some(obj) => {
-                                // get latest new value
-                                if d.t > last_new_t {
-                                    for (ix, r) in nv.row.iter().enumerate() {
-                                        if r != &obj.row[ix] {
-                                            // update new row only if it doesn't match the original
-                                            // row, or there is no original row
-                                            if let Some(ov) = old_vals_map.get(&ids) {
-                                                if &ov.row[ix] != r {
-                                                    obj.row[ix] = nv.row[ix].clone();
-                                                }
-                                            } else {
+                                for (ix, r) in nv.row.iter().enumerate() {
+                                    if r != &obj.row[ix] {
+                                        // update new row only if it doesn't match the original
+                                        // row, or there is no original row
+                                        if let Some(ov) = old_vals_map.get(&ids) {
+                                            if &ov.row[ix] != r {
                                                 obj.row[ix] = nv.row[ix].clone();
                                             }
+                                        } else {
+                                            obj.row[ix] = nv.row[ix].clone();
                                         }
                                     }
-                                    last_new_t = d.t;
                                 }
                             }
                             None => {
                                 new_vals_map.insert(ids, nv.clone());
-                                last_new_t = d.t;
                             }
                         }
                     }
@@ -128,11 +123,7 @@ impl Revealer {
                 bigdiff
                     .new_values
                     .append(&mut new_vals_map.values().cloned().collect());
-                bigdiff.t = if first_old_t == 0 {
-                    last_new_t
-                } else {
-                    first_old_t
-                };
+                bigdiff.t = first_old_t;
                 bigdiff.reveal(args)
             }
             None => Ok(true),
