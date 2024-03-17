@@ -785,7 +785,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
                 .map(|rv| from_value::<String>(rv.clone()))
                 .collect::<Vec<String>>()
         );
-        let answer: String = from_value(rowvals[3].clone());
+        let answer: String = from_value(rowvals[4].clone());
         if answer.contains("new_answer") {
             found_new = true;
         }
@@ -919,7 +919,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     let mut found_new = false;
     for row in res {
         let rowvals = row.unwrap().unwrap();
-        let answer: String = from_value(rowvals[3].clone());
+        let answer: String = from_value(rowvals[4].clone());
         if answer.contains("new_answer") {
             found_new = true;
         }
