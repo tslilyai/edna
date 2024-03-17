@@ -21,7 +21,7 @@ use std::time;
 
 #[derive(Debug, FromForm)]
 pub(crate) struct LectureQuestionSubmission {
-    answers: HashMap<u64, (u64, String)>,
+    answers: HashMap<u64, String>,
 }
 
 #[derive(Serialize)]
@@ -221,8 +221,14 @@ pub(crate) fn questions_submit(
     debug!(bg.log, "Submitting answer for lec {}", num);
     let time = Local::now().naive_local();
     let ts = time.format("%Y-%m-%d %H:%M:%S").to_string();
-
-    for (id, (aid, answer)) in &data.answers {
+    for (id, answer) in &data.answers {
+        let aidres = bg.query_iter(&format!(
+            "SELECT id from answers WHERE answers.email = '{}' and answers.lec = {} and answers.q = {}",
+            apikey.user.clone(),
+            num,
+            id
+        ));
+        let aid: u64 = from_value(aidres.into_iter().collect::<Vec<_>>()[0][0].clone());
         let rec: Vec<(&str, String)> = vec![
             ("id", format!("'{}'", aid)),
             ("answer", format!("'{}'", answer)),
@@ -238,7 +244,7 @@ pub(crate) fn questions_submit(
         "{}",
         data.answers
             .iter()
-            .map(|(i, (_, t))| format!("Question {}:\n{}", i, t))
+            .map(|(i, t)| format!("Question {}:\n{}", i, t))
             .collect::<Vec<_>>()
             .join("\n-----\n")
     );
