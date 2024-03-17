@@ -182,7 +182,7 @@ fn populate_db(
 
     // initialize for testing
     if args.prime {
-        let anum = 1;
+        let mut anum = 1;
         for l in 0..args.nlec {
             db.query_drop(&format!("INSERT INTO lectures VALUES ({}, 'lec{}');", l, l))
                 .unwrap();
@@ -208,7 +208,8 @@ fn populate_db(
 
                     // insert answers
                     db.query_drop(&format!("INSERT INTO answers VALUES ({}, '{}@mail.edu', {}, {}, 'lec{}q{}answer{}', '1000-01-01 00:00:00');", 
-                        anum++, u, l, q, l, q, u)).unwrap();
+                        anum, u, l, q, l, q, u)).unwrap();
+                    anum += 1;
 
                     // logout
                     let response = client.post("/apikey/logout").dispatch();
