@@ -58,7 +58,6 @@ impl Revealer {
                     t: 0,
                 };
                 let mut first_old_t = 0;
-                let mut last_new_t = 0;
                 for (uid, d) in ds {
                     // don't restore deleted pseudoprincipals that have been recorrelated!
                     if args.recorrelated_pps.contains(uid) && table == args.pp_gen.table {
