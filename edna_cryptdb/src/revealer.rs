@@ -33,17 +33,18 @@ impl Revealer {
         revealer
     }
 
-    fn reveal_remove_diffs_of_table<Q: Queryable>(
+    fn reveal_diffs_of_table<Q: Queryable>(
         &self,
         table: &str,
         dsmap: &HashMap<String, Vec<(String, EdnaDiffRecord)>>,
         args: &mut RevealArgs<Q>,
+        typ: u8,
     ) -> Result<bool, mysql::Error> {
         info!("Revealing remove diffs of table {}", table);
         match dsmap.get(table) {
             Some(ds) => {
                 let mut bigdiff = EdnaDiffRecord {
-                    typ: REMOVE,
+                    typ: typ,
                     // old and new rows
                     old_values: vec![],
                     new_values: vec![],
@@ -243,19 +244,40 @@ impl Revealer {
         // first construct the graph of tables with removed items
         let mut remove_diffs_for_table: HashMap<String, Vec<(String, EdnaDiffRecord)>> =
             HashMap::new();
+        let mut decor_diffs_for_table: HashMap<String, Vec<(String, EdnaDiffRecord)>> =
+            HashMap::new();
+        let mut modify_diffs_for_table: HashMap<String, Vec<(String, EdnaDiffRecord)>> =
+            HashMap::new();
         for dr in &drs {
-            if dr.did == did && dr.record.typ == REMOVE {
+            if dr.did == did {
                 let table = if dr.record.old_values.len() > 0 {
                     &dr.record.old_values[0].table
                 } else {
                     &dr.record.new_values[0].table
                 };
-                match remove_diffs_for_table.get_mut(table) {
-                    Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
-                    None => {
-                        remove_diffs_for_table
-                            .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
-                    }
+                match dr.record.typ {
+                    REMOVE => match remove_diffs_for_table.get_mut(table) {
+                        Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
+                        None => {
+                            remove_diffs_for_table
+                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                        }
+                    },
+                    DECOR => match decor_diffs_for_table.get_mut(table) {
+                        Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
+                        None => {
+                            decor_diffs_for_table
+                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                        }
+                    },
+                    MODIFY => match modify_diffs_for_table.get_mut(table) {
+                        Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
+                        None => {
+                            modify_diffs_for_table
+                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                        }
+                    },
+                    _ => warn!("Skipping record typ {}", dr.record.typ),
                 }
             }
         }
@@ -266,17 +288,20 @@ impl Revealer {
         // remove before decor.
 
         // reveal user removed records first for referential integrity
-        self.reveal_remove_diffs_of_table(
+        self.reveal_diffs_of_table(
             &pp_gen.table,
             &remove_diffs_for_table,
             &mut reveal_args,
+            REMOVE,
         )?;
         // insert all non-user removed records
         let mut all_tables = remove_diffs_for_table.keys().collect::<HashSet<_>>();
         all_tables.remove(&pp_gen.table);
-        let all_tables_copy = all_tables.clone();
+        let mut all_tables_vec: Vec<_> = all_tables.clone().into_iter().collect();
+        // make iteration deterministic
+        all_tables_vec.sort();
         while all_tables.len() > 0 {
-            for table in &all_tables_copy {
+            for table in &all_tables_vec {
                 // need to check that we haven't revealed this table yet
                 if all_tables.contains(table) {
                     // reveal all referenced tables first
@@ -286,56 +311,47 @@ impl Revealer {
                         let reftab = &fk.to_table;
                         // if we haven't revealed the referenced table yet, reveal it!
                         if all_tables.contains(reftab) {
-                            self.reveal_remove_diffs_of_table(
+                            self.reveal_diffs_of_table(
                                 reftab,
                                 &remove_diffs_for_table,
                                 &mut reveal_args,
+                                REMOVE,
                             )?;
                             all_tables.remove(reftab);
                         }
                     }
                     // then reveal this one
-                    self.reveal_remove_diffs_of_table(
+                    self.reveal_diffs_of_table(
                         table,
                         &remove_diffs_for_table,
                         &mut reveal_args,
+                        REMOVE,
                     )?;
                     all_tables.remove(table);
                 }
             }
         }
 
-        // reveal all modify diff records
-        for dr in &drs {
-            if dr.did == did && dr.record.typ == MODIFY {
-                info!("Reversing modify record {:?}\n", dr.record);
-                reveal_args.uid = dr.uid.clone();
-                let revealed = dr.record.reveal(&mut reveal_args)?;
-                if revealed {
-                    info!("Modify Diff Record revealed!\n");
-                } else {
-                    success = false;
-                    info!("Failed to reveal modify record");
-                }
-            }
+        let mut all_tables = modify_diffs_for_table.keys().collect::<HashSet<_>>();
+        all_tables.remove(&pp_gen.table);
+        let mut all_tables_vec: Vec<_> = all_tables.clone().into_iter().collect();
+        // make iteration deterministic
+        all_tables_vec.sort();
+        for table in &all_tables_vec {
+            self.reveal_diffs_of_table(table, &modify_diffs_for_table, &mut reveal_args, MODIFY)?;
         }
 
         // revealing in order of disguising: undo all decor
         // but only if we aren't going to do so anyways
         // when revealing new PPs!
         if reveal_pps != RevealPPType::Restore {
-            for dr in &drs {
-                if dr.did == did && dr.record.typ == DECOR {
-                    info!("Reversing decor record {:?}\n", dr.record);
-                    reveal_args.uid = dr.uid.clone();
-                    let revealed = dr.record.reveal(&mut reveal_args)?;
-                    if revealed {
-                        info!("Decor Record revealed!\n");
-                    } else {
-                        success = false;
-                        info!("Failed to reveal decor record");
-                    }
-                }
+            let mut all_tables = decor_diffs_for_table.keys().collect::<HashSet<_>>();
+            all_tables.remove(&pp_gen.table);
+            let mut all_tables_vec: Vec<_> = all_tables.clone().into_iter().collect();
+            // make iteration deterministic
+            all_tables_vec.sort();
+            for table in &all_tables_vec {
+                self.reveal_diffs_of_table(table, &decor_diffs_for_table, &mut reveal_args, DECOR)?;
             }
         }
 
