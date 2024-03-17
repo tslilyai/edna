@@ -41,8 +41,11 @@ impl Revealer {
         typ: u8,
     ) -> Result<bool, mysql::Error> {
         info!("Revealing remove diffs of table {}", table);
+        let tinfo = args.timap.get(table).unwrap();
         match dsmap.get(table) {
             Some(ds) => {
+                let mut new_vals_map = HashMap::new();
+                let mut old_vals_map = HashMap::new();
                 let mut bigdiff = EdnaDiffRecord {
                     typ: typ,
                     // old and new rows
@@ -54,6 +57,8 @@ impl Revealer {
                     new_uid: "".to_string(),
                     t: 0,
                 };
+                let mut first_old_t = 0;
+                let mut last_new_t = 0;
                 for (uid, d) in ds {
                     // don't restore deleted pseudoprincipals that have been recorrelated!
                     if args.recorrelated_pps.contains(uid) && table == args.pp_gen.table {
@@ -63,22 +68,55 @@ impl Revealer {
                         );
                         continue;
                     }
-                    bigdiff.old_values.append(&mut d.old_values.clone());
-                    bigdiff.new_values.append(&mut d.new_values.clone());
-                    if bigdiff.t == 0 {
-                        bigdiff.t = d.t;
-                    } else {
-                        bigdiff.t = min(d.t, bigdiff.t);
+
+                    // get the latest value of any new row
+                    for nv in &d.new_values {
+                        let ids = helpers::get_ids(&tinfo.id_cols, &nv.row);
+                        match new_vals_map.get_mut(&ids) {
+                            Some(_) => {
+                                // get latest new value
+                                if d.t > last_new_t {
+                                    new_vals_map.insert(ids, nv.clone());
+                                    last_new_t = d.t;
+                                }
+                            }
+                            None => {
+                                new_vals_map.insert(ids, nv.clone());
+                                last_new_t = d.t;
+                            }
+                        }
                     }
-                    //info!("Reversing remove record {:?}\n", d);
-                    //args.uid = uid.clone();
-                    //let revealed = d.reveal(args)?;
-                    //if revealed {
-                    //    info!("Remove Record revealed!\n");
-                    //} else {
-                    //    info!("Failed to reveal remove record");
-                    // }
+
+                    // get the oldest value of any old row
+                    for ov in &d.old_values {
+                        let ids = helpers::get_ids(&tinfo.id_cols, &ov.row);
+                        match old_vals_map.get_mut(&ids) {
+                            Some(_) => {
+                                // get first old value
+                                if first_old_t == 0 || d.t < first_old_t {
+                                    old_vals_map.insert(ids, ov.clone());
+                                    first_old_t = d.t;
+                                }
+                            }
+                            None => {
+                                old_vals_map.insert(ids, ov.clone());
+                                first_old_t = d.t;
+                            }
+                        }
+                    }
                 }
+
+                bigdiff
+                    .old_values
+                    .append(&mut old_vals_map.values().cloned().collect());
+                bigdiff
+                    .new_values
+                    .append(&mut new_vals_map.values().cloned().collect());
+                bigdiff.t = if first_old_t == 0 {
+                    last_new_t
+                } else {
+                    first_old_t
+                };
                 bigdiff.reveal(args)
             }
             None => Ok(true),
