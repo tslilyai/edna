@@ -44,8 +44,8 @@ impl Revealer {
         let tinfo = args.timap.get(table).unwrap();
         match dsmap.get(table) {
             Some(ds) => {
-                let mut new_vals_map = HashMap::new();
-                let mut old_vals_map = HashMap::new();
+                let mut new_vals_map: HashMap<Vec<RowVal>, TableRow> = HashMap::new();
+                let mut old_vals_map: HashMap<Vec<RowVal>, TableRow> = HashMap::new();
                 let mut bigdiff = EdnaDiffRecord {
                     typ: typ,
                     // old and new rows
@@ -73,10 +73,14 @@ impl Revealer {
                     for nv in &d.new_values {
                         let ids = helpers::get_ids(&tinfo.id_cols, &nv.row);
                         match new_vals_map.get_mut(&ids) {
-                            Some(_) => {
+                            Some(obj) => {
                                 // get latest new value
                                 if d.t > last_new_t {
-                                    new_vals_map.insert(ids, nv.clone());
+                                    for (ix, r) in nv.row.iter().enumerate() {
+                                        if r != &obj.row[ix] {
+                                            obj.row[ix] = nv.row[ix].clone();
+                                        }
+                                    }
                                     last_new_t = d.t;
                                 }
                             }
@@ -91,10 +95,14 @@ impl Revealer {
                     for ov in &d.old_values {
                         let ids = helpers::get_ids(&tinfo.id_cols, &ov.row);
                         match old_vals_map.get_mut(&ids) {
-                            Some(_) => {
+                            Some(obj) => {
                                 // get first old value
                                 if first_old_t == 0 || d.t < first_old_t {
-                                    old_vals_map.insert(ids, ov.clone());
+                                    for (ix, r) in ov.row.iter().enumerate() {
+                                        if r != &obj.row[ix] {
+                                            obj.row[ix] = ov.row[ix].clone();
+                                        }
+                                    }
                                     first_old_t = d.t;
                                 }
                             }
