@@ -252,29 +252,37 @@ impl Revealer {
             if dr.did == did {
                 let table = if dr.record.old_values.len() > 0 {
                     &dr.record.old_values[0].table
-                } else {
+                } else if dr.record.new_values.len() > 0 {
                     &dr.record.new_values[0].table
+                } else {
+                    ""
                 };
                 match dr.record.typ {
                     REMOVE => match remove_diffs_for_table.get_mut(table) {
                         Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
                         None => {
-                            remove_diffs_for_table
-                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                            remove_diffs_for_table.insert(
+                                table.to_string(),
+                                vec![(dr.uid.clone(), dr.record.clone())],
+                            );
                         }
                     },
                     DECOR => match decor_diffs_for_table.get_mut(table) {
                         Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
                         None => {
-                            decor_diffs_for_table
-                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                            decor_diffs_for_table.insert(
+                                table.to_string(),
+                                vec![(dr.uid.clone(), dr.record.clone())],
+                            );
                         }
                     },
                     MODIFY => match modify_diffs_for_table.get_mut(table) {
                         Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
                         None => {
-                            modify_diffs_for_table
-                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                            modify_diffs_for_table.insert(
+                                table.to_string(),
+                                vec![(dr.uid.clone(), dr.record.clone())],
+                            );
                         }
                     },
                     _ => warn!("Skipping record typ {}", dr.record.typ),
