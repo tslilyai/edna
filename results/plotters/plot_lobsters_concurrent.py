@@ -166,27 +166,27 @@ print(
 )
 print(
     "expensive disguise",
-    int(np.percentile(delete_results[LOW_LOAD][1], 5)),
-    int(statistics.median(delete_results[LOW_LOAD][1])),
-    int(np.percentile(delete_results[LOW_LOAD][1], 95)),
+    int(np.percentile(delete_results[LOW_LOAD][0], 5)),
+    int(statistics.median(delete_results[LOW_LOAD][0])),
+    int(np.percentile(delete_results[LOW_LOAD][0], 95)),
 )
 print(
     "expensive restore",
-    int(np.percentile(restore_results[LOW_LOAD][1], 5)),
-    int(statistics.median(restore_results[LOW_LOAD][1])),
-    int(np.percentile(restore_results[LOW_LOAD][1], 95)),
+    int(np.percentile(restore_results[LOW_LOAD][0], 5)),
+    int(statistics.median(restore_results[LOW_LOAD][0])),
+    int(np.percentile(restore_results[LOW_LOAD][0], 95)),
 )
 print(
     "exp txn delete",
-    int(np.percentile(delete_results_txn[LOW_LOAD][1], 5)),
-    int(statistics.median(delete_results_txn[LOW_LOAD][1])),
-    int(np.percentile(delete_results_txn[LOW_LOAD][1], 95)),
+    int(np.percentile(delete_results_txn[LOW_LOAD][0], 5)),
+    int(statistics.median(delete_results_txn[LOW_LOAD][0])),
+    int(np.percentile(delete_results_txn[LOW_LOAD][0], 95)),
 )
 print(
     "exp txn restore",
-    int(np.percentile(restore_results_txn[LOW_LOAD][1], 5)),
-    int(statistics.median(restore_results_txn[LOW_LOAD][1])),
-    int(np.percentile(restore_results_txn[LOW_LOAD][1], 95)),
+    int(np.percentile(restore_results_txn[LOW_LOAD][0], 5)),
+    int(statistics.median(restore_results_txn[LOW_LOAD][0])),
+    int(np.percentile(restore_results_txn[LOW_LOAD][0], 95)),
 )
 
 offset = 560

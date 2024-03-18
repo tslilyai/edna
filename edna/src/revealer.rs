@@ -115,6 +115,8 @@ impl Revealer {
                         }
                     }
                 }
+                // TODO deal with different primary keys here: might have to update the db here,
+                // and then change the new value primary key column to match the old
 
                 bigdiff
                     .old_values

@@ -17,7 +17,7 @@ for i in `seq 5`; do
 	    --test 'updates' \
 	    --scale $scale \
 	    --txn \
-	    --uid 15921 \
+	    --uid 15955 \
 	    &> output/updates-exp-$i.out
 	echo "Ran updatestest with txn"
 
@@ -27,7 +27,7 @@ for i in `seq 5`; do
 	    --test 'reveal' \
 	    --scale $scale \
 	    --txn \
-	    --uid 15921  \
+	    --uid 15955  \
 	    &> output/reveal-exp-$i.out
 	echo "Ran updates test with txn"
 
