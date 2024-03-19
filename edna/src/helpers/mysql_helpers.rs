@@ -197,14 +197,10 @@ pub fn init_db(in_memory: bool, user: &str, pass: &str, host: &str, dbname: &str
  ************************************/
 pub fn query_drop<Q: Queryable>(q: &str, conn: &mut Q) -> Result<(), mysql::Error> {
     let start = time::Instant::now();
+    warn!("begin query_drop {}: {}\n", q, start.elapsed().as_micros());
+
     conn.query_drop(q)?;
-    //let len = if 100 > q.len() { q.len() } else { 100 };
-    warn!(
-        "query_drop: {}: {}mus\n",
-        q,
-        //q[..len].to_string(),
-        start.elapsed().as_micros()
-    );
+    warn!("query_drop: {}: {}mus\n", q, start.elapsed().as_micros());
     Ok(())
 }
 
