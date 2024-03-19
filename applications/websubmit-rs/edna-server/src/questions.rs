@@ -28,7 +28,7 @@ pub(crate) struct LectureQuestionSubmission {
 pub(crate) struct LectureQuestion {
     pub id: u64,
     pub prompt: String,
-    pub answer: Option<(u64, String)>,
+    pub answer: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -179,20 +179,19 @@ pub(crate) fn questions(
 
     let mut answers = HashMap::new();
     for r in answers_res {
-        let aid: u64 = from_value(r[0].clone());
-        let qid: u64 = from_value(r[3].clone());
-        let atext: String = from_value(r[4].clone());
-        answers.insert(qid, (aid, atext));
+        let id: u64 = from_value(r[2].clone());
+        let atext: String = from_value(r[3].clone());
+        answers.insert(id, atext);
     }
     let res = bg.query_iter(&format!("SELECT * FROM questions WHERE lec = {}", num));
     drop(bg);
     let mut qs: Vec<_> = res
         .into_iter()
         .map(|r| {
-            let qid: u64 = from_value(r[1].clone());
-            let answer = answers.get(&qid).map(|s| s.to_owned());
+            let id: u64 = from_value(r[1].clone());
+            let answer = answers.get(&id).map(|s| s.to_owned());
             LectureQuestion {
-                id: qid,
+                id: id,
                 prompt: from_value(r[2].clone()),
                 answer: answer,
             }
@@ -221,16 +220,9 @@ pub(crate) fn questions_submit(
     debug!(bg.log, "Submitting answer for lec {}", num);
     let time = Local::now().naive_local();
     let ts = time.format("%Y-%m-%d %H:%M:%S").to_string();
+
     for (id, answer) in &data.answers {
-        let aidres = bg.query_iter(&format!(
-            "SELECT id from answers WHERE answers.email = '{}' and answers.lec = {} and answers.q = {}",
-            apikey.user.clone(),
-            num,
-            id
-        ));
-        let aid: u64 = from_value(aidres.into_iter().collect::<Vec<_>>()[0][0].clone());
         let rec: Vec<(&str, String)> = vec![
-            ("id", format!("'{}'", aid)),
             ("answer", format!("'{}'", answer)),
             ("submitted_at", format!("'{}'", ts.clone())),
             ("email", format!("'{}'", apikey.user.clone())),

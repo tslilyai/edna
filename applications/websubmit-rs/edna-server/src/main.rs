@@ -182,7 +182,6 @@ fn populate_db(
 
     // initialize for testing
     if args.prime {
-        let mut anum = 1;
         for l in 0..args.nlec {
             db.query_drop(&format!("INSERT INTO lectures VALUES ({}, 'lec{}');", l, l))
                 .unwrap();
@@ -207,9 +206,8 @@ fn populate_db(
                     assert_eq!(response.status(), Status::SeeOther);
 
                     // insert answers
-                    db.query_drop(&format!("INSERT INTO answers VALUES ({}, '{}@mail.edu', {}, {}, 'lec{}q{}answer{}', '1000-01-01 00:00:00');", 
-                        anum, u, l, q, l, q, u)).unwrap();
-                    anum += 1;
+                    db.query_drop(&format!("INSERT INTO answers VALUES ('{}@mail.edu', {}, {}, 'lec{}q{}answer{}', '1000-01-01 00:00:00');", 
+                        u, l, q, l, q, u)).unwrap();
 
                     // logout
                     let response = client.post("/apikey/logout").dispatch();
@@ -785,7 +783,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
                 .map(|rv| from_value::<String>(rv.clone()))
                 .collect::<Vec<String>>()
         );
-        let answer: String = from_value(rowvals[4].clone());
+        let answer: String = from_value(rowvals[3].clone());
         if answer.contains("new_answer") {
             found_new = true;
         }
@@ -919,7 +917,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     let mut found_new = false;
     for row in res {
         let rowvals = row.unwrap().unwrap();
-        let answer: String = from_value(rowvals[4].clone());
+        let answer: String = from_value(rowvals[3].clone());
         if answer.contains("new_answer") {
             found_new = true;
         }
