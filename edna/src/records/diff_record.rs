@@ -478,6 +478,8 @@ impl EdnaDiffRecord {
         let mut new_rows_to_remove: HashSet<TableRow> = new_values.clone().into_iter().collect();
         let table_info = args.timap.get(table).unwrap().clone();
 
+        warn!("Revealing table rows for {}", table);
+
         // TODO if any old values update the primary key of a new value, we can't do an
         // INSERT-UPDATE.
         // gotta do this when we look at individual diff records instead of the batch, so in the
@@ -491,6 +493,7 @@ impl EdnaDiffRecord {
             for nv in &new_values {
                 let new_ids = helpers::get_ids(&table_info.id_cols, &nv.row);
                 // note that the tables should always be the same...
+                assert_eq!(nv.table, ov.table);
                 if new_ids == old_ids {
                     // we found a match, update the old value here!
                     orig = self.update_old_value(nv, ov, args)?;
