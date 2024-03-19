@@ -145,22 +145,6 @@ pub fn new_decor_record(old_child: TableRow, new_child: TableRow) -> EdnaDiffRec
 }
 
 impl EdnaDiffRecord {
-    fn update_new_row_primary_keys<Q: Queryable>(&mut self, args: &mut RevealArgs<Q>) {
-        // TODO hmm if we remove new rows and insert old rows, and they have different primary
-        // keys, this should be fine? because they shouldn't match ids anyways
-        /*for ov in &self.old_values {
-            let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
-            let mut orig = ov.clone();
-            for nv in &self.new_values {
-                let new_ids = helpers::get_ids(&table_info.id_cols, &nv.row);
-                // note that the tables should always be the same...
-                if new_ids == old_ids {
-                    // we found a match, update the old value here!
-                }
-            }
-        }*/
-    }
-
     fn reveal_removed_principal(
         &self,
         uid: &UID,

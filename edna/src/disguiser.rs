@@ -956,7 +956,17 @@ impl Disguiser {
                             // pseudoprincipals
                             // sfc_records.push(new_sfchain_record)
 
-                            // B. UPDATE CHILD FOREIGN KEY
+                            // B. UPDATE CHILD FOREIGN KEY ONLY IF KEY IS A PRIMARY KEY
+                            for idcol in &child_tableinfo.id_cols {
+                                if user_fk_col == idcol {
+                                    let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
+                                    let q = format!(
+                                        "UPDATE {} SET {} = '{}' WHERE {}",
+                                        child_tableinfo.table, user_fk_col, new_uid, i_select
+                                    );
+                                    helpers::query_drop(&q, db).unwrap();
+                                }
+                            }
                             //let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
                             //let q = format!(
                             //"UPDATE {} SET {} = '{}' WHERE {}",
@@ -967,6 +977,7 @@ impl Disguiser {
                 }
             }
         }
+        // update all values, assuming that all primary keys match
         if values.len() > 0 {
             let mut vals = vec![];
             let mut cols: Vec<String> = vec![];
