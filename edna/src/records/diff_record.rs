@@ -542,37 +542,35 @@ impl EdnaDiffRecord {
     }
 
     /// get_count_of_children checks for the number of children of this table referring to this fk.
-    /// only check for children of pseudoprincipals
-    /// TODO check for children of non-user tables too
     fn get_count_of_children<Q: Queryable>(
+        parent_table: &str,
         ids: &Vec<RowVal>,
-        tinfo: &TableInfo,
+        child_tinfo: &TableInfo,
         args: &mut RevealArgs<Q>,
     ) -> Result<u64, mysql::Error> {
-        if tinfo.owner_fks.len() == 0 {
+        let fnstart = time::Instant::now();
+        let mut wheres = vec![];
+        if parent_table == args.pp_gen.table {
+            for fk in &child_tinfo.owner_fks {
+                let id = helpers::get_value_of_col(&ids, &fk.to_col).unwrap();
+                wheres.push(format!("`{}` = {}", fk.from_col, id));
+            }
+        } else {
+            for fk in &child_tinfo.other_fks {
+                if fk.to_table == parent_table {
+                    let id = helpers::get_value_of_col(&ids, &fk.to_col).unwrap();
+                    wheres.push(format!("`{}` = {}", fk.from_col, id))
+                }
+            }
+        }
+        if wheres.len() == 0 {
             return Ok(0);
         }
-        let fnstart = time::Instant::now();
-
-        let selection = if tinfo.table == args.pp_gen.table {
-            tinfo
-                .owner_fks
-                .iter()
-                .map(|c| format!("`{}` = {}", c.from_col, ids[0].value()))
-                .collect::<Vec<String>>()
-                .join(" OR ")
-        } else {
-            tinfo
-                .other_fks
-                .iter()
-                .filter(|fk| fk.to_table == tinfo.table)
-                // assume that only first id is the foreign key, could also just iterate through
-                // ids to find matching column
-                .map(|c| format!("`{}` = {}", c.from_col, ids[0].value()))
-                .collect::<Vec<String>>()
-                .join(" OR ")
-        };
-        let checkstmt = format!("SELECT COUNT(*) FROM {} WHERE {}", tinfo.table, selection);
+        let checkstmt = format!(
+            "SELECT COUNT(*) FROM {} WHERE {}",
+            child_tinfo.table,
+            wheres.join(" OR ")
+        );
         let res = args.db.query_iter(checkstmt.clone()).unwrap();
         let mut count: u64 = 0;
         for row in res {
@@ -580,9 +578,10 @@ impl EdnaDiffRecord {
             break;
         }
         warn!(
-            "get_count_of_children: {} children of table {} point to id {}: {}mus",
+            "get_count_of_children: {} children of table {} point to table {} id {}: {}mus",
             count,
-            tinfo.table,
+            child_tinfo.table,
+            parent_table,
             ids[0].value(),
             fnstart.elapsed().as_micros()
         );
@@ -837,13 +836,17 @@ impl EdnaDiffRecord {
             /*
              * CHECK 2: Referential integrity, we need to do something to rows
              * that refer to this one.
-             * TODO
              */
             let new_ids = helpers::get_ids(&table_info.id_cols, &new_value.row);
             // don't delete if things refer to it
             let mut nchildren = 0;
             for (_, tinfo) in &args.timap.clone() {
-                nchildren += EdnaDiffRecord::get_count_of_children(&new_ids, &tinfo, args)?;
+                nchildren += EdnaDiffRecord::get_count_of_children(
+                    &table_info.table,
+                    &new_ids,
+                    &tinfo,
+                    args,
+                )?;
             }
             if nchildren == 0 {
                 delete_select.push(format!("({})", helpers::get_select_of_ids_str(&new_ids)));
