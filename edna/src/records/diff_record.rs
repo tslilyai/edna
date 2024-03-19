@@ -449,15 +449,13 @@ impl EdnaDiffRecord {
                 }
 
                 // restore users first
-                let mut success = self.reveal_table_rows(
-                    &args.pp_gen.table,
-                    new_values,
-                    old_values.into_iter().collect(),
-                    args,
-                )?;
-                for (table, (new_values, old_values)) in rows_for_table {
-                    if table != args.pp_gen.table {
-                        success &= self.reveal_table_rows(&table, new_values, old_values, args)?;
+                let mut success = true;
+                if let Some((nvs, ovs)) = rows_for_table.get(&args.pp_gen.table) {
+                    success &= self.reveal_table_rows(&args.pp_gen.table, nvs, ovs, args)?;
+                }
+                for (table, (nvs, ovs)) in &rows_for_table {
+                    if table != &args.pp_gen.table {
+                        success &= self.reveal_table_rows(table, nvs, ovs, args)?;
                     }
                 }
                 Ok(success)
@@ -470,8 +468,8 @@ impl EdnaDiffRecord {
     fn reveal_table_rows<Q: Queryable>(
         &self,
         table: &str,
-        new_values: Vec<TableRow>,
-        old_values: Vec<TableRow>,
+        new_values: &Vec<TableRow>,
+        old_values: &Vec<TableRow>,
         args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
         let mut old_rows_updated = vec![];
@@ -490,7 +488,7 @@ impl EdnaDiffRecord {
         for ov in &old_values.clone() {
             let old_ids = helpers::get_ids(&table_info.id_cols, &ov.row);
             let mut orig = ov.clone();
-            for nv in &new_values {
+            for nv in new_values {
                 let new_ids = helpers::get_ids(&table_info.id_cols, &nv.row);
                 // note that the tables should always be the same...
                 assert_eq!(nv.table, ov.table);
