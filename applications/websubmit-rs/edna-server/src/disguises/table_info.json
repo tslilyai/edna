@@ -33,7 +33,7 @@
     },
     "answers": {
         "table": "answers",
-        "id_cols": ["id"],
+        "id_cols": ["email", "q", "lec"],
         "other_fks": [
             {
                 "to_table": "questions",
