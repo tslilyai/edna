@@ -597,6 +597,9 @@ impl EdnaDiffRecord {
         args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
         let fnstart = time::Instant::now();
+        if old_values.len() == 0 {
+            return Ok(true);
+        }
         let table_info = args.timap.get(table).unwrap();
         let mut old_values = old_values.clone();
 
@@ -696,6 +699,7 @@ impl EdnaDiffRecord {
             .collect();
         let colstr = cols.join(",");
         let mut vals = vec![];
+
         for tr in old_values {
             let row: Vec<String> = tr
                 .row
@@ -826,6 +830,7 @@ impl EdnaDiffRecord {
         args: &mut RevealArgs<Q>,
     ) -> Result<bool, mysql::Error> {
         let mut delete_select = vec![];
+
         for new_value in new_values {
             warn!("Going to try to remove new row! {:?}", new_value);
 
@@ -843,6 +848,10 @@ impl EdnaDiffRecord {
             if nchildren == 0 {
                 delete_select.push(format!("({})", helpers::get_select_of_ids_str(&new_ids)));
             }
+        }
+
+        if delete_select.len() == 0 {
+            return Ok(true);
         }
         helpers::query_drop(
             &format!(
