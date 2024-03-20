@@ -6,19 +6,20 @@ import sys
 import numpy as np
 from textwrap import wrap
 
+
 plt.style.use('seaborn-deep')
-plt.figure(figsize = (3.33, 1.5))
+plt.figure(figsize = (6, 2.5))
+barwidth = 0.4
 
 # plot styling for paper
-matplotlib.rc('font', family='serif', size=7)
+matplotlib.rc('font', family='serif', size=11)
 matplotlib.rc('text.latex', preamble='\\usepackage{times,mathptmx}')
 matplotlib.rc('text', usetex=True)
-matplotlib.rc('legend', fontsize=7)
-matplotlib.rc('figure', figsize=(3.33,1.5))
+matplotlib.rc('legend', fontsize=11)
+matplotlib.rc('figure', figsize=(6,2.5))
 matplotlib.rc('axes', linewidth=0.5)
 matplotlib.rc('lines', linewidth=0.5)
 
-barwidth = 0.4
 labels = [
         'Create\nAccount',
         'Get Ans\n(User)',
@@ -41,11 +42,11 @@ def add_labels(x,y,plt,color,offset):
         new_offset = offset
         if y[i] < 17:
             new_offset = offset - 4
-        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6)
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=11)
 
 def add_text_labels(x,y,plt,color,offset):
     for i in range(len(x)):
-        plt.text(x[i], offset - 4, y[i], ha='center', color=color, size=6)
+        plt.text(x[i], offset - 4, y[i], ha='center', color=color, size=11)
 
 def get_yerr(durs):
     mins = []
@@ -232,9 +233,9 @@ X = np.arange(8)
 offset = 14
 plt.axvspan(-0.5, 3.5, color='white', alpha=0, lw=0)
 plt.axvspan(3.5, 7.5, color='purple', alpha=0.08, lw=0)
-plt.text(3.6, 210, '\emph{Disguise/Reveal Ops}',
+plt.text(3.6, 168, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
-         color='purple', fontsize=7)
+         color='purple', fontsize=11)
 
 ################ add baseline closer to black line for anonymize
 plt.bar((X-0.5*barwidth)[:6],
@@ -315,8 +316,8 @@ add_labels((X+0.5*barwidth),
 ], plt, 'black', offset)
 
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=225)
-plt.yticks(range(0, 225, 50))
+plt.ylim(ymin=0, ymax=175)
+plt.yticks(range(0, 175, 50))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)
@@ -340,22 +341,22 @@ def add_labels(x,y,plt,color,offset):
         new_offset = offset
         if y[i] < 50:
             new_offset = offset - 6
-        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6,
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=11,
                  rotation = 90)
 
 def add_text_labels(x,y,plt,color,offset):
     for i in range(len(x)):
-        plt.text(x[i], offset - 6, y[i], ha='center', color=color,size=6,rotation=90)
+        plt.text(x[i], offset - 6, y[i], ha='center', color=color,size=11,rotation=90)
 
 barwidth = 0.25
-plt.figure(figsize = (3.33, 1.5))
+plt.figure(figsize = (6, 2.5))
 X = np.arange(8)
 offset = 25
 plt.axvspan(-0.5, 3.5, color='white', alpha=0, lw=0)
 plt.axvspan(3.5, 7.5, color='purple', alpha=0.08, lw=0)
-plt.text(3.6, 210, '\emph{Disguise/Reveal Ops}',
+plt.text(3.6, 330, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
-         color='purple', fontsize=7)
+         color='purple', fontsize=11)
 
 ################ baseline
 plt.bar((X-1*barwidth)[:6],
@@ -465,8 +466,8 @@ add_labels((X+1*barwidth),
 ], plt, 'blue', offset)
 
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=225)
-plt.yticks(range(0, 225, 50))
+plt.ylim(ymin=0, ymax=340)
+plt.yticks(range(0, 340, 75))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)
@@ -477,14 +478,14 @@ plt.clf()
 ###############
 # CRYPTDB GRAPH
 #############
-plt.figure(figsize = (3.33, 1.5))
+plt.figure(figsize = (6, 2.5))
 X = np.arange(8)
 offset = 25
 plt.axvspan(-0.5, 3.5, color='white', alpha=0, lw=0)
 plt.axvspan(3.5, 7.5, color='purple', alpha=0.08, lw=0)
-plt.text(3.6, 350, '\emph{Disguise/Reveal Ops}',
+plt.text(3.6, 210, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
-         color='purple', fontsize=7)
+         color='purple', fontsize=11)
 
 ################ baseline
 plt.bar((X-1*barwidth)[:6],
@@ -593,8 +594,8 @@ add_labels((X+1*barwidth),
 ], plt, 'red', offset)
 
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=365)
-plt.yticks(range(0, 365, 75))
+plt.ylim(ymin=0, ymax=225)
+plt.yticks(range(0, 225, 50))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)

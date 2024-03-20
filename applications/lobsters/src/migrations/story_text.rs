@@ -5,14 +5,18 @@ use std::time;
 pub fn apply(db: &mut mysql::PooledConn) {
     let start = time::Instant::now();
     helpers::query_drop(
-        "create table story_texts (`id` int, `title` varchar(150), `description` mediumtext, `body` mediumtext) AS (SELECT id, title, description, `story_cache` FROM stories)",
+        "create table story_texts AS SELECT `id`, `title`, `description`, `story_cache` FROM stories", db)
+    .unwrap();
+    helpers::query_drop(
+        "alter table story_texts rename column `story_cache` to `body`",
         db,
     )
     .unwrap();
-    helpers::query_drop("create index `index_id` on story_texts (`id`)", db).unwrap();
+    helpers::query_drop("ALTER TABLE story_texts ADD PRIMARY KEY (id)", db).unwrap();
+
     helpers::query_drop("create table storiesNew like stories", db).unwrap();
     helpers::query_drop("alter table storiesNew drop column `story_cache`", db).unwrap();
-    helpers::query_drop("insert into storiesNew (`id`,`created_at`,`user_id`,`url`,`title`,`description`,`short_id`,`is_expired`,`upvotes`,`downvotes`,`is_moderated`,`hotness`,`markeddown_description`,`comments_count`,`merged_story_id`,`unavailable_at`,`twitter_id`,`user_is_author`) SELECT 
+    helpers::query_drop("insert into storiesNew (`id`,`created_at`,`user_id`,`url`,`title`,`description`,`short_id`,`is_expired`,`upvotes`,`downvotes`,`is_moderated`,`hotness`,`markeddown_description`,`comments_count`,`merged_story_id`,`unavailable_at`,`twitter_id`,`user_is_author`) SELECT
 `id`,`created_at`,`user_id`,`url`,`title`,`description`,`short_id`,`is_expired`,`upvotes`,`downvotes`,`is_moderated`,`hotness`,`markeddown_description`,`comments_count`,`merged_story_id`,`unavailable_at`,`twitter_id`,`user_is_author` from stories;", db).unwrap();
     helpers::query_drop("DROP TABLE stories", db).unwrap();
     helpers::query_drop("RENAME TABLE storiesNew to stories", db).unwrap();

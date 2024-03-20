@@ -8,16 +8,17 @@ from textwrap import wrap
 
 
 plt.style.use('seaborn-deep')
-plt.figure(figsize = (3.33, 1.5))
+plt.figure(figsize = (6, 2.5))
 
 # plot styling for paper
-matplotlib.rc('font', family='serif', size=7)
+matplotlib.rc('font', family='serif', size=11)
 matplotlib.rc('text.latex', preamble='\\usepackage{times,mathptmx}')
 matplotlib.rc('text', usetex=True)
-matplotlib.rc('legend', fontsize=7)
-matplotlib.rc('figure', figsize=(3.33,1.5))
+matplotlib.rc('legend', fontsize=11)
+matplotlib.rc('figure', figsize=(6,2.5))
 matplotlib.rc('axes', linewidth=0.5)
 matplotlib.rc('lines', linewidth=0.5)
+
 
 def add_labels(x,y,plt,color,offset):
     for i in range(len(x)):
@@ -30,11 +31,11 @@ def add_labels(x,y,plt,color,offset):
         new_offset = offset
         if y[i] < 10 or y[i] > 80:
             new_offset = offset - 8
-        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6)
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=11)
 
 def add_text_labels(x,y,plt,color,offset):
     for i in range(len(x)):
-        plt.text(x[i], offset - 8, y[i], ha='center', color=color, size=6)
+        plt.text(x[i], offset - 8, y[i], ha='center', color=color, size=11)
 
 def get_yerr(durs):
     mins = []
@@ -125,9 +126,9 @@ with open(filename_dryrun,'r') as csvfile:
 ###################### shading
 plt.axvspan(-0.5, 2.45, color='white', alpha=0, lw=0)
 plt.axvspan(2.45, 6.5, color='purple', alpha=0.08, lw=0)
-plt.text(2.55, 210, '\emph{Disguise/Reveal Ops}',
+plt.text(2.55, 168, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
-         color='purple', fontsize=7)
+         color='purple', fontsize=11)
 plt.margins(x=0.0)
 
 ################ add baseline closer to black line for anonymize
@@ -200,8 +201,8 @@ add_labels((X+barwidth/2),
     statistics.median(restore_durs_noanon),
 ], plt, 'black', offset)
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=225)
-plt.yticks(range(0, 225, 50))
+plt.ylim(ymin=0, ymax=175)
+plt.yticks(range(0, 175, 50))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.tight_layout(h_pad=0)
