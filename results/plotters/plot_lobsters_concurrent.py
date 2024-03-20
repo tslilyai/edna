@@ -10,11 +10,11 @@ import matplotlib.colors as mcolors
 plt.style.use('seaborn-deep')
 
 # plot styling for paper
-matplotlib.rc('font', family='serif', size=8)
+matplotlib.rc('font', family='serif', size=11)
 matplotlib.rc('text.latex', preamble='\\usepackage{times,mathptmx}')
 matplotlib.rc('text', usetex=True)
-matplotlib.rc('legend', fontsize=7)
-matplotlib.rc('figure', figsize=(3.33,1.2))
+matplotlib.rc('legend', fontsize=11)
+matplotlib.rc('figure', figsize=(6,2.5))
 matplotlib.rc('axes', linewidth=0.5)
 matplotlib.rc('lines', linewidth=0.5)
 
@@ -28,10 +28,17 @@ def add_labels(x,y,plt,color,offset):
             label = "{0:.2f}".format(y[i])
         new_offset = offset
         if y[i] < 1000:
+            new_offset = offset - 400
+        elif y[i] > 3000:
+            if y[i] < 3500:
+                new_offset = offset - 200
+            elif y[i] > 3600:
+                new_offset = offset - 400
+            else:
+                new_offset = offset - 300
+        elif y[i] < 3000:
             new_offset = offset - 300
-        elif y[i] > 3400:
-            new_offset = offset - 200
-        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6)
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=11)
 
 
 barwidth = 0.15
@@ -51,7 +58,7 @@ delete_results_txn = defaultdict(list)
 restore_results = defaultdict(list)
 restore_results_txn = defaultdict(list)
 
-fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(3.33, 1.2))
+fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(6, 2.5))
 
 def get_yerr(durs):
     mins = []
@@ -292,8 +299,8 @@ add_labels((X+2*barwidth),
 ], plt, 'b', offset)
 
 plt.ylabel('Time (sec)')
-plt.ylim(ymin=0, ymax=10500)
-plt.yticks(range(0, 10500, 2000))
+plt.ylim(ymin=0, ymax=4500)
+plt.yticks(range(0, 4500, 1000))
 #plt.tick_params(
 #    axis='x',          # changes apply to the x-axis
 #    which='both',      # both major and minor ticks are affected

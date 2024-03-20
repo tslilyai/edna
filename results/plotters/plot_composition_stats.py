@@ -10,31 +10,31 @@ from textwrap import wrap
 plt.style.use('seaborn-deep')
 
 # plot styling for paper
-matplotlib.rc('font', family='serif', size=8)
+matplotlib.rc('font', family='serif', size=11)
 matplotlib.rc('text.latex', preamble='\\usepackage{times,mathptmx}')
 matplotlib.rc('text', usetex=True)
-matplotlib.rc('legend', fontsize=8)
-matplotlib.rc('figure', figsize=(1.65,1.0))
+matplotlib.rc('legend', fontsize=11)
+matplotlib.rc('figure', figsize=(3,2.0))
 matplotlib.rc('axes', linewidth=0.5)
 matplotlib.rc('lines', linewidth=0.5)
 
 colors=['g', 'y', 'm', 'w']
 hatches=['','','', '////']
 labels = ["Manual\n(No Edna)", "Direct\nDisguising",
-          "Disguising\nDecorrelated\nData", "Crypto\nCost"]
-fig = plt.figure(figsize=(3.2, 0.4))
+          "Disguising Decorrelated\nData", "Crypto\nCost"]
+fig = plt.figure(figsize=(5.5, .5))
 patches = []
 for (i, color) in enumerate(colors):
     patches.append(mpatches.Patch(edgecolor='black', facecolor=color, label=labels[i],
                                   hatch=hatches[i], ))
 leg = fig.legend(patches, labels, mode='expand', ncol=4, loc='center', frameon=False,
-           fontsize=8,handlelength=1.2)
+           fontsize=11,handlelength=1)
 for patch in leg.get_patches():
     patch.set_height(10)
 plt.savefig("composition_legend.pdf", dpi=300)
 
 plt.clf()
-plt.figure(figsize = (1.65, 1.0))
+plt.figure(figsize = (3.2, 2.0))
 
 def add_labels(x,y,plt,color,offset):
     for i in range(len(x)):
@@ -46,14 +46,20 @@ def add_labels(x,y,plt,color,offset):
             label = "{0:.1f}".format(y[i])
         new_offset = offset
         if y[i] < 50 or (y[i] < 80 and y[i] > 60 and color != 'm'):
-            new_offset = (offset / 3)
+            new_offset = (offset / 2.5)
 
-        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6)
+        if y[i] > 34 and y[i] < 45 and color == 'black':
+            new_offset += 10
+
+        if y[i] > 300 or (y[i] > 30 and y[i] < 50) and color == 'm':
+            new_offset += (y[i]/20)
+
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=11)
 
 
 def add_text_labels(x,y,plt,color,offset):
     for i in range(len(x)):
-        plt.text(x[i], (offset/3), y[i], ha='center', color=color, size=6)
+        plt.text(x[i], (offset/3), y[i], ha='center', color=color, size=11)
 
 def get_yerr(durs):
     mins = []
@@ -188,14 +194,14 @@ for i in range(2):
         statistics.median(restore_durs),
     ], plt, 'm', offset)
 
-    plt.ylim(ymin=0, ymax=500)
-    plt.yticks(range(0, 500, 150))
+    plt.ylim(ymin=0, ymax=650)
+    plt.yticks(range(0, 650, 150))
     if i == 0:
-        plt.ylim(ymin=0, ymax=130)
-        plt.yticks(range(0, 130, 40))
+        plt.ylim(ymin=0, ymax=100)
+        plt.yticks(range(0, 100, 30))
         plt.ylabel('Time (ms)')
     plt.xticks(X, labels=labels)
-    plt.subplots_adjust(left=0.25, right=1.0, bottom=0.4)
+    plt.subplots_adjust(left=0.25, right=1.0, bottom=0)
     plt.tight_layout(h_pad=0)
     plt.savefig('composition_stats_{}.pdf'.format(title), dpi=300)
     plt.clf()

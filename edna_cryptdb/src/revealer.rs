@@ -40,9 +40,12 @@ impl Revealer {
         args: &mut RevealArgs<Q>,
         typ: u8,
     ) -> Result<bool, mysql::Error> {
-        info!("Revealing remove diffs of table {}", table);
+        info!("Revealing diffs of table {}", table);
+        let tinfo = args.timap.get(table).unwrap();
         match dsmap.get(table) {
             Some(ds) => {
+                let mut new_vals_map: HashMap<Vec<RowVal>, TableRow> = HashMap::new();
+                let mut old_vals_map: HashMap<Vec<RowVal>, TableRow> = HashMap::new();
                 let mut bigdiff = EdnaDiffRecord {
                     typ: typ,
                     // old and new rows
@@ -54,6 +57,7 @@ impl Revealer {
                     new_uid: "".to_string(),
                     t: 0,
                 };
+                let mut first_old_t = 0;
                 for (uid, d) in ds {
                     // don't restore deleted pseudoprincipals that have been recorrelated!
                     if args.recorrelated_pps.contains(uid) && table == args.pp_gen.table {
@@ -63,22 +67,61 @@ impl Revealer {
                         );
                         continue;
                     }
-                    bigdiff.old_values.append(&mut d.old_values.clone());
-                    bigdiff.new_values.append(&mut d.new_values.clone());
-                    if bigdiff.t == 0 {
-                        bigdiff.t = d.t;
-                    } else {
-                        bigdiff.t = min(d.t, bigdiff.t);
+
+                    // get the oldest value of any old row
+                    for ov in &d.old_values {
+                        let ids = helpers::get_ids(&tinfo.id_cols, &ov.row);
+                        match old_vals_map.get_mut(&ids) {
+                            Some(obj) => {
+                                // get first old value
+                                if first_old_t == 0 || d.t < first_old_t {
+                                    for (ix, r) in ov.row.iter().enumerate() {
+                                        if r != &obj.row[ix] {
+                                            obj.row[ix] = ov.row[ix].clone();
+                                        }
+                                    }
+                                    first_old_t = d.t;
+                                }
+                            }
+                            None => {
+                                old_vals_map.insert(ids, ov.clone());
+                                first_old_t = d.t;
+                            }
+                        }
                     }
-                    //info!("Reversing remove record {:?}\n", d);
-                    //args.uid = uid.clone();
-                    //let revealed = d.reveal(args)?;
-                    //if revealed {
-                    //    info!("Remove Record revealed!\n");
-                    //} else {
-                    //    info!("Failed to reveal remove record");
-                    // }
+
+                    // get the latest value of any new row
+                    for nv in &d.new_values {
+                        let ids = helpers::get_ids(&tinfo.id_cols, &nv.row);
+                        match new_vals_map.get_mut(&ids) {
+                            Some(obj) => {
+                                for (ix, r) in nv.row.iter().enumerate() {
+                                    if r != &obj.row[ix] {
+                                        // update new row only if it doesn't match the original
+                                        // row, or there is no original row
+                                        if let Some(ov) = old_vals_map.get(&ids) {
+                                            if &ov.row[ix] != r {
+                                                obj.row[ix] = nv.row[ix].clone();
+                                            }
+                                        } else {
+                                            obj.row[ix] = nv.row[ix].clone();
+                                        }
+                                    }
+                                }
+                            }
+                            None => {
+                                new_vals_map.insert(ids, nv.clone());
+                            }
+                        }
+                    }
                 }
+                bigdiff
+                    .old_values
+                    .append(&mut old_vals_map.values().cloned().collect());
+                bigdiff
+                    .new_values
+                    .append(&mut new_vals_map.values().cloned().collect());
+                bigdiff.t = first_old_t;
                 bigdiff.reveal(args)
             }
             None => Ok(true),
@@ -252,29 +295,37 @@ impl Revealer {
             if dr.did == did {
                 let table = if dr.record.old_values.len() > 0 {
                     &dr.record.old_values[0].table
-                } else {
+                } else if dr.record.new_values.len() > 0 {
                     &dr.record.new_values[0].table
+                } else {
+                    ""
                 };
                 match dr.record.typ {
                     REMOVE => match remove_diffs_for_table.get_mut(table) {
                         Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
                         None => {
-                            remove_diffs_for_table
-                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                            remove_diffs_for_table.insert(
+                                table.to_string(),
+                                vec![(dr.uid.clone(), dr.record.clone())],
+                            );
                         }
                     },
                     DECOR => match decor_diffs_for_table.get_mut(table) {
                         Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
                         None => {
-                            decor_diffs_for_table
-                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                            decor_diffs_for_table.insert(
+                                table.to_string(),
+                                vec![(dr.uid.clone(), dr.record.clone())],
+                            );
                         }
                     },
                     MODIFY => match modify_diffs_for_table.get_mut(table) {
                         Some(ds) => ds.push((dr.uid.clone(), dr.record.clone())),
                         None => {
-                            modify_diffs_for_table
-                                .insert(table.clone(), vec![(dr.uid.clone(), dr.record.clone())]);
+                            modify_diffs_for_table.insert(
+                                table.to_string(),
+                                vec![(dr.uid.clone(), dr.record.clone())],
+                            );
                         }
                     },
                     _ => warn!("Skipping record typ {}", dr.record.typ),

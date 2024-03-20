@@ -61,14 +61,20 @@ impl Disguiser {
         let engine = if in_memory { "MEMORY" } else { "InnoDB" };
 
         if reset {
-            helpers::query_drop(&format!("DROP TABLE IF EXISTS {}", REMOVED_SHARED_TABLE), &mut db)
-                .unwrap();
+            helpers::query_drop(
+                &format!("DROP TABLE IF EXISTS {}", REMOVED_SHARED_TABLE),
+                &mut db,
+            )
+            .unwrap();
         }
         // create table
-        helpers::query_drop(&format!(
+        helpers::query_drop(
+            &format!(
             "CREATE TABLE IF NOT EXISTS {} (object varchar(2048), data varchar(2048)) ENGINE = {};",
             REMOVED_SHARED_TABLE, engine
-        ), &mut db)
+        ),
+            &mut db,
+        )
         .unwrap();
 
         let obj_rows =
@@ -905,6 +911,7 @@ impl Disguiser {
         helpers::query_drop(&q, db).unwrap();
 
         let mut index = 0;
+        let mut values: HashMap<Vec<RowVal>, Vec<RowVal>> = HashMap::new();
         for (_owners, groups) in &owner_groups {
             /*
              * DECOR OBJECT MODIFICATIONS
@@ -927,21 +934,35 @@ impl Disguiser {
                         index += 1;
 
                         // FIRST: Register the pseudoprincipal (install a sfchain record)
-                        let privkey = llapi.register_pseudoprincipal(did, &old_uid, &new_uid, pp.clone());
-                        info!("Register anon principal {}", new_uid);
+                        let privkey =
+                            llapi.register_pseudoprincipal(did, &old_uid, &new_uid, pp.clone());
 
                         // PROXY: login pseudoprincipal (w/secret key)
                         // we're going to save access_keys for each pseudoprincipal (and whatever
                         // principal invoked the disguise who is logged in)
                         if !dryrun {
-                            db.query_drop(format!("LOGIN {}", base64::encode(&privkey))).unwrap();
+                            db.query_drop(format!("LOGIN {}", base64::encode(&privkey)))
+                                .unwrap();
                         }
+
+                        info!("Register anon principal {}", new_uid);
 
                         for i in items {
                             // A. DECOR DIFF
-                            let mut i_with_pps = i.clone();
                             let ix = i.iter().position(|r| &r.column() == user_fk_col).unwrap();
-                            i_with_pps[ix] = RowVal::new(i[ix].column(), new_uid.clone());
+                            let ids = get_ids(&child_tableinfo.id_cols, &i);
+                            let i_with_pps = match values.get_mut(&ids) {
+                                Some(obj) => {
+                                    obj[ix] = RowVal::new(i[ix].column(), new_uid.clone());
+                                    obj.clone()
+                                }
+                                None => {
+                                    let mut i_with_pps = i.clone();
+                                    i_with_pps[ix] = RowVal::new(i[ix].column(), new_uid.clone());
+                                    values.insert(ids, i_with_pps.clone());
+                                    i_with_pps
+                                }
+                            };
                             // note that we may have multiple decor records for
                             // each pp, since the pp may own multiple items
                             llapi.save_decor_record(
@@ -952,7 +973,7 @@ impl Disguiser {
                                 },
                                 TableRow {
                                     table: child_tableinfo.table.to_string(),
-                                    row: i_with_pps,
+                                    row: i_with_pps.clone(),
                                 },
                                 did,
                             );
@@ -964,21 +985,77 @@ impl Disguiser {
                             // pseudoprincipals
                             // sfc_records.push(new_sfchain_record)
 
-                            // B. UPDATE CHILD FOREIGN KEY
-                            let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
-                            let q = format!(
-                                "UPDATE {} SET {} = '{}' WHERE {}",
-                                child_tableinfo.table, user_fk_col, new_uid, i_select
-                            );
-                            helpers::query_drop(&q, db).unwrap();
+                            // B. UPDATE CHILD FOREIGN KEY ONLY IF KEY IS A PRIMARY KEY
+                            for idcol in &child_tableinfo.id_cols {
+                                if user_fk_col == idcol {
+                                    let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
+                                    let q = format!(
+                                        "UPDATE {} SET {} = '{}' WHERE {}",
+                                        child_tableinfo.table, user_fk_col, new_uid, i_select
+                                    );
+                                    helpers::query_drop(&q, db).unwrap();
+                                }
+                            }
+                            //let i_select = get_select_of_row(&child_tableinfo.id_cols, &i);
+                            //let q = format!(
+                            //"UPDATE {} SET {} = '{}' WHERE {}",
+                            //child_tableinfo.table, user_fk_col, new_uid, i_select
+                            //);
                         }
+
                         // PROXY: logout pp
                         if !dryrun {
-                            db.query_drop(format!("LOGOUT {}", base64::encode(&privkey))).unwrap();
+                            db.query_drop(format!("LOGOUT {}", base64::encode(&privkey)))
+                                .unwrap();
                         }
                     }
                 }
             }
+        }
+        // update all values, assuming that all primary keys match
+        if values.len() > 0 {
+            let mut vals = vec![];
+            let mut cols: Vec<String> = vec![];
+            for (_, v) in values {
+                if cols.len() == 0 {
+                    cols = v.iter().map(|rv| rv.column().clone()).collect();
+                }
+                let row: Vec<String> = v
+                    .iter()
+                    .map(|rv| {
+                        if rv.value().is_empty() {
+                            "\"\"".to_string()
+                        } else if rv.value() == "NULL" {
+                            "NULL".to_string()
+                        } else {
+                            for c in rv.value().chars() {
+                                if !c.is_numeric() {
+                                    return format!("\"{}\"", rv.value().clone());
+                                }
+                            }
+                            rv.value().clone()
+                        }
+                    })
+                    .collect();
+                vals.push(format!("({})", row.join(",")));
+            }
+            let colstr = cols.join(",");
+            let valstr = vals.join(",");
+            let updates: Vec<String> = cols
+                .iter()
+                .map(|c| format!("{} = VALUES({})", c, c))
+                .collect();
+            helpers::query_drop(
+                &format!(
+                    "INSERT INTO {} ({}) VALUES {} ON DUPLICATE KEY UPDATE {}",
+                    child_tableinfo.table,
+                    colstr,
+                    valstr,
+                    updates.join(",")
+                ),
+                db,
+            )
+            .unwrap();
         }
     }
 
