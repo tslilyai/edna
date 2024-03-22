@@ -480,10 +480,10 @@ plt.clf()
 #############
 plt.figure(figsize = (6, 2.5))
 X = np.arange(8)
-offset = 25
+offset = 30
 plt.axvspan(-0.5, 3.5, color='white', alpha=0, lw=0)
 plt.axvspan(3.5, 7.5, color='purple', alpha=0.08, lw=0)
-plt.text(3.6, 210, '\emph{Disguise/Reveal Ops}',
+plt.text(3.6, 330, '\emph{Disguise/Reveal Ops}',
          verticalalignment='top', horizontalalignment='left',
          color='purple', fontsize=11)
 
@@ -594,8 +594,8 @@ add_labels((X+1*barwidth),
 ], plt, 'red', offset)
 
 plt.ylabel('Time (ms)')
-plt.ylim(ymin=0, ymax=225)
-plt.yticks(range(0, 225, 50))
+plt.ylim(ymin=0, ymax=340)
+plt.yticks(range(0, 340, 75))
 plt.xticks(X, labels=labels, rotation=90)
 plt.legend(loc='upper left', frameon=False, handlelength=1, borderpad=-0.055, labelspacing=-0.05);
 plt.margins(x=0.0)
