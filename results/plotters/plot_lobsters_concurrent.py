@@ -7,11 +7,11 @@ import sys
 from collections import defaultdict
 import matplotlib.colors as mcolors
 
-plt.style.use('seaborn-deep')
+plt.style.use('seaborn-v0_8-colorblind')
 
 # plot styling for paper
 matplotlib.rc('font', family='serif', size=11)
-matplotlib.rc('text.latex', preamble='\\usepackage{times,mathptmx}')
+matplotlib.rc('text.latex',preamble='\\usepackage{inconsolata}\n\\usepackage[bitstream-charter]{mathdesign}\n\\usepackage{mathrsfs}')
 matplotlib.rc('text', usetex=True)
 matplotlib.rc('legend', fontsize=11)
 matplotlib.rc('figure', figsize=(6,2.5))

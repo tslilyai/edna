@@ -6,13 +6,12 @@ import sys
 import numpy as np
 from textwrap import wrap
 
-plt.style.use('seaborn-deep')
 plt.figure(figsize = (6, 2.5))
 barwidth = 0.4
 
 # plot styling for paper
 matplotlib.rc('font', family='serif', size=11)
-matplotlib.rc('text.latex', preamble='\\usepackage{times,mathptmx}')
+matplotlib.rc('text.latex',preamble='\\usepackage{inconsolata}\n\\usepackage[bitstream-charter]{mathdesign}\n\\usepackage{mathrsfs}')
 matplotlib.rc('text', usetex=True)
 matplotlib.rc('legend', fontsize=11)
 matplotlib.rc('figure', figsize=(6,2.5))
