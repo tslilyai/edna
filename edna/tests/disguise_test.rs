@@ -549,7 +549,7 @@ fn test_app_gdpr_disguise() {
 }
 
 #[test]
-fn test_compose_anon_gdpr_dispseudoprincipals() {
+fn test_compose_anon_gdpr_disguise() {
     init_logger();
     let dbname = "testAppComposeDisguise".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);

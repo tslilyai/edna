@@ -1,10 +1,10 @@
-use crate::records::*;
+use crate::records::PrivKey;
 use aes::Aes128;
 use block_modes::block_padding::Pkcs7;
 use block_modes::{BlockMode, Cbc};
 use crypto_box::aead::generic_array::GenericArray;
 use crypto_box::{aead::Aead, Box, PublicKey, SecretKey};
-use log::{debug, info};
+use log::info;
 use num_bigint::BigInt;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
@@ -74,27 +74,27 @@ pub fn get_pk_bytes(bytes: &Vec<u8>) -> [u8; 32] {
 }
 
 /*
- * ENCRYPTION STUFF
+ * EncData Functions
  */
-pub fn decrypt_encdata(ed: &EncData, decrypt_cap: &DecryptCap) -> (bool, Vec<u8>) {
-    if decrypt_cap.is_empty() {
+pub fn decrypt_encdata(ed: &EncData, privkey: &PrivKey, dryrun: bool) -> (bool, Vec<u8>) {
+    if privkey.is_empty() {
         return (false, vec![]);
     }
 
     let start = time::Instant::now();
-    let secretkey = SecretKey::from(get_pk_bytes(decrypt_cap));
-    let pubkey = PublicKey::from(get_pk_bytes(&ed.pubkey));
+    if dryrun {
+        let ret = (true, ed.encdata.to_vec());
+        info!("dryrun decrypted: {}", start.elapsed().as_micros());
+        return ret;
+    }
+
+    let secretkey = SecretKey::from(get_pk_bytes(&privkey.clone()));
+    let pubkey = PublicKey::from(get_pk_bytes(&ed.pubkey.clone()));
     let salsabox = Box::new(&pubkey, &secretkey);
-    /*debug!(
-        "decrypt {:?} with secret {} and pubkey {}",
-        base64::encode(&ed.encdata),
-        base64::encode(&decrypt_cap),
-        base64::encode(&ed.pubkey),
-    );*/
     match salsabox.decrypt(&GenericArray::from_slice(&ed.nonce), &ed.encdata[..]) {
         Ok(plaintext) => {
-            debug!(
-                "pubkey decrypted {}: {}",
+            info!(
+                "decrypted {}: {}",
                 plaintext.len(),
                 start.elapsed().as_micros()
             );
@@ -104,36 +104,19 @@ pub fn decrypt_encdata(ed: &EncData, decrypt_cap: &DecryptCap) -> (bool, Vec<u8>
     }
 }
 
-pub fn encrypt_det_with_pubkey(
-    pubkey: &PublicKey,
-    secretkey: &SecretKey,
-    nonce: &Vec<u8>,
-    bytes: &Vec<u8>,
-) -> EncData {
+pub fn encrypt_with_pubkey(pubkey: &Option<&PublicKey>, bytes: &Vec<u8>, dryrun: bool) -> EncData {
     let start = time::Instant::now();
-    // this generates a new secret key each time
-    let edna_pubkey = PublicKey::from(secretkey);
-    let salsabox = Box::new(pubkey, secretkey);
-    let encrypted = salsabox
-        .encrypt(nonce.as_slice().into(), &bytes[..])
-        .unwrap();
-    /*debug!(
-        "encrypt to {:?} with secret {} and pubkey {}, pair {}",
-        base64::encode(&encrypted),
-        base64::encode(&secretkey.to_bytes()),
-        base64::encode(&pubkey.as_bytes()),
-        base64::encode(&edna_pubkey.as_bytes()),
-    );*/
-    info!("pubkey encrypt: {}", start.elapsed().as_micros());
-    EncData {
-        encdata: encrypted,
-        nonce: nonce.to_vec(),
-        pubkey: edna_pubkey.as_bytes().to_vec(),
+    if dryrun {
+        let ret = EncData {
+            encdata: bytes.to_vec(),
+            nonce: vec![],
+            pubkey: vec![],
+        };
+        info!("dryrun encrypt: {}", start.elapsed().as_micros());
+        return ret;
     }
-}
 
-pub fn encrypt_with_pubkey(pubkey: &PublicKey, bytes: &Vec<u8>) -> EncData {
-    let start = time::Instant::now();
+    let pubkey = pubkey.expect("No pubkey?");
     let mut rng = crypto_box::rand_core::OsRng;
     // this generates a new secret key each time
     let secretkey = SecretKey::generate(&mut rng);
@@ -141,14 +124,7 @@ pub fn encrypt_with_pubkey(pubkey: &PublicKey, bytes: &Vec<u8>) -> EncData {
     let salsabox = Box::new(pubkey, &secretkey);
     let nonce = crypto_box::generate_nonce(&mut rng);
     let encrypted = salsabox.encrypt(&nonce, &bytes[..]).unwrap();
-    /*debug!(
-        "encrypt to {:?} with secret {} and pubkey {}, pair {}",
-        base64::encode(&encrypted),
-        base64::encode(&secretkey.to_bytes()),
-        base64::encode(&pubkey.as_bytes()),
-        base64::encode(&edna_pubkey.as_bytes()),
-    );*/
-    info!("pubkey encrypt: {}", start.elapsed().as_micros());
+    info!("encrypt: {}", start.elapsed().as_micros());
     EncData {
         encdata: encrypted,
         nonce: nonce.to_vec(),

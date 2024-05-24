@@ -49,6 +49,7 @@ pub fn reveal(
         TABLEINFO_JSON,
         PPGEN_JSON,
         Some(edna::RevealPPType::Restore),
+        true, // allow partial row reveals
         Some(user_pw),
         None,
         false,

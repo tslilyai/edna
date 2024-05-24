@@ -5,8 +5,189 @@ import statistics
 import sys
 import numpy as np
 from textwrap import wrap
+from collections import defaultdict
+import matplotlib.colors as mcolors
 
 plt.style.use('dark_background')
+
+def add_labels(x,y,plt,color,offset):
+    for i in range(len(x)):
+        if y[i] < 0.1:
+            label = "{0:.1g}".format(y[i])
+        elif y[i] > 100:
+            label = "{0:.0f}".format(y[i])
+        else:
+            label = "{0:.2f}".format(y[i])
+        new_offset = offset
+        if y[i] < 1000:
+            new_offset = offset - 400
+        elif y[i] > 3000:
+            if y[i] < 3500:
+                new_offset = offset - 200
+            elif y[i] > 3600:
+                new_offset = offset - 400
+            else:
+                new_offset = offset - 300
+        elif y[i] < 3000:
+            new_offset = offset - 300
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=11)
+
+barwidth = 0.25
+# positions
+X = np.arange(2)
+labels = ['Low Load', 'High Load']
+HIGH_LOAD = 13
+LOW_LOAD = 2
+TOTAL_TIME = 100000.0
+BUCKET_TIME = 25000
+
+# collect all results
+op_results = defaultdict(list)
+op_results_txn = defaultdict(list)
+delete_results = defaultdict(list)
+delete_results_txn = defaultdict(list)
+restore_results = defaultdict(list)
+restore_results_txn = defaultdict(list)
+
+fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(6, 3))
+
+def get_yerr(durs):
+    mins = []
+    maxes = []
+    for i in range(len(durs)):
+        mins.append(statistics.median(durs[i]) - np.percentile(durs[i], 5))
+        maxes.append(np.percentile(durs[i], 95)-statistics.median(durs[i]))
+    return [mins, maxes]
+
+def get_data_count(filename, results, i, u):
+    vals = defaultdict(list)
+    btime = BUCKET_TIME
+    if "expensive" in filename:
+        btime = BUCKET_TIME
+    with open(filename,'r') as csvfile:
+        rows = csvfile.readlines()
+        ndisguises = int(rows[0].strip())
+        oppairs = [x.split(':') for x in rows[i].strip().split(',')]
+        for (i, x) in enumerate(oppairs):
+            bucket = int(int(x[0]) / btime)
+            # only count when test has gotten underway; skip end buckets
+            if bucket < 1 or bucket > 19 or ('none' in filename and bucket > 3):
+                continue
+            val = float(x[1])/1000
+            vals[bucket].append(val)
+        if len(vals) == 0:
+            results[u].append(0)
+
+        lvals = []
+        for bucket, vs in vals.items():
+            lvals.append((float(len(vs))/btime)*1000) # ops/ms * 1000ms/s
+        results[u].append(lvals)
+
+def get_data_values(filename, results, i, u):
+    vals = []
+    with open(filename,'r') as csvfile:
+        rows = csvfile.readlines()
+        ndisguises = int(rows[0].strip())
+        oppairs = [x.split(':') for x in rows[i].strip().split(',')]
+        for (i, x) in enumerate(oppairs):
+            bucket = int(int(x[0]) / BUCKET_TIME)
+            # only count when test has gotten underway; skip end buckets
+            if bucket < 1 or bucket > 19:
+                continue
+
+            val = float(x[1])/1000
+            vals.append(val)
+        if len(vals) == 0:
+            results[u].append([0,0])
+        results[u].append(vals)
+
+users = [LOW_LOAD, HIGH_LOAD]
+disguiser = ['none', 'cheap', 'expensive']
+for u in users:
+    for d in disguiser:
+        get_data_count('../lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(u, d),
+                op_results, 1, u)
+        get_data_count('../lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(u, d),
+                op_results_txn, 1, u)
+        if d != 'none':
+            get_data_values('../lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(u, d),
+                    delete_results, 2, u)
+            get_data_values('../lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(u, d),
+                    delete_results_txn, 2, u)
+            get_data_values('../lobsters_results/concurrent_disguise_stats_{}users_{}.csv'.format(u, d),
+                    restore_results, 3, u)
+            get_data_values('../lobsters_results/concurrent_disguise_stats_{}users_{}--txn.csv'.format(u, d),
+                    restore_results_txn, 3, u)
+offset = 560
+
+plt.ylabel('Time (sec)')
+plt.ylim(ymin=0, ymax=4500)
+plt.yticks(range(0, 4500, 1000))
+plt.xticks(X, labels=labels)
+plt.ylabel('Throughput (ops/sec)')
+
+################ none
+plt.bar((X-barwidth), [
+    statistics.median(op_results[LOW_LOAD][0]),
+    statistics.median(op_results[HIGH_LOAD][0]),
+],
+yerr=get_yerr([
+    op_results[LOW_LOAD][0],
+    op_results[HIGH_LOAD][0],
+
+]),
+error_kw=dict(capthick=0.5, ecolor='white', lw=0.5), color='#5BC43C', capsize=3,
+        width=barwidth, label="No Disguising", edgecolor='black', linewidth=0.25)
+add_labels((X-barwidth),
+[
+    statistics.median(op_results[LOW_LOAD][0]),
+    statistics.median(op_results[HIGH_LOAD][0]),
+], plt, 'white', offset)
+
+################ cheap w/txn
+plt.bar((X), [
+    statistics.median(op_results_txn[LOW_LOAD][1]),
+    statistics.median(op_results_txn[HIGH_LOAD][1]),
+],
+yerr=get_yerr([
+    op_results_txn[LOW_LOAD][1],
+    op_results_txn[HIGH_LOAD][1],
+
+]),
+error_kw=dict(capthick=0.5, ecolor='white', lw=0.5),color='#F3B768', capsize=3,
+        width=barwidth, label="Disguise Random User",edgecolor='black', alpha=.99, linewidth=0.25)
+add_labels((X),
+[
+    statistics.median(op_results_txn[LOW_LOAD][1]),
+    statistics.median(op_results_txn[HIGH_LOAD][1]),
+], plt, 'white', offset)
+
+################ expensive (TX)
+plt.bar((X+barwidth), [
+    statistics.median(op_results_txn[LOW_LOAD][2]),
+    statistics.median(op_results_txn[HIGH_LOAD][2]),
+],
+yerr=get_yerr([
+    op_results_txn[LOW_LOAD][2],
+    op_results_txn[HIGH_LOAD][2],
+
+]),
+error_kw=dict(capthick=0.5, ecolor='black', lw=0.5),
+color='#06BCBC',
+capsize=3, width=barwidth, label="Disguise Expensive User",alpha=.99,
+        edgecolor='black', linewidth=0.25)
+add_labels((X+barwidth),
+[
+    statistics.median(op_results_txn[LOW_LOAD][2]),
+    statistics.median(op_results_txn[HIGH_LOAD][2]),
+], plt, 'black', offset)
+
+plt.legend(loc='upper left', frameon=False, handlelength=1);
+plt.tight_layout(h_pad=0)
+plt.savefig('lobsters_concurrent_results_slides.pdf')
+
+
+exit
 
 def get_yerr(durs):
     mins = []
@@ -192,7 +373,7 @@ def add_text_labels(x,y,plt,color,offset):
 
 X = np.arange(4)
 offset = 10
-plt.axvspan(-0.5, 3.5, color='white', alpha=0, lw=0)
+plt.axvspan(-0.5, 3.5, color='black', alpha=0, lw=0)
 #plt.axvspan(.5, 3.5, color='purple', alpha=0.08, lw=0)
 #plt.text(.6, 55, '\emph{Disguise/Reveal Ops}',
          #verticalalignment='top', horizontalalignment='left',
@@ -213,13 +394,13 @@ plt.bar((X-.5*barwidth)[:2],
         linewidth=1)
 add_labels((X-.5*barwidth)[0:1], [
     statistics.median(questions_durs_baseline),
-], plt, 'white', offset)
+], plt, 'black', offset)
 add_text_labels((X-.5*barwidth)[1:2], ["N/A"], plt, 'w', offset)
 add_text_labels((X-.5*barwidth)[3:4], ["N/A"], plt, 'w', offset)
 
 add_labels((X-.5*barwidth)[2:3], [
    statistics.median(delete_durs_baseline),
-], plt, 'white', offset)
+], plt, 'black', offset)
 ############### edna
 plt.bar((X+.5*barwidth), [
     statistics.median(questions_durs),
@@ -241,7 +422,7 @@ add_labels((X+.5*barwidth),
     statistics.median(edit_durs),
     statistics.median(delete_durs_noanon),
     statistics.median(restore_durs_noanon),
-], plt, 'white', offset)
+], plt, 'black', offset)
 
 
 plt.ylabel('Time (ms)')
@@ -268,7 +449,7 @@ yerr=get_yerr([
     delete_qapla_durs_noanon,
     restore_qapla_durs_noanon,
 ]),
-error_kw=dict(capthick=0.5, ecolor='white', lw=2), color='c', capsize=3,
+error_kw=dict(capthick=0.5, ecolor='black', lw=2), color='c', capsize=3,
         width=barwidth, label="Qapla", edgecolor='c', linewidth=1)
 add_labels((X+1*barwidth),
 [
@@ -276,7 +457,7 @@ add_labels((X+1*barwidth),
     statistics.median(edit_qapla_durs),
     statistics.median(delete_qapla_durs_noanon),
     statistics.median(restore_qapla_durs_noanon),
-], plt, 'white', offset)
+], plt, 'black', offset)
 
 plt.ylabel('Time (ms)')
 plt.ylim(ymin=0, ymax=90)

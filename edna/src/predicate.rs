@@ -1,7 +1,6 @@
 use crate::helpers::*;
 use crate::records::*;
-use crate::UID;
-use log::debug;
+use crate::{ForeignKey, UID};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::str::FromStr;
@@ -156,10 +155,9 @@ impl ToString for Pred {
 
 // adds a filter to pred to filter by ownership by UID, if UID exists
 pub fn owner_filter_pred(
-    table: &str,
     uid: &Option<UID>,
-    owner_cols: &Vec<String>,
-    sf_records: &Vec<SpeaksForRecordWrapper>,
+    owner_cols: &Vec<ForeignKey>,
+    sfc_records: &Vec<&SFChainRecord>,
 ) -> Pred {
     let p = match uid {
         None => PredSpec::True,
@@ -168,20 +166,20 @@ pub fn owner_filter_pred(
             let mut init_pred = vec![];
             for fk in owner_cols {
                 init_pred.push(PredSpec::Eq {
-                    col: format!("{}.{}", table, fk),
+                    col: format!("{}.{}", fk.from_table, fk.from_col),
                     val: uid.clone(),
                 });
             }
             PredSpec::Or(init_pred)
         }
     };
-    predspec_to_owned_pred(owner_cols, sf_records, &p)
+    predspec_to_owned_pred(owner_cols, sfc_records, &p)
 }
 
-// rewrites pred with owners as specified in the sf_records
+// rewrites pred with owners as specified in the sfc_records
 fn predspec_to_owned_pred(
-    owner_cols: &Vec<String>,
-    sf_records: &Vec<SpeaksForRecordWrapper>,
+    owner_cols: &Vec<ForeignKey>,
+    sfc_records: &Vec<&SFChainRecord>,
     p: &PredSpec,
 ) -> Pred {
     use PredSpec::*;
@@ -202,14 +200,14 @@ fn predspec_to_owned_pred(
         And(ps) => {
             let mut init_pred = vec![];
             for pt in ps {
-                init_pred.push(predspec_to_owned_pred(owner_cols, sf_records, pt));
+                init_pred.push(predspec_to_owned_pred(owner_cols, sfc_records, pt));
             }
             Pred::And(init_pred)
         }
         Or(ps) => {
             let mut init_pred = vec![];
             for pt in ps {
-                init_pred.push(predspec_to_owned_pred(owner_cols, sf_records, pt));
+                init_pred.push(predspec_to_owned_pred(owner_cols, sfc_records, pt));
             }
             Pred::Or(init_pred)
         }
@@ -225,11 +223,11 @@ fn predspec_to_owned_pred(
             let mut new_owners: Vec<String> = vec![val.clone()];
             let mut found = false;
             let col_end = col.split(".").last().unwrap();
-            for fk_col in owner_cols {
-                if col_end == fk_col {
+            for fk in owner_cols {
+                if col_end == fk.from_col {
                     found = true;
                     new_owners.append(
-                        &mut sf_records
+                        &mut sfc_records
                             .iter()
                             .filter(|ot| &ot.old_uid == val)
                             .map(|ot| ot.new_uid.to_string())
@@ -238,7 +236,7 @@ fn predspec_to_owned_pred(
                     break;
                 }
             }
-            if found && !sf_records.is_empty() {
+            if found && !sfc_records.is_empty() {
                 Pred::ColInList {
                     col: col.clone(),
                     vals: new_owners,
@@ -259,11 +257,11 @@ fn predspec_to_owned_pred(
             let mut found = false;
             let mut new_owners: Vec<String> = vec![val.clone()];
             let col_end = col.split(".").last().unwrap();
-            for fk_col in owner_cols {
-                if col_end == fk_col {
+            for fk in owner_cols {
+                if col_end == fk.from_col {
                     found = true;
                     new_owners.append(
-                        &mut sf_records
+                        &mut sfc_records
                             .iter()
                             .filter(|ot| &ot.old_uid == val)
                             .map(|ot| ot.new_uid.to_string())
@@ -272,7 +270,7 @@ fn predspec_to_owned_pred(
                     break;
                 }
             }
-            if found && !sf_records.is_empty() {
+            if found && !sfc_records.is_empty() {
                 Pred::ColInList {
                     col: col.clone(),
                     vals: new_owners,
@@ -287,84 +285,6 @@ fn predspec_to_owned_pred(
             }
         }
     }
-}
-
-pub fn diff_record_matches_pred(pred: &Pred, name: &str, t: &EdnaDiffRecord) -> bool {
-    if t.table != name {
-        return false;
-    }
-    if predicate_applies_with_col(pred, &t.col, &t.old_val)
-        || predicate_applies_with_col(pred, &t.col, &t.new_val)
-    {
-        //debug!("Pred: SpeaksForRecord matched pred {:?}! Pushing matching to len {}\n", pred, matching.len());
-        return true;
-    }
-    false
-}
-
-pub fn get_speaksfor_records_matching_pred(
-    pred: &Pred,
-    fk_col: &str,
-    records: &Vec<SpeaksForRecordWrapper>,
-) -> Vec<SpeaksForRecordWrapper> {
-    let mut matching = vec![];
-    for t in records {
-        if predicate_applies_with_col(pred, fk_col, &t.old_uid)
-            || predicate_applies_with_col(pred, fk_col, &t.new_uid)
-        {
-            debug!(
-                "Pred: SpeaksForRecord matched pred {:?}! Pushing matching to len {}\n",
-                pred,
-                matching.len()
-            );
-            matching.push(t.clone());
-        }
-    }
-    matching
-}
-
-fn predicate_applies_with_col(p: &Pred, c: &str, v: &str) -> bool {
-    use Pred::*;
-    let mut ret = false;
-    match p {
-        Pred::Or(ps) => {
-            for p in ps {
-                if predicate_applies_with_col(p, c, &v) {
-                    ret = true;
-                    break;
-                }
-            }
-        }
-        Pred::And(ps) => {
-            let mut all_true = true;
-            for clause in ps {
-                if !predicate_applies_with_col(clause, c, &v) {
-                    all_true = false;
-                    break;
-                }
-            }
-            ret = all_true;
-        }
-        ColInList { col, vals, neg } => {
-            let found = col == c && vals.iter().find(|v2| v2.to_string() == v).is_some();
-            ret = found != *neg;
-        }
-        ColColCmp { .. } => unimplemented!("No speaksfor comparison of cols"),
-        ColValCmp { col, val, op } => {
-            if c == col {
-                ret = vals_satisfy_cmp(&v.to_string(), &val, &op);
-            } else {
-                ret = false;
-            }
-        }
-        Bool(b) => ret = *b,
-        _ => unimplemented!("No support for pred"),
-    }
-    debug!(
-        "Predicate {:?} applies with col {} and val {}? {}\n",
-        p, c, v, ret
-    );
-    ret
 }
 
 pub fn compute_op(lval: &str, rval: &str, op: &BinOp) -> String {

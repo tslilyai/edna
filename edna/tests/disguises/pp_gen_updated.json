@@ -1,0 +1,13 @@
+{
+    "table": "users",
+    "id_col": "id",
+    "cols": ["id"],
+    "val_generation": [
+        {
+            "RandNum": { 
+                "lb": 1,
+                "ub": 100000000
+            }
+        }
+    ]
+}

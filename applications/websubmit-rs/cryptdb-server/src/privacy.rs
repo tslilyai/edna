@@ -5,7 +5,7 @@ use crate::disguises;
 use crate::email;
 use mysql::from_value;
 use rocket::form::{Form, FromForm};
-use rocket::http::{Cookie, CookieJar};
+use rocket::http::{CookieJar};
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_dyn_templates::Template;
@@ -107,7 +107,6 @@ pub(crate) fn edit_as_pseudoprincipal(
         data.email.to_string(),
         Some(data.apikey.to_string()),
         None,
-        bg.crypto,
     );
     info!(
         bg.log,
@@ -122,12 +121,12 @@ pub(crate) fn edit_as_pseudoprincipal(
     'pploop: for pp in pps {
         let answers_res = bg.query_iter(&format!(
             "SELECT email, q, answer FROM answers WHERE lec = {} AND email = '{}';",
-            data.lec_id, pp.0
+            data.lec_id, pp
         ));
         if answers_res.is_empty() {
             info!(
                 bg.log,
-                "No answers for lec {} for pp {}", data.lec_id, pp.0
+                "No answers for lec {} for pp {}", data.lec_id, pp
                 );
         } else {
             for r in answers_res {
@@ -179,17 +178,9 @@ pub(crate) fn edit_as_pseudoprincipal(
 
     // this just lets the user act as the latest pseudoprincipal
     // but it won't reset afterward.... so the user won't be able to do anything else
-    let cookie = Cookie::build("anonkey", apikey.clone()).path("/").finish();
-    cookies.add(cookie);
-    let cookie = Cookie::build("email", data.email.to_string())
-        .path("/")
-        .finish();
-    cookies.add(cookie);
-    let cookie = Cookie::build("apikey", data.apikey.clone())
-        .path("/")
-        .finish();
-    cookies.add(cookie);
-
+    cookies.add(("anonkey", apikey.clone()));
+    cookies.add(("email", data.email.to_string()));
+    cookies.add(("apikey", data.apikey.clone()));
     Template::render("questions", &ctx)
 }
 

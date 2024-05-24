@@ -4,12 +4,13 @@ extern crate mysql;
 extern crate rand;
 
 use chrono::Local;
-use edna::{helpers, EdnaClient};
+use edna::*;
 use log::{error, warn};
 use mysql::prelude::*;
 use mysql::Opts;
 use rand::Rng;
 use std::cmp::min;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -22,7 +23,9 @@ use structopt::StructOpt;
 
 mod datagen;
 mod disguises;
+mod migrations;
 mod queriers;
+mod updates_bench;
 include!("statistics.rs");
 
 const TOTAL_TIME: u128 = 500000;
@@ -51,6 +54,8 @@ struct Cli {
     use_txn: bool,
     #[structopt(long = "dryrun")]
     dryrun: bool,
+    #[structopt(long = "uid", default_value = "1")]
+    uid: usize,
 }
 
 fn init_logger() {
@@ -101,11 +106,25 @@ fn main() {
         return;
     }
 
+    if args.test == "migrations" {
+        updates_bench::run_mysql_migrations(&mut db, 10 as usize);
+        return;
+    }
+
     error!("Registering {} users", nusers);
     for u in 0..nusers {
         let user_id = u as u64 + 1;
         edna.register_principal(&user_id.to_string(), user_id.to_string());
     }
+    if args.test == "updates" {
+        updates_bench::run_updates_test(&mut edna, &mut db, args.use_txn, args.uid);
+        return;
+    }
+    if args.test == "reveal" {
+        updates_bench::run_simple_reveal(&mut edna, &mut db, args.use_txn, args.uid);
+        return;
+    }
+
     let mut run_concurrent = false;
     match args.test.as_str() {
         "storage" => run_sizes_test(&mut edna, &sampler),
@@ -365,12 +384,17 @@ fn run_disguising_thread(
     // UNSUB
     let mut edna_locked = edna.lock().unwrap();
     let start = time::Instant::now();
+    let gdpr_spec: DisguiseSpec = serde_json::from_str(GDPR_JSON).unwrap();
+    let table_infos: HashMap<TableName, TableInfo> = serde_json::from_str(TABLEINFO_JSON).unwrap();
+    let guise_gen: PseudoprincipalGenerator = serde_json::from_str(PPGEN_JSON).unwrap();
+    warn!("deserialize took {}mus", start.elapsed().as_micros());
+    let start = time::Instant::now();
     let did = edna_locked
-        .apply_disguise(
+        .apply_disguise_rust(
             uid.to_string(),
-            GDPR_JSON,
-            TABLEINFO_JSON,
-            PPGEN_JSON,
+            gdpr_spec,
+            table_infos.clone(),
+            guise_gen.clone(),
             None, //Some(uid.to_string()),
             None,
             use_txn,
@@ -382,12 +406,13 @@ fn run_disguising_thread(
     // RESUB
     let start = time::Instant::now();
     edna_locked
-        .reveal_disguise(
+        .reveal_disguise_rust(
             uid.to_string(),
             did,
-            TABLEINFO_JSON,
-            PPGEN_JSON,
+            table_infos.clone(),
+            guise_gen,
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             Some(uid.to_string()),
             None,
             use_txn,
@@ -448,9 +473,15 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
     let mut file = File::create(filename).unwrap();
     let nusers = sampler.nusers();
     let mut rng = rand::thread_rng();
-    let bytes = edna.get_sizes(dbname);
+    let bytes = edna.get_space_overhead(dbname);
     file.write(format!("TOTAL START: {} {}\n", bytes.0, bytes.1).as_bytes())
         .unwrap();
+
+    let start = time::Instant::now();
+    let decay_spec: DisguiseSpec = serde_json::from_str(DECAY_JSON).unwrap();
+    let table_infos: HashMap<TableName, TableInfo> = serde_json::from_str(TABLEINFO_JSON).unwrap();
+    let guise_gen: PseudoprincipalGenerator = serde_json::from_str(PPGEN_JSON).unwrap();
+    warn!("deserialize took {}mus", start.elapsed().as_micros());
 
     for _ in 0..1 {
         let mut users = vec![];
@@ -461,11 +492,11 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
 
             // DECAY
             let did = edna
-                .apply_disguise(
+                .apply_disguise_rust(
                     user_id.to_string(),
-                    DECAY_JSON,
-                    TABLEINFO_JSON,
-                    PPGEN_JSON,
+                    decay_spec.clone(),
+                    table_infos.clone(),
+                    guise_gen.clone(),
                     None, //Some(user_id.to_string()),
                     None,
                     false,
@@ -473,7 +504,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
                 .unwrap();
             dids.push(did);
         }
-        let bytes = edna.get_sizes(dbname);
+        let bytes = edna.get_space_overhead(dbname);
         file.write(format!("TOTAL DECOR: {} {}\n", bytes.0, bytes.1).as_bytes())
             .unwrap();
 
@@ -482,12 +513,13 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
             let did = dids[i];
 
             // UNDECAY
-            edna.reveal_disguise(
+            edna.reveal_disguise_rust(
                 u.to_string(),
                 did,
-                TABLEINFO_JSON,
-                PPGEN_JSON,
+                table_infos.clone(),
+                guise_gen.clone(),
                 Some(edna::RevealPPType::Restore),
+                true, // allow partial row reveals
                 Some(u.to_string()),
                 None,
                 false,
@@ -495,7 +527,7 @@ fn run_sizes_test(edna: &mut EdnaClient, sampler: &datagen::Sampler) {
             .unwrap();
         }
 
-        let bytes = edna.get_sizes(dbname);
+        let bytes = edna.get_space_overhead(dbname);
         file.write(format!("TOTAL RESTORE: {} {}\n", bytes.0, bytes.1).as_bytes())
             .unwrap();
         file.flush().unwrap();
@@ -513,6 +545,14 @@ fn run_stats_test(
     error!("Running stats test");
     let pool = mysql::Pool::new(Opts::from_url(url).unwrap()).unwrap();
     let mut db = pool.get_conn().unwrap();
+
+    let start = time::Instant::now();
+    let gdpr_spec: DisguiseSpec = serde_json::from_str(GDPR_JSON).unwrap();
+    let decay_spec: DisguiseSpec = serde_json::from_str(DECAY_JSON).unwrap();
+    let hobby_spec: DisguiseSpec = serde_json::from_str(HOBBY_JSON).unwrap();
+    let table_infos: HashMap<TableName, TableInfo> = serde_json::from_str(TABLEINFO_JSON).unwrap();
+    let guise_gen: PseudoprincipalGenerator = serde_json::from_str(PPGEN_JSON).unwrap();
+    warn!("deserialize took {}mus", start.elapsed().as_micros());
 
     let filename = if dryrun {
         format!("../../results/lobsters_results/lobsters_disguise_stats_basic_dryrun.csv",)
@@ -604,11 +644,11 @@ fn run_stats_test(
         error!("Decaying user {}", u);
         let start = time::Instant::now();
         let did = edna
-            .apply_disguise(
+            .apply_disguise_rust(
                 user_id.to_string(),
-                DECAY_JSON,
-                TABLEINFO_JSON,
-                PPGEN_JSON,
+                decay_spec.clone(),
+                table_infos.clone(),
+                guise_gen.clone(),
                 None, //Some(user_id.to_string()),
                 None,
                 use_txn,
@@ -644,12 +684,13 @@ fn run_stats_test(
         // UNDECAY
         error!("Undecaying user {}", u);
         let start = time::Instant::now();
-        edna.reveal_disguise(
+        edna.reveal_disguise_rust(
             user_id.to_string(),
             did,
-            TABLEINFO_JSON,
-            PPGEN_JSON,
+            table_infos.clone(),
+            guise_gen.clone(),
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             Some(user_id.to_string()),
             None,
             use_txn,
@@ -687,11 +728,11 @@ fn run_stats_test(
         error!("UNSUB user {}", u);
         let start = time::Instant::now();
         let did = edna
-            .apply_disguise(
+            .apply_disguise_rust(
                 user_id.to_string(),
-                GDPR_JSON,
-                TABLEINFO_JSON,
-                PPGEN_JSON,
+                gdpr_spec.clone(),
+                table_infos.clone(),
+                guise_gen.clone(),
                 None, //Some(user_id.to_string()),
                 None,
                 use_txn,
@@ -726,12 +767,13 @@ fn run_stats_test(
         // RESUB
         error!("RESUB user {}", u);
         let start = time::Instant::now();
-        edna.reveal_disguise(
+        edna.reveal_disguise_rust(
             user_id.to_string(),
             did,
-            TABLEINFO_JSON,
-            PPGEN_JSON,
+            table_infos.clone(),
+            guise_gen.clone(),
             Some(edna::RevealPPType::Restore),
+            true, // allow partial row reveals
             Some(user_id.to_string()),
             None,
             use_txn,
@@ -802,11 +844,11 @@ fn run_stats_test(
             );
             let start = time::Instant::now();
             let did = edna
-                .apply_disguise(
+                .apply_disguise_rust(
                     user_id.to_string(),
-                    HOBBY_JSON,
-                    TABLEINFO_JSON,
-                    PPGEN_JSON,
+                    hobby_spec.clone(),
+                    table_infos.clone(),
+                    guise_gen.clone(),
                     None, //Some(user_id.to_string()),
                     None,
                     use_txn,
@@ -848,12 +890,13 @@ fn run_stats_test(
             // CATEGORY ANON REVEAL
             error!("CATEGORY ANON REVEAL user {}", u);
             let start = time::Instant::now();
-            edna.reveal_disguise(
+            edna.reveal_disguise_rust(
                 user_id.to_string(),
                 did,
-                TABLEINFO_JSON,
-                PPGEN_JSON,
+                table_infos.clone(),
+                guise_gen.clone(),
                 Some(edna::RevealPPType::Restore),
+                true, // allow partial row reveals
                 Some(user_id.to_string()),
                 None,
                 use_txn,

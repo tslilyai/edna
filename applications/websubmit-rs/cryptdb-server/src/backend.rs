@@ -36,7 +36,7 @@ impl MySqlBackend {
         let mut db = mysql::Conn::new(Opts::from_url(url).unwrap()).unwrap();
         assert_eq!(db.ping(), true);
 
-        let edna = EdnaClient::new(&url, false, args.crypto);
+        let edna = EdnaClient::new(&url, false, !args.crypto /* dryrun */);
 
         Ok(MySqlBackend {
             handle: db,

@@ -6,9 +6,12 @@ protect inactive accounts, selectively dissociate personal data from public
 profiles, and remove service access to their data without permanently losing
 their accounts. 
 
+* [Thesis paper on Edna](https://github.com/tslilyai/edna/blob/main/paper/thesis.pdf)
+* [Thesis defense of Edna](https://www.youtube.com/watch?v=HZcMqz80s2I) 
 * [Edna's paper at SOSP'23](https://github.com/tslilyai/edna/blob/main/paper/edna.pdf)
-* [Thesis defense of Edna](https://www.youtube.com/watch?v=HZcMqz80s2I) (corresponds to the `robust_reveal` branch)
   
+=======
+
 Edna was last tested on a machine with 16 CPUs and 60 GB RAM, running Ubuntu 20.04.5 LTS, and uses MySQL with the InnoDB storage engine atop a local SSD. The CloudLab profile (`profile.py`) should provide these settings, but numbers may differ due to variability in the machine type, etc.
 
 ## Repository organization:

@@ -7,14 +7,14 @@ import sys
 from collections import defaultdict
 import matplotlib.colors as mcolors
 
-plt.style.use('seaborn-deep')
+plt.style.use('seaborn-v0_8-colorblind')
 
 # plot styling for paper
-matplotlib.rc('font', family='serif', size=8)
-matplotlib.rc('text.latex', preamble='\\usepackage{times,mathptmx}')
+matplotlib.rc('font', family='serif', size=11)
+matplotlib.rc('text.latex',preamble='\\usepackage{inconsolata}\n\\usepackage[bitstream-charter]{mathdesign}\n\\usepackage{mathrsfs}')
 matplotlib.rc('text', usetex=True)
-matplotlib.rc('legend', fontsize=7)
-matplotlib.rc('figure', figsize=(3.33,1.2))
+matplotlib.rc('legend', fontsize=11)
+matplotlib.rc('figure', figsize=(6,2.5))
 matplotlib.rc('axes', linewidth=0.5)
 matplotlib.rc('lines', linewidth=0.5)
 
@@ -28,17 +28,24 @@ def add_labels(x,y,plt,color,offset):
             label = "{0:.2f}".format(y[i])
         new_offset = offset
         if y[i] < 1000:
+            new_offset = offset - 400
+        elif y[i] > 3000:
+            if y[i] < 3500:
+                new_offset = offset - 200
+            elif y[i] > 3600:
+                new_offset = offset - 400
+            else:
+                new_offset = offset - 300
+        elif y[i] < 3000:
             new_offset = offset - 300
-        elif y[i] > 3400:
-            new_offset = offset - 200
-        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=6)
+        plt.text(x[i], y[i]+new_offset, label, ha='center', color=color, size=11)
 
 
 barwidth = 0.15
 # positions
 X = np.arange(2)
 labels = ['Low Load', 'High Load']
-HIGH_LOAD = 14
+HIGH_LOAD = 13
 LOW_LOAD = 2
 TOTAL_TIME = 100000.0
 BUCKET_TIME = 25000
@@ -51,7 +58,7 @@ delete_results_txn = defaultdict(list)
 restore_results = defaultdict(list)
 restore_results_txn = defaultdict(list)
 
-fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(3.33, 1.2))
+fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(6, 2.5))
 
 def get_yerr(durs):
     mins = []
@@ -141,77 +148,52 @@ print(op_results_txn[HIGH_LOAD][1])
 print(op_results_txn[HIGH_LOAD][2])
 
 print(
-    "cheap disguise",
+    "high load disguise",
+    int(np.percentile(delete_results[HIGH_LOAD][1], 5)),
+    int(statistics.median(delete_results[HIGH_LOAD][1])),
+    int(np.percentile(delete_results[HIGH_LOAD][1], 95)),
+)
+print(
+    "high load restore",
+    int(np.percentile(restore_results[HIGH_LOAD][1], 5)),
+    int(statistics.median(restore_results[HIGH_LOAD][1])),
+    int(np.percentile(restore_results[HIGH_LOAD][1], 95)),
+)
+print(
+    "high load disguise txn",
+    int(np.percentile(delete_results_txn[HIGH_LOAD][1], 5)),
+    int(statistics.median(delete_results_txn[HIGH_LOAD][1])),
+    int(np.percentile(delete_results_txn[HIGH_LOAD][1], 95)),
+)
+print(
+    "high load restore txn",
+    int(np.percentile(restore_results_txn[HIGH_LOAD][1], 5)),
+    int(statistics.median(restore_results_txn[HIGH_LOAD][1])),
+    int(np.percentile(restore_results_txn[HIGH_LOAD][1], 95)),
+)
+print(
+    "expensive disguise",
     int(np.percentile(delete_results[LOW_LOAD][0], 5)),
     int(statistics.median(delete_results[LOW_LOAD][0])),
     int(np.percentile(delete_results[LOW_LOAD][0], 95)),
 )
 print(
-    "cheap restore",
+    "expensive restore",
     int(np.percentile(restore_results[LOW_LOAD][0], 5)),
     int(statistics.median(restore_results[LOW_LOAD][0])),
     int(np.percentile(restore_results[LOW_LOAD][0], 95)),
 )
 print(
-    "cheap disguise txn",
+    "exp txn delete",
     int(np.percentile(delete_results_txn[LOW_LOAD][0], 5)),
     int(statistics.median(delete_results_txn[LOW_LOAD][0])),
     int(np.percentile(delete_results_txn[LOW_LOAD][0], 95)),
 )
 print(
-    "cheap restore txn",
+    "exp txn restore",
     int(np.percentile(restore_results_txn[LOW_LOAD][0], 5)),
     int(statistics.median(restore_results_txn[LOW_LOAD][0])),
     int(np.percentile(restore_results_txn[LOW_LOAD][0], 95)),
-)
-print(
-    "expensive disguise",
-    int(np.percentile(delete_results[LOW_LOAD][1], 5)),
-    int(statistics.median(delete_results[LOW_LOAD][1])),
-    int(np.percentile(delete_results[LOW_LOAD][1], 95)),
-)
-print(
-    "expensive restore",
-    int(np.percentile(restore_results[LOW_LOAD][1], 5)),
-    int(statistics.median(restore_results[LOW_LOAD][1])),
-    int(np.percentile(restore_results[LOW_LOAD][1], 95)),
-)
-print(
-    "exp txn delete",
-    int(np.percentile(delete_results_txn[LOW_LOAD][1], 5)),
-    int(statistics.median(delete_results_txn[LOW_LOAD][1])),
-    int(np.percentile(delete_results_txn[LOW_LOAD][1], 95)),
-)
-print(
-    "exp txn restore",
-    int(np.percentile(restore_results_txn[LOW_LOAD][1], 5)),
-    int(statistics.median(restore_results_txn[LOW_LOAD][1])),
-    int(np.percentile(restore_results_txn[LOW_LOAD][1], 95)),
-)
-
-print(
-    "expensive disguise",
-    int(np.percentile(delete_results[LOW_LOAD][1], 5)),
-    int(statistics.median(delete_results[LOW_LOAD][1])),
-    int(np.percentile(delete_results[LOW_LOAD][1], 95)),
-)
-print(
-    "expensive restore",
-    int(np.percentile(restore_results[LOW_LOAD][1], 5)),
-    int(statistics.median(restore_results[LOW_LOAD][1])),
-    int(np.percentile(restore_results[LOW_LOAD][1], 95)),
-)
-print(
-    "exp txn delete",
-    int(np.percentile(delete_results_txn[LOW_LOAD][1], 5)),
-    int(statistics.median(delete_results_txn[LOW_LOAD][1])),
-    int(np.percentile(delete_results_txn[LOW_LOAD][1], 95)),
-)
-print(
-    "exp txn restore",
-    int(np.percentile(restore_results_txn[LOW_LOAD][1], 5)),
-    int(statistics.median(restore_results_txn[LOW_LOAD][1])),
-    int(np.percentile(restore_results_txn[LOW_LOAD][1], 95)),
 )
 
 offset = 560
@@ -317,8 +299,8 @@ add_labels((X+2*barwidth),
 ], plt, 'b', offset)
 
 plt.ylabel('Time (sec)')
-plt.ylim(ymin=0, ymax=5500)
-plt.yticks(range(0, 5500, 2000))
+plt.ylim(ymin=0, ymax=4500)
+plt.yticks(range(0, 4500, 1000))
 #plt.tick_params(
 #    axis='x',          # changes apply to the x-axis
 #    which='both',      # both major and minor ticks are affected

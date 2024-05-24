@@ -105,10 +105,14 @@ pub fn apply_ll(bg: &mut MySqlBackend, is_baseline: bool) -> Result<DID, mysql::
                     rowvals[3].value(),
                 ));
 
-                // register new ownershiprecord for pseudoprincipal
+                // register new pseudoprincipal
                 let start = time::Instant::now();
                 bg.edna
-                    .register_and_save_pseudoprincipal_record(did, &u, &new_uid, &vec![]);
+                    .register_pseudoprincipal(did, &u, &new_uid, TableRow {
+                        table: "users".to_string(),
+                        row: rowvals,
+                });
+
                 debug!(
                     bg.log,
                     "WSAnon: save pseudoprincipals: {}",
@@ -131,6 +135,18 @@ pub fn apply_ll(bg: &mut MySqlBackend, is_baseline: bool) -> Result<DID, mysql::
                     lec: lecture,
                     q: q,
                 });
+            }
+            if !is_baseline {
+                // insert a diff record for the decor state change
+                /*llapi.save_decor_record(
+                    np_uid.clone(),
+                    TableRow {
+                        table: curtable_info.table.clone(),
+                        row: i.clone(),
+                    },
+                    i_with_pps,
+                    did,
+                );*/
             }
         }
 

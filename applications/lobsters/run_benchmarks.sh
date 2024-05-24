@@ -9,23 +9,49 @@ db=lobsters_edna
 sql=/data/lobsters_edna_messages_and_tags.sql;
 scale=2.75
 
-# CONCURRENT TEST
-for u in 2 13; do
-	for d in 'expensive' 'cheap' 'none'; do
-    	for txn in '' '--txn'; do
-		    mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
-            	    mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
-		    RUST_LOG=error ../../target/release/lobsters \
-			--scale $scale \
-			--nconcurrent $u \
-			--disguiser $d \
-			--filename "${u}users_${d}${txn}" \
-			$txn \
-		    &> output/users-$u-${d}-$txn.out
-		    echo "Ran concurrent test for $u users 0 sleep ${d}"
-	    done
-    done
+# UPDATE TEST
+for i in `seq 5`; do
+	mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+	mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+	RUST_BACKTRACE=1 RUST_LOG=error ../../target/release/lobsters \
+	    --test 'updates' \
+	    --scale $scale \
+	    --txn \
+	    --uid 15955 \
+	    &> output/updates-exp-$i.out
+	echo "Ran updatestest with txn"
+
+	mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+	mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+	RUST_LOG=error ../../target/release/lobsters \
+	    --test 'reveal' \
+	    --scale $scale \
+	    --txn \
+	    --uid 15955  \
+	    &> output/reveal-exp-$i.out
+	echo "Ran updates test with txn"
+
+	mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+	mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+	RUST_LOG=error ../../target/release/lobsters \
+	    --test 'updates' \
+	    --scale $scale \
+	    --txn \
+	    --uid 10 \
+	    &> output/updates-cheap-$i.out
+	echo "Ran updates test with txn"
+
+	mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+	mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+	RUST_LOG=error ../../target/release/lobsters \
+	    --test 'reveal' \
+	    --scale $scale \
+	    --txn \
+	    --uid 10 \
+	    &> output/reveal-cheap-$i.out
+	echo "Ran reveal test with txn"
 done
+exit
 
 ##############################
 # STATS TEST
@@ -87,3 +113,23 @@ RUST_LOG=error ../../target/release/lobsters \
 	--scale $scale \
 	&> output/users_storage.out
 echo "Ran storage test for users"
+
+# CONCURRENT TEST
+for u in 2 13; do
+	for d in 'expensive' 'cheap' 'none'; do
+    	for txn in '' '--txn'; do
+		    mysql -utester -ppass --execute='DROP DATABASE IF EXISTS '$db'; CREATE DATABASE '$db';'
+            	    mysql -utester -ppass --execute='use '$db'; set @@max_heap_table_size=4294967295; source '$sql';'
+            #CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph --no-inline -F99 -o 14users_cheap.svg -b lobsters -- \
+		    RUST_LOG=error ../../target/release/lobsters \
+			--scale $scale \
+			--nconcurrent $u \
+			--disguiser $d \
+			--filename "${u}users_${d}${txn}" \
+			$txn \
+		    &> output/users-$u-${d}-$txn.out
+		    echo "Ran concurrent test for $u users 0 sleep ${d}"
+	    done
+    done
+done
+

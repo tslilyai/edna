@@ -27,7 +27,7 @@ mod questions;
 
 use backend::MySqlBackend;
 use edna::helpers;
-//use mysql::from_value;
+use mysql::from_value;
 use mysql::prelude::*;
 use mysql::{Opts, Value};
 use rocket::fs::FileServer;
@@ -47,6 +47,7 @@ use std::thread;
 use std::time;
 use std::time::Duration;
 
+pub const NITERS: usize = 200;
 pub const APIKEY_FILE: &'static str = "apikey.txt";
 pub const SHARE_FILE: &'static str = "share.txt";
 pub const DID_FILE: &'static str = "dids.txt";
@@ -139,6 +140,84 @@ fn rocket(args: &args::Args) -> Rocket<Build> {
         .mount("/anon/edit", routes![privacy::edit_as_pseudoprincipal])
 }
 
+fn populate_db(
+    user2apikey: &mut HashMap<String, String>,
+    account_durations: &mut Vec<Duration>,
+    args: &args::Args,
+    client: &Client,
+    db: &mut mysql::Conn,
+    log: slog::Logger,
+) {
+    // create admin
+    info!(log, "Creating admin");
+    let postdata = serde_urlencoded::to_string(&vec![("email", config::ADMIN.0)]).unwrap();
+    let response = client
+        .post("/apikey/generate")
+        .body(postdata)
+        .header(ContentType::Form)
+        .dispatch();
+    assert_eq!(response.status(), Status::Ok);
+
+    // create all users
+    for u in 0..args.nusers {
+        let email = format!("{}@mail.edu", u);
+        let postdata = serde_urlencoded::to_string(&vec![("email", email.clone())]).unwrap();
+        let start = time::Instant::now();
+        let response = client
+            .post("/apikey/generate")
+            .body(postdata)
+            .header(ContentType::Form)
+            .dispatch();
+        account_durations.push(start.elapsed());
+        assert_eq!(response.status(), Status::Ok);
+
+        // get api key
+        let file = File::open(format!("{}.{}", email, APIKEY_FILE)).unwrap();
+        let mut buf_reader = BufReader::new(file);
+        let mut apikey = String::new();
+        buf_reader.read_to_string(&mut apikey).unwrap();
+        info!(log, "Got email {} with apikey {}", &email, apikey);
+        user2apikey.insert(email.clone(), apikey);
+    }
+
+    // initialize for testing
+    if args.prime {
+        for l in 0..args.nlec {
+            db.query_drop(&format!("INSERT INTO lectures VALUES ({}, 'lec{}');", l, l))
+                .unwrap();
+            for q in 0..args.nqs {
+                db.query_drop(&format!(
+                    "INSERT INTO questions VALUES ({}, {}, 'lec{}question{}');",
+                    l, q, l, q
+                ))
+                .unwrap();
+                for u in 0..args.nusers {
+                    // LOGIN
+                    let email = format!("{}@mail.edu", u);
+                    let apikey = user2apikey.get(&email).unwrap();
+                    let postdata =
+                        serde_urlencoded::to_string(&vec![("email", &email), ("key", apikey)])
+                            .unwrap();
+                    let response = client
+                        .post("/apikey/login")
+                        .body(postdata)
+                        .header(ContentType::Form)
+                        .dispatch();
+                    assert_eq!(response.status(), Status::SeeOther);
+
+                    // insert answers
+                    db.query_drop(&format!("INSERT INTO answers VALUES ('{}@mail.edu', {}, {}, 'lec{}q{}answer{}', '1000-01-01 00:00:00');", 
+                        u, l, q, l, q, u)).unwrap();
+
+                    // logout
+                    let response = client.post("/apikey/logout").dispatch();
+                    assert_eq!(response.status(), Status::SeeOther);
+                }
+            }
+        }
+    }
+}
+
 #[rocket::main]
 async fn main() {
     env_logger::init();
@@ -196,75 +275,15 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     let client = Client::tracked(rocket).expect("valid rocket instance");
     let mut db = mysql::Conn::new(Opts::from_url(&url).unwrap()).unwrap();
     let mut user2apikey = HashMap::new();
+    populate_db(
+        &mut user2apikey,
+        &mut account_durations,
+        args,
+        &client,
+        &mut db,
+        log.clone(),
+    );
 
-    // create admin
-    debug!(log, "Creating admin");
-    let postdata = serde_urlencoded::to_string(&vec![("email", config::ADMIN.0)]).unwrap();
-    let response = client
-        .post("/apikey/generate")
-        .body(postdata)
-        .header(ContentType::Form)
-        .dispatch();
-    assert_eq!(response.status(), Status::Ok);
-
-    // create all users
-    for u in 0..args.nusers {
-        let email = format!("{}@mail.edu", u);
-        let postdata = serde_urlencoded::to_string(&vec![("email", email.clone())]).unwrap();
-        let start = time::Instant::now();
-        let response = client
-            .post("/apikey/generate")
-            .body(postdata)
-            .header(ContentType::Form)
-            .dispatch();
-        account_durations.push(start.elapsed());
-        assert_eq!(response.status(), Status::Ok);
-
-        // get api key
-        let file = File::open(format!("{}.{}", email, APIKEY_FILE)).unwrap();
-        let mut buf_reader = BufReader::new(file);
-        let mut apikey = String::new();
-        buf_reader.read_to_string(&mut apikey).unwrap();
-        debug!(log, "Got email {} with apikey {}", &email, apikey);
-        user2apikey.insert(email.clone(), apikey);
-    }
-
-    // initialize for testing
-    if args.prime {
-        for l in 0..args.nlec {
-            db.query_drop(&format!("INSERT INTO lectures VALUES ({}, 'lec{}');", l, l))
-                .unwrap();
-            for q in 0..args.nqs {
-                db.query_drop(&format!(
-                    "INSERT INTO questions VALUES ({}, {}, 'lec{}question{}');",
-                    l, q, l, q
-                ))
-                .unwrap();
-                for u in 0..args.nusers {
-                    // LOGIN
-                    let email = format!("{}@mail.edu", u);
-                    let apikey = user2apikey.get(&email).unwrap();
-                    let postdata =
-                        serde_urlencoded::to_string(&vec![("email", &email), ("key", apikey)])
-                            .unwrap();
-                    let response = client
-                        .post("/apikey/login")
-                        .body(postdata)
-                        .header(ContentType::Form)
-                        .dispatch();
-                    assert_eq!(response.status(), Status::SeeOther);
-
-                    // insert answers
-                    db.query_drop(&format!("INSERT INTO answers VALUES ('{}@mail.edu', {}, {}, 'lec{}q{}answer{}', '1000-01-01 00:00:00');", 
-                        u, l, q, l, q, u)).unwrap();
-
-                    // logout
-                    let response = client.post("/apikey/logout").dispatch();
-                    assert_eq!(response.status(), Status::SeeOther);
-                }
-            }
-        }
-    }
     /************
      * admin read
      *************/
@@ -282,7 +301,7 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             .dispatch();
         assert_eq!(response.status(), Status::SeeOther);
 
-        for _ in 0..200 {
+        for _ in 0..NITERS {
             // admin read
             let start = time::Instant::now();
             let response = client.get(format!("/leclist")).dispatch();
@@ -304,7 +323,7 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     /**********************************
      * baseline reads
      ***********************************/
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..min(args.nusers, NITERS) {
         let email = format!("{}@mail.edu", u);
         let apikey = user2apikey.get(&email).unwrap();
 
@@ -328,7 +347,7 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     /**********************************
      * baseline edits + delete
      ***********************************/
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..min(args.nusers, NITERS) {
         let email = format!("{}@mail.edu", u);
         let apikey = user2apikey.get(&email).unwrap();
 
@@ -353,7 +372,7 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             format!("new_answer_user_{}_lec_{}", u, 0),
         ));
         let postdata = serde_urlencoded::to_string(&answers).unwrap();
-        debug!(log, "Posting to questions for lec 0 answers {}", postdata);
+        info!(log, "Posting to questions for lec 0 answers {}", postdata);
         let response = client
             .post(format!("/questions/{}", 0)) // testing lecture 0 for now
             .body(postdata)
@@ -372,27 +391,27 @@ fn run_baseline_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     /**********************************
      * anonymization
      ***********************************/
-    // create all users again... because we just deleted them all lol
-    for u in 0..args.nusers {
-        let email = format!("{}@mail.edu", u);
-        let postdata = serde_urlencoded::to_string(&vec![("email", email.clone())]).unwrap();
-        let start = time::Instant::now();
-        let response = client
-            .post("/apikey/generate")
-            .body(postdata)
-            .header(ContentType::Form)
-            .dispatch();
-        account_durations.push(start.elapsed());
-        assert_eq!(response.status(), Status::Ok);
-
-        // get api key
-        let file = File::open(format!("{}.{}", email, APIKEY_FILE)).unwrap();
-        let mut buf_reader = BufReader::new(file);
-        let mut apikey = String::new();
-        buf_reader.read_to_string(&mut apikey).unwrap();
-        debug!(log, "Got email {} with apikey {}", &email, apikey);
-        user2apikey.insert(email.clone(), apikey);
+    // create all data again... because we just deleted them all lol
+    if args.prime {
+        let schema = std::fs::read_to_string("src/schema.sql").unwrap();
+        let host = format!("127.0.0.1:{}", args.port);
+        helpers::init_db(
+            false, // in-memory
+            &args.config.mysql_user,
+            &args.config.mysql_pass,
+            &host,
+            &args.class,
+            &schema,
+        );
     }
+    populate_db(
+        &mut user2apikey,
+        &mut account_durations,
+        args,
+        &client,
+        &mut db,
+        log.clone(),
+    );
 
     // login as the admin
     let postdata =
@@ -449,77 +468,15 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     let mut db = mysql::Conn::new(Opts::from_url(&url).unwrap()).unwrap();
     let mut user2apikey = HashMap::new();
     let log = new_logger();
+    populate_db(
+        &mut user2apikey,
+        &mut account_durations,
+        args,
+        &client,
+        &mut db,
+        log.clone(),
+    );
 
-    // create admin
-    debug!(log, "Creating admin");
-    let postdata = serde_urlencoded::to_string(&vec![("email", config::ADMIN.0)]).unwrap();
-    let response = client
-        .post("/apikey/generate")
-        .body(postdata)
-        .header(ContentType::Form)
-        .dispatch();
-    assert_eq!(response.status(), Status::Ok);
-
-    // create all users
-    debug!(log, "Creating users");
-    for u in 0..args.nusers {
-        let email = format!("{}@mail.edu", u);
-        let postdata = serde_urlencoded::to_string(&vec![("email", email.clone())]).unwrap();
-        let start = time::Instant::now();
-        let response = client
-            .post("/apikey/generate")
-            .body(postdata)
-            .header(ContentType::Form)
-            .dispatch();
-        account_durations.push(start.elapsed());
-        assert_eq!(response.status(), Status::Ok);
-
-        // get api key
-        let file = File::open(format!("{}.{}", email, APIKEY_FILE)).unwrap();
-        let mut buf_reader = BufReader::new(file);
-        let mut apikey = String::new();
-        buf_reader.read_to_string(&mut apikey).unwrap();
-        debug!(log, "Got email {} with apikey {}", &email, apikey);
-        user2apikey.insert(email.clone(), apikey);
-    }
-
-    debug!(log, "Initializing for testing");
-    // initialize for testing
-    if args.prime {
-        for l in 0..args.nlec {
-            db.query_drop(&format!("INSERT INTO lectures VALUES ({}, 'lec{}');", l, l))
-                .unwrap();
-            for q in 0..args.nqs {
-                db.query_drop(&format!(
-                    "INSERT INTO questions VALUES ({}, {}, 'lec{}question{}');",
-                    l, q, l, q
-                ))
-                .unwrap();
-                for u in 0..args.nusers {
-                    // LOGIN
-                    let email = format!("{}@mail.edu", u);
-                    let apikey = user2apikey.get(&email).unwrap();
-                    let postdata =
-                        serde_urlencoded::to_string(&vec![("email", &email), ("key", apikey)])
-                            .unwrap();
-                    let response = client
-                        .post("/apikey/login")
-                        .body(postdata)
-                        .header(ContentType::Form)
-                        .dispatch();
-                    assert_eq!(response.status(), Status::SeeOther);
-
-                    // insert answers
-                    db.query_drop(&format!("INSERT INTO answers VALUES ('{}@mail.edu', {}, {}, 'lec{}q{}answer{}', '1000-01-01 00:00:00');", 
-                        u, l, q, l, q, u)).unwrap();
-
-                    // logout
-                    let response = client.post("/apikey/logout").dispatch();
-                    assert_eq!(response.status(), Status::SeeOther);
-                }
-            }
-        }
-    }
     /************
      * admin read
      *************/
@@ -537,7 +494,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             .dispatch();
         assert_eq!(response.status(), Status::SeeOther);
 
-        for _ in 0..200 {
+        for _ in 0..NITERS {
             // admin read
             let start = time::Instant::now();
             let response = client.get(format!("/leclist")).dispatch();
@@ -559,7 +516,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     /***********************************
      * editing nonanon data
      ***********************************/
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..min(args.nusers, NITERS) {
         // login
         let email = format!("{}@mail.edu", u);
         let apikey = user2apikey.get(&email).unwrap();
@@ -581,7 +538,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         // editing
         let start = time::Instant::now();
         let response = client.get(format!("/questions/{}", 0)).dispatch();
-        debug!(
+        info!(
             log,
             "Edit Public: Getting questions {}mus",
             start.elapsed().as_micros()
@@ -594,14 +551,14 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             format!("new_answer_user_{}_lec_{}", u, 0),
         ));
         let postdata = serde_urlencoded::to_string(&answers).unwrap();
-        debug!(log, "Posting to questions for lec 0 answers {}", postdata);
+        info!(log, "Posting to questions for lec 0 answers {}", postdata);
         let post_start = time::Instant::now();
         let response = client
             .post(format!("/questions/{}", 0)) // testing lecture 0 for now
             .body(postdata)
             .header(ContentType::Form)
             .dispatch();
-        debug!(
+        info!(
             log,
             "Edit Public: Posting questions {}mus",
             post_start.elapsed().as_micros()
@@ -618,7 +575,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
      * gdpr deletion (no composition)
      ***********************************/
     let mut user2gdprdids = HashMap::new();
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..min(args.nusers, NITERS) {
         let email = format!("{}@mail.edu", u);
         let apikey = user2apikey.get(&email).unwrap();
 
@@ -632,7 +589,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             .dispatch();
         assert_eq!(response.status(), Status::SeeOther);
 
-        debug!(
+        info!(
             log,
             "User {} {} attempted to log in correctly, going to delete", email, apikey
         );
@@ -646,7 +603,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         let mut buf_reader = BufReader::new(file);
         let mut did = String::new();
         buf_reader.read_to_string(&mut did).unwrap();
-        debug!(log, "Got email {} with did {}", &email, did);
+        info!(log, "Got email {} with did {}", &email, did);
         user2gdprdids.insert(email.clone(), did);
 
         // logout
@@ -657,7 +614,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     /***********************************
      * gdpr restore (without composition)
      ***********************************/
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..min(args.nusers, NITERS) {
         let email = format!("{}@mail.edu", u);
         let apikey = user2apikey.get(&email).unwrap();
 
@@ -713,7 +670,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         assert_eq!(response.status(), Status::SeeOther);
 
         // get records
-        for u in 0..min(args.nusers, 200) {
+        for u in 0..min(args.nusers, NITERS) {
             let email = format!("{}@mail.edu", u);
 
             // check results of anonymization: user has no answers
@@ -741,7 +698,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     /***********************************
      * editing anonymized data
      ***********************************/
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..min(args.nusers, NITERS) {
         let email = format!("{}@mail.edu", u);
         let apikey = user2apikey.get(&email).unwrap();
 
@@ -750,7 +707,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         // render template to get edit creds
         let response = client.get(format!("/anon/auth")).dispatch();
         assert_eq!(response.status(), Status::Ok);
-        debug!(
+        info!(
             log,
             "Auth edit anon request: {}mus",
             start.elapsed().as_micros()
@@ -770,7 +727,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             .header(ContentType::Form)
             .dispatch();
         assert_eq!(response.status(), Status::Ok);
-        debug!(
+        info!(
             log,
             "Perform edit anon request: {}mus",
             anon_start.elapsed().as_micros()
@@ -790,7 +747,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
             .header(ContentType::Form)
             .dispatch();
         assert_eq!(response.status(), Status::SeeOther);
-        debug!(
+        info!(
             log,
             "Update answers as anon request: {}mus",
             anon_start.elapsed().as_micros()
@@ -812,12 +769,13 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         .header(ContentType::Form)
         .dispatch();
     assert_eq!(response.status(), Status::SeeOther);
-    /*let res = db
+    let res = db
         .query_iter("SELECT answers.* FROM answers WHERE lec = 0 AND q = 0;")
         .unwrap();
+    let mut found_new = false;
     for row in res {
         let rowvals = row.unwrap().unwrap();
-        debug!(
+        info!(
             log,
             "Rowvals are {:?}",
             rowvals
@@ -826,8 +784,12 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
                 .collect::<Vec<String>>()
         );
         let answer: String = from_value(rowvals[3].clone());
-        assert!(answer.contains("new_answer"));
-    }*/
+        if answer.contains("new_answer") {
+            found_new = true;
+        }
+    }
+    assert!(found_new);
+
     // logout
     let response = client.post("/apikey/logout").dispatch();
     assert_eq!(response.status(), Status::SeeOther);
@@ -835,7 +797,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     /***********************************
      * gdpr deletion (with composition)
      ***********************************/
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..min(args.nusers, NITERS) {
         let email = format!("{}@mail.edu", u);
         let apikey = user2apikey.get(&email).unwrap();
 
@@ -859,7 +821,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         let mut buf_reader = BufReader::new(file);
         let mut did = String::new();
         buf_reader.read_to_string(&mut did).unwrap();
-        debug!(log, "Got email {} with did {}", &email, did);
+        info!(log, "Got email {} with did {}", &email, did);
         user2gdprdids.insert(email.clone(), did);
 
         let response = client.post("/apikey/logout").dispatch();
@@ -877,31 +839,34 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     assert_eq!(response.status(), Status::SeeOther);
 
     // check results of delete: no answers or users exist
-    /*let res = db.query_iter("SELECT * FROM answers;").unwrap();
+    let res = db.query_iter("SELECT * FROM answers;").unwrap();
     let mut rows = vec![];
     for row in res {
         let rowvals = row.unwrap().unwrap();
         let answer: String = from_value(rowvals[0].clone());
         rows.push(answer);
     }
-    assert_eq!(rows.len(), 0);
+    assert_eq!(
+        rows.len(),
+        args.nlec * args.nqs * (args.nusers - min(args.nusers, NITERS))
+    );
     let res = db.query_iter("SELECT * FROM users;").unwrap();
     let mut rows = vec![];
     for row in res {
         let rowvals = row.unwrap().unwrap();
         let email: String = from_value(rowvals[0].clone());
-        debug!(log, "Got email {} from users after delete", email);
+        info!(log, "Got email {} from users after delete", email);
         rows.push(email);
     }
-    assert_eq!(rows.len(), 1); // the admin
-    */
+    // note: this gets messy because of pseudoprincipals
+    //assert_eq!(rows.len()); // the admin
     let response = client.post("/apikey/logout").dispatch();
     assert_eq!(response.status(), Status::SeeOther);
 
     /***********************************
      * gdpr restore (with composition)
      ***********************************/
-    for u in 0..min(args.nusers, 200) {
+    for u in 0..min(args.nusers, NITERS) {
         let email = format!("{}@mail.edu", u);
         let apikey = user2apikey.get(&email).unwrap();
 
@@ -945,16 +910,20 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
         .dispatch();
     assert_eq!(response.status(), Status::SeeOther);
 
-    /*let res = db
+    let res = db
         .query_iter("SELECT * FROM answers WHERE lec = 0 AND q = 0;")
         .unwrap();
     let mut rows = vec![];
+    let mut found_new = false;
     for row in res {
         let rowvals = row.unwrap().unwrap();
         let answer: String = from_value(rowvals[3].clone());
-        assert!(answer.contains("new_answer"), "{}", answer);
+        if answer.contains("new_answer") {
+            found_new = true;
+        }
         rows.push(answer);
     }
+    assert!(found_new);
     assert_eq!(rows.len(), args.nusers as usize);
 
     let res = db.query_iter("SELECT * FROM users;").unwrap();
@@ -967,7 +936,7 @@ fn run_benchmark(args: &args::Args, rocket: Rocket<Build>) {
     assert_eq!(
         rows.len(),
         1 + args.nusers as usize * (args.nlec as usize + 1)
-    );*/
+    );
 
     print_stats(
         args,

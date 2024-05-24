@@ -1,26 +1,60 @@
 {
     "users": {
-        "name": "users",
+        "table": "users",
         "id_cols": ["email"],
-        "other_fk_cols": [],
-        "owner_fk_cols": ["email"]
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "email",
+                "from_table": "users",
+                "from_col": "email"
+            }
+        ]
     },
     "lectures": {
-        "name": "lectures",
+        "table": "lectures",
         "id_cols": ["id"],
-        "other_fk_cols": [],
-        "owner_fk_cols": []
+        "other_fks": [],
+        "owner_fks": []
     },
     "questions": {
-        "name": "questions",
+        "table": "questions",
         "id_cols": ["lec", "q"],
-        "other_fk_cols": [["lectures", "id", "lec"]],
-        "owner_fk_cols": []
+        "other_fks": [
+             {
+                "to_table": "lectures",
+                "to_col": "id",
+                "from_table": "questions",
+                "from_col": "lec"
+            }
+        ],
+        "owner_fks": []
     },
     "answers": {
-        "name": "answers",
-        "id_cols": ["email", "lec", "q"],
-        "other_fk_cols": [["lectures", "id", "lec"], ["questions", "q", "q"]],
-        "owner_fk_cols": ["email"]
+        "table": "answers",
+        "id_cols": ["email", "q", "lec"],
+        "other_fks": [
+            {
+                "to_table": "questions",
+                "to_col": "q",
+                "from_table": "answers",
+                "from_col": "q"
+            },
+            {
+                "to_table": "lectures",
+                "to_col": "id",
+                "from_table": "answers",
+                "from_col": "lec"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "email",
+                "from_table": "answers",
+                "from_col": "email"
+            }
+        ]
     }
 }

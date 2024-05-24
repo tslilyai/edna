@@ -1,7 +1,8 @@
 use crate::crypto::*;
 use crate::helpers::*;
 use crate::records::*;
-use crate::{DID, UID};
+use crate::TableRow;
+use crate::{Update, UpdateFn, DID, UID};
 use crypto_box::{PublicKey, SecretKey};
 use log::{error, info, warn};
 use mysql::prelude::*;
@@ -23,7 +24,7 @@ use std::time;
 
 pub type Loc = u64; // locator
 pub type Index = u64; // index into shares map, enc locators map
-pub type DecryptCap = Vec<u8>; // decryption capability (e.g., private key)
+pub type PrivKey = Vec<u8>; // decryption capability (e.g., private key)
 pub type Share = [BigInt; 2];
 pub type ShareValue = BigInt;
 pub type UserData = (Share, Index);
@@ -35,24 +36,27 @@ pub struct PrincipalData {
     pub enc_locators_index: Index,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bag {
     pub diffrecs: Vec<DiffRecordWrapper>,
-    pub ownrecs: Vec<SpeaksForRecordWrapper>,
-    pub pkrecs: HashMap<UID, PrivkeyRecord>,
+    pub chainrecs: HashMap<UID, SFChainRecord>,
+    pub t: u64,
     pub random_padding: Vec<u8>,
 }
 
 impl Bag {
-    pub fn new() -> Bag {
+    pub fn new(start_time: time::Instant) -> Bag {
         let mut rng = rand::thread_rng();
         let size = rng.gen_range(512..4096);
         let mut padding: Vec<u8> = repeat(0u8).take(size).collect();
         rng.fill_bytes(&mut padding[..]);
 
-        let mut bag: Bag = Default::default();
-        bag.random_padding = padding;
-        bag
+        Bag {
+            random_padding: padding,
+            t: start_time.elapsed().as_secs(),
+            chainrecs: HashMap::new(),
+            diffrecs: vec![],
+        }
     }
 }
 
@@ -77,8 +81,10 @@ pub struct Locator {
     pub pubkey: Vec<u8>,
 }
 
-#[derive(Clone)]
 pub struct RecordCtrler {
+    pub start_time: time::Instant,
+    updates: Vec<Update>,
+
     // principal records are stored indexed by some large random num
     principal_data: HashMap<UID, PrincipalData>,
 
@@ -129,6 +135,8 @@ impl RecordCtrler {
         let prime = BigInt::from_bytes_le(num_bigint::Sign::Plus, &prime_arr);
 
         let mut tctrler = RecordCtrler {
+            start_time: time::Instant::now(),
+            updates: vec![],
             principal_data: HashMap::new(),
             enc_map: HashMap::new(),
             enc_locators_map: HashMap::new(),
@@ -151,6 +159,7 @@ impl RecordCtrler {
         }
 
         // TODO get from persistent enc locs maps
+        // TODO get from updates
 
         let share_rows = RecordPersister::get_share_store_rows(db);
         for share_info in share_rows {
@@ -171,7 +180,7 @@ impl RecordCtrler {
     }
 
     // gets number of bytes in principaldata as well as encrypted store
-    pub fn get_sizes(&self, db: &mut mysql::PooledConn, dbname: &str) -> (usize, usize) {
+    pub fn get_space_overhead(&self, db: &mut mysql::PooledConn, dbname: &str) -> (usize, usize) {
         let mut bytes = 0;
         for (key, pd) in self.principal_data.iter() {
             bytes += size_of_val(&*key);
@@ -204,6 +213,17 @@ impl RecordCtrler {
         elbytes += size_of_val(&self.enc_locators_map);
         error!("enclocs_map {}", elbytes);
 
+        let mut replaylogbytes = 0;
+        for u in &self.updates {
+            replaylogbytes += size_of_val(&*u);
+            error!("replaylogbytes {}", replaylogbytes);
+            let upfn = u.upfn.lock().unwrap();
+            replaylogbytes += size_of_val(&*upfn);
+            error!("replaylogbytes {}", replaylogbytes);
+        }
+        replaylogbytes += size_of_val(&self.updates);
+        error!("replaylogbytes {}", replaylogbytes);
+
         let mut ssbytes = 0;
         for (l, ss) in self.shares_map.iter() {
             ssbytes += size_of_val(&l);
@@ -212,7 +232,7 @@ impl RecordCtrler {
         ssbytes += size_of_val(&self.shares_map);
         error!("ssmap {}", ssbytes);
 
-        let persisted_bytes = RecordPersister::get_sizes(db, dbname);
+        let persisted_bytes = RecordPersister::get_space_overhead(db, dbname);
         error!("persisted {}", persisted_bytes);
 
         (bytes + ssbytes + edbytes + elbytes, persisted_bytes)
@@ -264,10 +284,9 @@ impl RecordCtrler {
             let bag = self.tmp_bags.get(&uid.to_string()).unwrap().clone();
             self.update_bag_at_loc(&lc, &bag, db);
             warn!(
-                "Edna: Inserted bag with {} dr, {} sfr, {} pks for uid {}: {}mus",
+                "Edna: Inserted bag with {} dr, {} sfchains for uid {}: {}mus",
                 bag.diffrecs.len(),
-                bag.ownrecs.len(),
-                bag.pkrecs.len(),
+                bag.chainrecs.len(),
                 uid,
                 start_update.elapsed().as_micros(),
             );
@@ -381,7 +400,7 @@ impl RecordCtrler {
         is_anon: bool,
         db: Option<&mut Q>,
         persist: bool,
-    ) -> (DecryptCap, Vec<u8> /*publickey*/) {
+    ) -> (PrivKey, Vec<u8> /*publickey*/) {
         if self.dryrun {
             // pk = uid as bytes
             let pk = get_pk_bytes(uid.as_bytes().to_vec());
@@ -445,7 +464,7 @@ impl RecordCtrler {
         is_anon: bool,
         db: &mut Q,
         persist: bool,
-    ) -> DecryptCap {
+    ) -> PrivKey {
         let (secretkey, _pubkey) = self.register_principal(uid, is_anon, Some(db), persist);
         secretkey
     }
@@ -513,15 +532,25 @@ impl RecordCtrler {
 
         // persist share info at share_loc
         self.shares_map.insert(uid_pw_hash, perm_share.clone());
-        info!("user share: {:?}", perm_share.share);
+        info!("edna-stored user share: {:?}", perm_share.share);
+        info!(
+            "user-stored user share: {:?}",
+            (&all_shares[2], uid_pw_hash)
+        );
         RecordPersister::persist_share(&vec![(uid_pw_hash, perm_share.clone())], db);
 
         (all_shares[2].clone(), uid_pw_hash)
     }
 
-    pub fn register_anon_principal(&mut self, uid: &UID, anon_uid: &UID, did: DID) {
+    pub fn register_pseudoprincipal(
+        &mut self,
+        old_uid: &UID,
+        new_uid: &UID,
+        pp: TableRow,
+        did: DID,
+    ) -> PrivKey {
         let start = time::Instant::now();
-        let anon_uidstr = anon_uid.trim_matches('\'');
+        let anon_uidstr = new_uid.trim_matches('\'');
         // save the anon principal as a new principal with a public key
         let (secretkey, pubkey) = self.register_principal(
             &anon_uidstr.to_string(),
@@ -529,45 +558,43 @@ impl RecordCtrler {
             None::<&mut mysql::Conn>,
             false,
         );
-
         info!(
             "Registering anon principal {} with secretkey {} and pubkey {}",
             anon_uidstr.to_string(),
             base64::encode(&secretkey),
             base64::encode(&pubkey),
         );
-        let privkey_record =
-            new_privkey_record(uid.to_string(), anon_uidstr.to_string(), secretkey);
-        self.insert_privkey_record(uid, did, &privkey_record);
+
+        // we need to record the pp in the speaksfor chain
+        let chain_record = new_sfchain_record(
+            old_uid.to_string(),
+            anon_uidstr.to_string(),
+            secretkey.clone(),
+        );
+        self.insert_chain_record(old_uid, did, &chain_record);
+
+        // we also need to record a diff record for the pp
+        // so we can delete the pp when we reverse this disguise
+        let pp_record = new_generic_diff_record_wrapper(
+            self.start_time,
+            old_uid,
+            did,
+            edna_diff_record_to_bytes(&new_pseudoprincipal_record(
+                pp,
+                old_uid.clone(),
+                new_uid.clone(),
+            )),
+        );
+        self.insert_diff_record_wrapper(&pp_record);
         info!(
-            "Edna: speaksfor record from anon principal {} to original {}",
-            anon_uid, uid
+            "Edna: record anon principal {} for original {}",
+            new_uid, old_uid
         );
         info!(
             "Edna: register anon principal: {}",
             start.elapsed().as_micros()
         );
-    }
-
-    pub fn insert_speaksfor_record(
-        &mut self,
-        uid: &UID,
-        anon_uid: &UID,
-        did: DID,
-        speaksfor_record_data: Vec<u8>,
-    ) {
-        let start = time::Instant::now();
-        let sf_record_wrapped = new_generic_speaksfor_record_wrapper(
-            uid.to_string(),
-            anon_uid.to_string(),
-            did,
-            speaksfor_record_data,
-        );
-        self.insert_speaksfor_record_wrapper(&sf_record_wrapped, uid);
-        info!(
-            "Edna: insert speaksfor anon principal: {}",
-            start.elapsed().as_micros()
-        );
+        secretkey
     }
 
     pub fn principal_is_anon(&self, uid: &UID) -> bool {
@@ -591,18 +618,31 @@ impl RecordCtrler {
     }
 
     // forget metadata as soon as all locators are gone.
-    // do this even for pseudoprincipals
+    // don't this even for pseudoprincipals; we'll either fail to recorrelate to
+    // pseudoprincipal can be restored from recursive disguising!
     pub fn mark_principal_to_forget(&mut self, uid: &UID, did: DID) {
         let start = time::Instant::now();
-        let p = self.principal_data.get_mut(uid).unwrap();
-        let mut precord = new_remove_principal_record_wrapper(uid, did, &p);
-        self.insert_user_diff_record_wrapper(&mut precord);
-        self.tmp_remove_principals.insert(uid.to_string());
-        info!(
-            "Edna: mark principal {} to remove : {}",
-            uid,
-            start.elapsed().as_micros()
-        );
+        if let Some(p) = self.principal_data.get_mut(uid) {
+            let precord = new_generic_diff_record_wrapper(
+                self.start_time,
+                uid,
+                did,
+                edna_diff_record_to_bytes(&new_remove_principal_record(&p)),
+            );
+            self.insert_diff_record_wrapper(&precord);
+            self.tmp_remove_principals.insert(uid.to_string());
+            info!(
+                "Edna: mark principal {} to remove : {}",
+                uid,
+                start.elapsed().as_micros()
+            );
+        } else {
+            info!(
+                "Edna: principal {} already removed: {}",
+                uid,
+                start.elapsed().as_micros()
+            );
+        }
     }
 
     /*
@@ -612,11 +652,7 @@ impl RecordCtrler {
     fn update_bag_at_loc<Q: Queryable>(&mut self, lc: &Locator, bag: &Bag, db: &mut Q) {
         let popt = self.principal_data.get(&lc.uid);
         let pubkey = if popt.is_none() {
-            warn!(
-                "UpdateBagAtLoc: no user with uid {} found, bag had {} sfrs",
-                lc.uid,
-                bag.ownrecs.len()
-            );
+            warn!("UpdateBagAtLoc: no user with uid {} found", lc.uid,);
             Some(PublicKey::from(get_pk_bytes(lc.pubkey.clone())))
         } else {
             popt.unwrap().pubkey.clone()
@@ -631,34 +667,32 @@ impl RecordCtrler {
         info!("Edna: Saved bag for {}", lc.uid);
     }
 
-    fn insert_privkey_record(&mut self, old_uid: &UID, did: DID, pppk: &PrivkeyRecord) {
+    fn insert_chain_record(&mut self, old_uid: &UID, did: DID, pppk: &SFChainRecord) {
         let start = time::Instant::now();
         let p = self.principal_data.get_mut(old_uid);
         if p.is_none() {
-            info!("InsertPrivkeyRecord: no user with uid {} found?", old_uid);
+            info!("InsertSFChainRecord: no user with uid {} found?", old_uid);
             return;
         }
         match self.tmp_bags.get_mut(old_uid) {
             Some(bag) => {
                 // important: insert the mapping from new_uid to pppk
-                bag.pkrecs.insert(pppk.new_uid.clone(), pppk.clone());
+                bag.chainrecs.insert(pppk.new_uid.clone(), pppk.clone());
                 info!(
-                    "Got bag for {} and {} with ownrecs {} and privkeys {}",
+                    "Got bag for {} and {} with and privkeys {}",
                     old_uid,
                     did,
-                    bag.ownrecs.len(),
-                    bag.pkrecs.len()
+                    bag.chainrecs.len()
                 );
             }
             None => {
-                let mut new_bag = Bag::new();
-                new_bag.pkrecs.insert(pppk.new_uid.clone(), pppk.clone());
+                let mut new_bag = Bag::new(self.start_time);
+                new_bag.chainrecs.insert(pppk.new_uid.clone(), pppk.clone());
                 info!(
-                    "Got new_bag for {} and {} with ownrecs {} and privkeys {}",
+                    "Got new_bag for {} and {} with and privkeys {}",
                     old_uid,
                     did,
-                    new_bag.ownrecs.len(),
-                    new_bag.pkrecs.len()
+                    new_bag.chainrecs.len()
                 );
                 self.tmp_bags.insert(old_uid.clone(), new_bag);
             }
@@ -670,45 +704,7 @@ impl RecordCtrler {
         );
     }
 
-    fn insert_speaksfor_record_wrapper(&mut self, pppk: &SpeaksForRecordWrapper, old_uid: &UID) {
-        let start = time::Instant::now();
-        let p = self.principal_data.get_mut(old_uid);
-        if p.is_none() {
-            info!("no user with uid {} found?", old_uid);
-            return;
-        }
-        match self.tmp_bags.get_mut(old_uid) {
-            Some(bag) => {
-                bag.ownrecs.push(pppk.clone());
-                info!(
-                    "Got bag for {} and {} with ownrecs {} and privkeys {}",
-                    old_uid,
-                    pppk.did,
-                    bag.ownrecs.len(),
-                    bag.pkrecs.len()
-                );
-            }
-            None => {
-                let mut new_bag = Bag::new();
-                new_bag.ownrecs.push(pppk.clone());
-                info!(
-                    "Got new_bag for {} and {} with ownrecs {} and privkeys {}",
-                    old_uid,
-                    pppk.did,
-                    new_bag.ownrecs.len(),
-                    new_bag.pkrecs.len()
-                );
-                self.tmp_bags.insert(old_uid.clone(), new_bag);
-            }
-        }
-        info!(
-            "Inserted own record from uid {} total: {}",
-            old_uid,
-            start.elapsed().as_micros()
-        );
-    }
-
-    pub fn insert_user_diff_record_wrapper(&mut self, record: &DiffRecordWrapper) {
+    pub fn insert_diff_record_wrapper(&mut self, record: &DiffRecordWrapper) {
         let start = time::Instant::now();
         match self.tmp_bags.get_mut(&record.uid) {
             Some(bag) => {
@@ -716,7 +712,7 @@ impl RecordCtrler {
                 bag.diffrecs.push(record.clone());
             }
             None => {
-                let mut new_bag = Bag::new();
+                let mut new_bag = Bag::new(self.start_time);
                 info!("Got new bag for {} diff records", record.uid);
                 new_bag.diffrecs.push(record.clone());
                 self.tmp_bags.insert(record.uid.clone(), new_bag);
@@ -733,54 +729,51 @@ impl RecordCtrler {
      * GET TOKEN FUNCTIONS
      */
 
-    // gets/decrypts bag at location, keeps contents (sf and diff), follows references in pkrecs:
+    // gets/decrypts bag at location, keeps contents (sf and diff), follows references in chainrecs:
     // if user is pseudoprincipal, get/decrypt that bag and add its contents; return all gathered contents
     // NOTE: we could have flag to remove locators so we don't traverse twice (e.g., have to call cleanup)
     // this would remove locators regardless of success in revealing
     pub fn get_user_records(
         &mut self,
-        decrypt_cap: &DecryptCap,
+        privkey: &PrivKey,
         lc: &Locator,
-    ) -> (
-        Vec<DiffRecordWrapper>,
-        Vec<SpeaksForRecordWrapper>,
-        HashMap<UID, PrivkeyRecord>,
-    ) {
+    ) -> (Vec<DiffRecordWrapper>, HashMap<UID, SFChainRecord>) {
         let mut diff_records = vec![];
-        let mut sf_records = vec![];
         let mut pk_records = HashMap::new();
-        if decrypt_cap.is_empty() {
-            return (diff_records, sf_records, pk_records);
+        if privkey.is_empty() {
+            return (diff_records, pk_records);
         }
         if let Some(encbag) = self.enc_map.get(&lc.loc) {
             info!("Getting records of user {} with lc {}", lc.uid, lc.loc);
-            let start = time::Instant::now();
-            // decrypt record with decrypt_cap provided by client
-            let (succeeded, plaintext) = decrypt_encdata(encbag, decrypt_cap, self.dryrun);
+            let initstart = time::Instant::now();
+            // decrypt record with privkey provided by client
+            let (succeeded, plaintext) = decrypt_encdata(encbag, privkey, self.dryrun);
+            warn!(
+                "Edna: Decrypt encdata: {}mus",
+                initstart.elapsed().as_micros(),
+            );
             if !succeeded {
-                info!(
-                    "Failed to decrypt bag {} with {}",
-                    lc.uid,
-                    decrypt_cap.len()
-                );
-                return (diff_records, sf_records, pk_records);
+                info!("Failed to decrypt bag {} with {}", lc.uid, privkey.len());
+                return (diff_records, pk_records);
             }
+            let start = time::Instant::now();
             let mut bag: Bag = bincode::deserialize(&plaintext).unwrap();
-
-            // remove if we found a matching record for the disguise
-            diff_records.append(&mut bag.diffrecs);
-            sf_records.append(&mut bag.ownrecs);
-            info!(
-                "Edna: Decrypted diff, own, pk records added {}, {}, {} total: {}",
-                bag.diffrecs.len(),
-                bag.ownrecs.len(),
-                bag.pkrecs.len(),
+            warn!(
+                "Edna: Deserialize encdata: {}mus",
                 start.elapsed().as_micros(),
+            );
+            // we found a matching record for the disguise
+            diff_records.append(&mut bag.diffrecs);
+            warn!(
+                "Edna: Decrypted diff, pk records added {}, {}: {}mus",
+                bag.diffrecs.len(),
+                bag.chainrecs.len(),
+                initstart.elapsed().as_micros(),
             );
 
             // get ALL new_uids regardless of disguise that record came from
             let mut new_uids = vec![];
-            for (new_uid, pk) in &bag.pkrecs {
+            for (new_uid, pk) in &bag.chainrecs {
                 new_uids.push((new_uid.clone(), pk.priv_key.clone()));
                 pk_records.insert(new_uid.clone(), pk.clone());
             }
@@ -788,10 +781,8 @@ impl RecordCtrler {
             for (_new_uid, pk) in new_uids {
                 let pplcs = self.get_locators(&pk);
                 for lc in pplcs {
-                    let (mut pp_diff_records, mut pp_sf_records, pp_pk_records) =
-                        self.get_user_records(&pk, &lc);
+                    let (mut pp_diff_records, pp_pk_records) = self.get_user_records(&pk, &lc);
                     diff_records.append(&mut pp_diff_records);
-                    sf_records.append(&mut pp_sf_records);
                     for (new_uid, pk) in &pp_pk_records {
                         pk_records.insert(new_uid.clone(), pk.clone());
                     }
@@ -799,7 +790,7 @@ impl RecordCtrler {
             }
         }
         // return records matching disguise and the removed locs from this iteration
-        (diff_records, sf_records, pk_records)
+        (diff_records, pk_records)
     }
 
     // gets private key given uid and password or user share
@@ -808,7 +799,9 @@ impl RecordCtrler {
         uid: &UID,
         password: Option<String>,
         user_data: Option<UserData>,
-    ) -> Option<DecryptCap> {
+    ) -> Option<PrivKey> {
+        info!("get_priv_key: user {} user share: {:?}", uid, user_data);
+        let allstart = time::Instant::now();
         if self.dryrun {
             if user_data != None {
                 panic!("Oops can't use this in dryrun");
@@ -883,12 +876,21 @@ impl RecordCtrler {
         };
         let priv_key = sss.reconstruct(&shares);
         let pkbytes = get_pk_bytes(priv_key.to_bytes_le().1);
-        info!("SSS reconstruct: {}mus", start.elapsed().as_micros());
+        warn!(
+            "SSS reconstruct {}: {}mus",
+            uid,
+            start.elapsed().as_micros()
+        );
+        warn!(
+            "get priv key of uid {}: {}mus",
+            uid,
+            allstart.elapsed().as_micros()
+        );
         return Some(pkbytes.to_vec());
     }
 
     // gets locators given privkey
-    pub fn get_locators(&self, privkey: &DecryptCap) -> Vec<Locator> {
+    pub fn get_locators(&self, privkey: &PrivKey) -> Vec<Locator> {
         let pk_hash = {
             let mut hasher = DefaultHasher::new();
             (base64::encode(privkey)).hash(&mut hasher);
@@ -911,36 +913,34 @@ impl RecordCtrler {
         return lcs;
     }
 
-    // gets/decrypts bag at loc, gets diff/own/pks, if nothing or correct disguise puts in an empty vec,
-    // follows uids in pk, removes matching records of pseudoprincipals
-    // for each pseudoprincipal for which we hold a private key;
-    // returns whether there exist diffs, owns, or pks at the given location (respectively)
+    // gets/decrypts bag at loc and gets diff/sfchains, if nothing or correct
+    // disguise puts in an empty vec, follows uids in pk, removes matching
+    // records of pseudoprincipals for each pseudoprincipal for which we hold a
+    // private key; returns whether there exist diffs, owns, or sfchains at the given
+    // location (respectively)
     pub fn cleanup_user_records(
         &mut self,
         did: DID,
-        decrypt_cap: &DecryptCap,
+        privkey: &PrivKey,
         lc: &Locator,
-        seen_pps: &mut HashSet<UID>,
         db: &mut mysql::PooledConn,
-    ) -> (bool, bool, bool) {
+    ) -> (bool, bool) {
         // delete locators + encrypted records
         // remove pseudoprincipal metadata if caps are empty
         let mut no_diffs_at_loc = true;
-        let mut no_owns_at_loc = true;
-        let mut no_pks_at_loc = true;
+        let mut no_sfchains_at_loc = true;
         let mut changed = false;
-        if decrypt_cap.is_empty() {
-            return (false, false, false);
+        if privkey.is_empty() {
+            return (false, false);
         }
         if let Some(encbag) = self.enc_map.get(&lc.loc) {
             let start = time::Instant::now();
             no_diffs_at_loc = false;
-            no_owns_at_loc = false;
 
-            let (success, plaintext) = decrypt_encdata(encbag, decrypt_cap, self.dryrun);
+            let (success, plaintext) = decrypt_encdata(encbag, privkey, self.dryrun);
             if !success {
                 info!("Could not decrypt encdata at {:?} with decryptcap", lc);
-                return (false, false, false);
+                return (false, false);
             }
             let mut bag: Bag = bincode::deserialize(&plaintext).unwrap();
             let records = bag.diffrecs.clone();
@@ -955,23 +955,7 @@ impl RecordCtrler {
                 bag.diffrecs = vec![];
                 changed |= !records.is_empty();
             }
-            let records = bag.ownrecs.clone();
-            info!(
-                "EdnaCleanup: Decrypted sf records added {} total: {}",
-                records.len(),
-                start.elapsed().as_micros(),
-            );
-            if records.is_empty() || records[0].did == did {
-                info!(
-                    "EdnaCleanup: Removed {} sf records uid {}",
-                    records.len(),
-                    lc.uid
-                );
-                no_owns_at_loc = true;
-                bag.ownrecs = vec![];
-                changed |= !records.is_empty();
-            }
-            let records = bag.pkrecs.clone();
+            let records = bag.chainrecs.clone();
             info!(
                 "EdnaCleanup: Decrypted pk records added {} total: {}",
                 records.len(),
@@ -979,7 +963,7 @@ impl RecordCtrler {
             );
             // remove matching records of pseudoprincipals
             // for each pseudoprincipal for which we hold a private key
-            let mut keep_pks = HashMap::new();
+            let mut keep_sfchains = HashMap::new();
             for (new_uid, pkt) in &records {
                 let pk_hash = {
                     let mut hasher = DefaultHasher::new();
@@ -987,23 +971,18 @@ impl RecordCtrler {
                     hasher.finish()
                 };
                 if let Some(encls) = self.enc_locators_map.get(&pk_hash) {
-                    info!(
-                        "Cleanup: Getting records of pseudoprincipal {} with data {}, {:?}",
-                        new_uid,
-                        pkt.priv_key.len(),
-                        encls,
-                    );
+                    info!("Cleanup: Getting records of pseudoprincipal {}", new_uid,);
                     let mut empty = false;
                     for enclc in encls.clone() {
                         let (_, lcbytes) = decrypt_encdata(&enclc, &pkt.priv_key, self.dryrun);
                         let pplc: Locator = bincode::deserialize(&lcbytes).unwrap();
                         // for each locator that the pp has
                         // clean up the records at the locators
-                        let (no_diffs_at_loc, no_owns_at_loc, no_pks_at_loc) =
-                            self.cleanup_user_records(did, &pkt.priv_key, &pplc, seen_pps, db);
+                        let (no_diffs_at_loc, no_sfchains_at_loc) =
+                            self.cleanup_user_records(did, &pkt.priv_key, &pplc, db);
 
                         // remove loc from pp if nothing's left at that loc
-                        if no_diffs_at_loc && no_owns_at_loc && no_pks_at_loc {
+                        if no_diffs_at_loc && no_sfchains_at_loc {
                             // remove the locator and also the bag that it points to!
                             info!(
                                 "Removing locator {:?} from user {}'s encrypted locators",
@@ -1023,64 +1002,60 @@ impl RecordCtrler {
                             new_uid
                         );
                         self.enc_locators_map.remove(&pk_hash);
-                        seen_pps.remove(new_uid);
                         changed = true;
                         RecordPersister::remove_enc_locs_at_index(pk_hash, db);
                     } else {
                         // otherwise we need to keep the private key for this principal/keep this
                         // principal around.
-                        keep_pks.insert(new_uid.clone(), pkt.clone());
+                        keep_sfchains.insert(new_uid.clone(), pkt.clone());
                     }
                 }
             }
             // if this is empty, yay! no more private keys at this principal
-            no_pks_at_loc = keep_pks.is_empty();
+            no_sfchains_at_loc = keep_sfchains.is_empty();
 
             // actually remove locs
-            if no_diffs_at_loc && no_owns_at_loc && no_pks_at_loc {
+            if no_diffs_at_loc && no_sfchains_at_loc {
                 let _enc_bag = self.enc_map.remove(&lc.loc);
                 RecordPersister::remove_enc_bag_at_loc(lc.loc, db);
             } else if changed {
-                bag.pkrecs = keep_pks;
+                bag.chainrecs = keep_sfchains;
                 self.update_bag_at_loc(&lc, &bag, db);
             } else {
                 info!("Bag of {} not changed and not empty", lc.uid);
             }
         }
         // return whether we removed bags
-        (no_diffs_at_loc, no_owns_at_loc, no_pks_at_loc)
+        (no_diffs_at_loc, no_sfchains_at_loc)
     }
 
-    // for every loc, get/decrypt bag, add associated uids in pkrecs to set (done recursively),
+    // for every loc, get/decrypt bag, add associated uids in chainrecs to set (done recursively),
     // return that set
     pub fn get_user_pseudoprincipals(
         &self,
-        decrypt_cap: &DecryptCap,
+        privkey: &PrivKey,
         locators: &Vec<Locator>,
     ) -> HashSet<UID> {
         let mut uids = HashSet::new();
-        if decrypt_cap.is_empty() {
+        if privkey.is_empty() {
             return uids;
         }
         for lc in locators {
             if let Some(encbag) = self.enc_map.get(&lc.loc) {
                 info!("Getting pps of user");
                 let start = time::Instant::now();
-                // decrypt record with decrypt_cap provided by client
-                let (_, plaintext) = decrypt_encdata(encbag, decrypt_cap, self.dryrun);
+                // decrypt record with privkey provided by client
+                let (_, plaintext) = decrypt_encdata(encbag, privkey, self.dryrun);
                 let bag: Bag = bincode::deserialize(&plaintext).unwrap();
-                let records = bag.ownrecs;
+                let records = bag.chainrecs;
+                let mut new_uids = vec![];
                 for pk in &records {
                     if uids.is_empty() {
                         // save the original user too
-                        uids.insert(pk.old_uid.clone());
+                        uids.insert(pk.1.old_uid.clone());
                     }
-                    uids.insert(pk.new_uid.clone());
-                }
-                let mut new_uids = vec![];
-                let records = bag.pkrecs;
-                for (new_uid, pk) in &records {
-                    new_uids.push((new_uid.clone(), pk.priv_key.clone()));
+                    uids.insert(pk.1.new_uid.clone());
+                    new_uids.push((pk.0.clone(), pk.1.priv_key.clone()));
                 }
                 // get all records of pseudoprincipal
                 // note that the pp's metadata might be deleted by now
@@ -1098,6 +1073,29 @@ impl RecordCtrler {
         }
         uids
     }
+
+    pub fn record_update<Q: Queryable>(&mut self, f: UpdateFn, db: &mut Q) {
+        let u = Update {
+            t: self.start_time.elapsed().as_secs(),
+            upfn: f.clone(),
+        };
+        RecordPersister::persist_update(&u, db);
+        self.updates.push(u);
+        // TODO truncate old updates
+    }
+
+    pub fn get_updates_since(&self, t: u64) -> Vec<Update> {
+        // note that they should already been sorted in ascending order
+        let mut i = 0;
+        while i < self.updates.len() {
+            // time since start is greater
+            if self.updates[i].t >= t {
+                break;
+            }
+            i += 1;
+        }
+        return self.updates[i..].to_vec();
+    }
 }
 
 #[cfg(test)]
@@ -1105,6 +1103,7 @@ mod tests {
     use super::*;
     use crate::{helpers, EdnaClient, RowVal};
     use mysql::Opts;
+    use serde_json::from_str;
 
     fn start_logger() {
         let _ = env_logger::builder()
@@ -1128,8 +1127,7 @@ mod tests {
         let mut db = pool.get_conn().unwrap();
         let mut ctrler = RecordCtrler::new(&mut db, true, true, false);
 
-        let pseudoprincipal_name = "guise".to_string();
-        let pseudoprincipal_ids = vec![];
+        let pseudoprincipal_name = "user".to_string();
         let old_fk_value = 5;
         let fk_col = "fk_col".to_string();
 
@@ -1146,17 +1144,20 @@ mod tests {
             for _ in 1..iters {
                 let d = ctrler.start_disguise(Some(u.to_string()));
                 for i in 0..iters {
-                    let mut remove_record = new_delete_record_wrapper(
-                        d as u64,
-                        pseudoprincipal_name.clone(),
-                        pseudoprincipal_ids.clone(),
-                        vec![RowVal::new(
-                            fk_col.clone(),
-                            (old_fk_value + (i as u64)).to_string(),
-                        )],
+                    let mut remove_record = new_generic_diff_record_wrapper(
+                        ctrler.start_time,
+                        &u.to_string(),
+                        d,
+                        edna_diff_record_to_bytes(&new_delete_record(TableRow {
+                            table: pseudoprincipal_name.clone(),
+                            row: vec![RowVal::new(
+                                fk_col.clone(),
+                                (old_fk_value + (i as u64)).to_string(),
+                            )],
+                        })),
                     );
                     remove_record.uid = u.to_string();
-                    ctrler.insert_user_diff_record_wrapper(&mut remove_record);
+                    ctrler.insert_diff_record_wrapper(&remove_record);
                 }
                 ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
             }
@@ -1173,14 +1174,13 @@ mod tests {
             assert_eq!(priv_key1, priv_key2);
             let locators = ctrler.get_locators(&priv_key1);
             assert_eq!(locators.len(), iters - 1);
-            let (diff_records, _, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
+            let (diff_records, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
             assert_eq!(diff_records.len(), (iters as usize));
             for i in 0..iters {
-                let dt = edna_diff_record_from_bytes(&diff_records[i].record_data);
-                assert_eq!(
-                    dt.old_value[0].value(),
-                    (old_fk_value + (i as u64)).to_string()
-                );
+                let dt = edna_diff_record_from_bytes(&diff_records[i].record_data, 0);
+                let old_val = from_str::<u64>(&dt.old_values[0].row[0].value()).unwrap();
+
+                assert!(old_val < old_fk_value || old_val <= old_fk_value + (iters as u64));
             }
         }
     }
@@ -1197,9 +1197,7 @@ mod tests {
         let mut db = pool.get_conn().unwrap();
         let mut ctrler = RecordCtrler::new(&mut db, true, true, false);
 
-        let pseudoprincipal_name = "guise".to_string();
-        let pseudoprincipal_ids = vec![];
-        let referenced_name = "referenced".to_string();
+        let pseudoprincipal_name = "user".to_string();
         let old_fk_value = 5;
         let fk_col = "fk_col".to_string();
 
@@ -1214,38 +1212,33 @@ mod tests {
             );
             user_shares.push(user_data.clone());
 
-            for _ in 1..iters {
+            for i in 1..iters {
                 let d = ctrler.start_disguise(Some(u.to_string()));
-                let mut remove_record = new_delete_record_wrapper(
-                    d as u64,
-                    pseudoprincipal_name.clone(),
-                    pseudoprincipal_ids.clone(),
-                    vec![RowVal::new(
-                        fk_col.clone(),
-                        (old_fk_value + (d as u64)).to_string(),
-                    )],
+                let remove_record = new_generic_diff_record_wrapper(
+                    ctrler.start_time,
+                    &u.to_string(),
+                    d,
+                    edna_diff_record_to_bytes(&new_delete_record(TableRow {
+                        table: pseudoprincipal_name.clone(),
+                        row: vec![RowVal::new(
+                            fk_col.clone(),
+                            (old_fk_value + (i as u64)).to_string(),
+                        )],
+                    })),
                 );
-                remove_record.uid = u.to_string();
-                ctrler.insert_user_diff_record_wrapper(&mut remove_record);
+                ctrler.insert_diff_record_wrapper(&remove_record);
 
                 let anon_uid: u64 = rng.next_u64();
                 // create an anonymous user
                 // and insert some record for the anon user
-                let sf_record_bytes = edna_sf_record_to_bytes(&new_edna_speaksfor_record(
-                    referenced_name.to_string(),
-                    vec![],
-                    fk_col.to_string(),
-                    &anon_uid.to_string(),
-                ));
-                ctrler.register_anon_principal(&u.to_string(), &anon_uid.to_string(), d as u64);
-                ctrler.insert_speaksfor_record(
-                    &u.to_string(),
-                    &anon_uid.to_string(),
-                    d as u64,
-                    sf_record_bytes,
-                );
+                let pp = TableRow {
+                    table: pseudoprincipal_name.clone(),
+                    row: vec![RowVal::new("uid".to_string(), anon_uid.to_string())],
+                };
+                ctrler.register_pseudoprincipal(&u.to_string(), &anon_uid.to_string(), pp, d);
                 ctrler.save_and_clear_disguise::<mysql::PooledConn>(&mut db);
             }
+
             // check principal data
             ctrler
                 .principal_data
@@ -1267,15 +1260,12 @@ mod tests {
             assert_eq!(locators.len(), iters - 1);
 
             assert_eq!(priv_key1, priv_key2);
-            let (diff_records, sf_records, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
+            let (diff_records, _) = ctrler.get_user_records(&priv_key1, &locators[0]);
 
-            assert_eq!(diff_records.len(), 1);
-            assert_eq!(sf_records.len(), 1);
-            let dt = edna_diff_record_from_bytes(&diff_records[0].record_data);
-            assert_eq!(
-                dt.old_value[0].value(),
-                (old_fk_value + locators[0].did).to_string()
-            );
+            assert_eq!(diff_records.len(), 2); // TODO lily check
+            let dt = edna_diff_record_from_bytes(&diff_records[0].record_data, 0);
+            let old_val = from_str::<u64>(&dt.old_values[0].row[0].value()).unwrap();
+            assert!(old_val < old_fk_value || old_val <= old_fk_value + (iters as u64));
         }
     }
 }

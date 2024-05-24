@@ -2,7 +2,6 @@ extern crate log;
 extern crate mysql;
 
 use edna_cryptdb::helpers;
-use edna_cryptdb::EdnaClient;
 use log::warn;
 use mysql::prelude::*;
 use mysql::Opts;
@@ -14,8 +13,8 @@ const PPGEN_JSON: &'static str = include_str!("./disguises/pp_gen.json");
 const ANON_JSON: &'static str = include_str!("./disguises/universal_anon_disguise.json");
 const GDPR_JSON: &'static str = include_str!("./disguises/gdpr_disguise.json");
 const TABLEINFO_JSON: &'static str = include_str!("./disguises/table_info.json");
-const USER_ITERS: u64 = 3;
-const NSTORIES: u64 = 4;
+const USER_ITERS: u64 = 5;
+const NSTORIES: u64 = 5;
 
 fn init_logger() {
     let _ = env_logger::builder()
@@ -32,10 +31,9 @@ fn test_app_rev_anon_disguise() {
     init_logger();
     let dbname = "testRevAnon".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = EdnaClient::new(
-        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
-        true,
-        true,
+    let mut edna = edna_cryptdb::EdnaClient::new(&format!(
+        "mysql://tester:pass@127.0.0.1/{}",
+        dbname), true, false
     );
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
@@ -73,7 +71,7 @@ fn test_app_rev_anon_disguise() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
         user_shares.push(user_share.clone());
     }
 
@@ -96,7 +94,7 @@ fn test_app_rev_anon_disguise() {
         anon_did,
         TABLEINFO_JSON,
         PPGEN_JSON,
-        Some(edna::RevealPPType::Restore),
+        Some(edna_cryptdb::RevealPPType::Restore),
         None,
         None,
         false,
@@ -168,7 +166,7 @@ fn test_app_rev_anon_disguise() {
         let vals = row.unwrap().unwrap();
         assert_eq!(vals.len(), 1);
         let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-        assert!(guises.insert(user_id));
+        assert!(pseudoprincipals.insert(user_id));
         assert!(user_id >= USER_ITERS + 1);
         stories_results.push(user_id);
     }
@@ -185,6 +183,11 @@ fn test_app_rev_anon_disguise() {
             let username = helpers::mysql_val_to_string(&vals[1]);
             assert_eq!(username.len(), 30);
         }
+
+        // NEW! add another story that refers to this pseudoprincipal to check pseudoprincipal
+        // retention policies
+        db.query_drop(format!(r"INSERT INTO stories (user_id) VALUES ({});", u))
+            .unwrap();
     }
 
     // REVERSE DISGUISE WITH USER DIFFS
@@ -195,7 +198,7 @@ fn test_app_rev_anon_disguise() {
             anon_did,
             TABLEINFO_JSON,
             PPGEN_JSON,
-            Some(edna::RevealPPType::Restore),
+            Some(edna_cryptdb::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -214,7 +217,8 @@ fn test_app_rev_anon_disguise() {
             let id = helpers::mysql_val_to_string(&vals[0]);
             results.push(id);
         }
-        assert_eq!(results.len(), NSTORIES as usize);
+        // additional story added for pp recorrelation!
+        assert!(results.len() > NSTORIES as usize);
 
         // moderations recorrelated
         let mut results = vec![];
@@ -242,10 +246,14 @@ fn test_app_rev_anon_disguise() {
         let vals = row.unwrap().unwrap();
         assert_eq!(vals.len(), 1);
         let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-        assert!(user_id < USER_ITERS + 1, "{}", user_id);
+        assert!(
+            user_id < USER_ITERS + 1,
+            "story user is still a pseudoprincipal: {}",
+            user_id
+        );
         stories_results.push(user_id);
     }
-    assert_eq!(stories_results.len() as u64, USER_ITERS * NSTORIES);
+    assert!(stories_results.len() as u64 > USER_ITERS * NSTORIES);
 
     // moderations have no pseudoprincipals as owners
     let res = db
@@ -279,11 +287,11 @@ fn test_app_rev_gdpr_disguise() {
     init_logger();
     let dbname = "testRevGDPR".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = EdnaClient::new(
-        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
-        true,
-        true,
+    let mut edna = edna_cryptdb::EdnaClient::new(&format!(
+        "mysql://tester:pass@127.0.0.1/{}",
+        dbname), true, false
     );
+
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
     )
@@ -313,7 +321,7 @@ fn test_app_rev_gdpr_disguise() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
         user_shares.push(user_share.clone());
     }
 
@@ -341,7 +349,7 @@ fn test_app_rev_gdpr_disguise() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             PPGEN_JSON,
-            Some(edna::RevealPPType::Restore),
+            Some(edna_cryptdb::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -413,11 +421,11 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
     init_logger();
     let dbname = "testRevCompose".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = EdnaClient::new(
-        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
-        true,
-        true,
+    let mut edna = edna_cryptdb::EdnaClient::new(&format!(
+        "mysql://tester:pass@127.0.0.1/{}",
+        dbname), true, false
     );
+
     let mut db = mysql::Conn::new(
         Opts::from_url(&format!("mysql://tester:pass@127.0.0.1/{}", dbname)).unwrap(),
     )
@@ -447,7 +455,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
         user_shares.push(user_share.clone());
     }
 
@@ -541,8 +549,8 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             assert_eq!(vals.len(), 2);
             let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
             let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-            assert!(guises.insert(user_id));
-            assert!(guises.insert(moderator_user_id));
+            assert!(pseudoprincipals.insert(user_id));
+            assert!(pseudoprincipals.insert(moderator_user_id));
             assert!(user_id >= USER_ITERS + 1);
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
@@ -567,7 +575,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
         anon_did,
         TABLEINFO_JSON,
         PPGEN_JSON,
-        Some(edna::RevealPPType::Restore),
+        Some(edna_cryptdb::RevealPPType::Restore),
         None,
         None,
         false,
@@ -634,8 +642,8 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             assert_eq!(vals.len(), 2);
             let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
             let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-            assert!(guises.insert(user_id));
-            assert!(guises.insert(moderator_user_id));
+            assert!(pseudoprincipals.insert(user_id));
+            assert!(pseudoprincipals.insert(moderator_user_id));
             assert!(user_id >= USER_ITERS + 1);
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
@@ -662,7 +670,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             PPGEN_JSON,
-            Some(edna::RevealPPType::Restore),
+            Some(edna_cryptdb::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -717,7 +725,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             let vals = row.unwrap().unwrap();
             assert_eq!(vals.len(), 1);
             let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-            assert!(guises.insert(user_id));
+            assert!(pseudoprincipals.insert(user_id));
             assert!(user_id >= USER_ITERS + 1);
             stories_results.push(user_id);
         }
@@ -737,8 +745,6 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             assert_eq!(vals.len(), 2);
             let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
             let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-            assert!(guises.insert(user_id));
-            assert!(guises.insert(moderator_user_id));
             assert!(user_id >= USER_ITERS + 1);
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
@@ -764,7 +770,7 @@ fn test_app_anon_gdpr_rev_gdpr_anon_disguises() {
             anon_did,
             TABLEINFO_JSON,
             PPGEN_JSON,
-            Some(edna::RevealPPType::Restore),
+            Some(edna_cryptdb::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -853,11 +859,11 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
 
     let dbname = "testRevComposeTwo".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = EdnaClient::new(
-        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
-        true,
-        true,
+    let mut edna = edna_cryptdb::EdnaClient::new(&format!(
+        "mysql://tester:pass@127.0.0.1/{}",
+        dbname), true, false
     );
+
     let url = format!("mysql://{}:{}@{}", "tester", "pass", "127.0.0.1");
     let mut db = mysql::Conn::new(Opts::from_url(&format!("{}/{}", url, dbname)).unwrap()).unwrap();
     assert_eq!(db.ping(), true);
@@ -885,7 +891,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
         user_shares.push(user_share.clone());
     }
 
@@ -919,15 +925,15 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         gdpr_dids.push(did);
     }
 
-    // REVERSE ANON DISGUISE WITH DIFFS
+    // REVERSE ANON DISGUISE
     for u in 1..USER_ITERS + 1 {
-        // get diffs
         edna.reveal_disguise(
-            String::from("NULL"),
+            //String::from("NULL"),
+            u.to_string(),
             anon_did,
             TABLEINFO_JSON,
             PPGEN_JSON,
-            Some(edna::RevealPPType::Restore),
+            Some(edna_cryptdb::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -995,8 +1001,8 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             assert_eq!(vals.len(), 2);
             let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
             let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-            assert!(guises.insert(user_id));
-            assert!(guises.insert(moderator_user_id));
+            assert!(pseudoprincipals.insert(user_id));
+            assert!(pseudoprincipals.insert(moderator_user_id));
             assert!(user_id >= USER_ITERS + 1);
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
@@ -1022,7 +1028,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             gdpr_dids[u as usize - 1],
             TABLEINFO_JSON,
             PPGEN_JSON,
-            Some(edna::RevealPPType::Restore),
+            Some(edna_cryptdb::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1030,8 +1036,7 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         .unwrap();
     }
 
-    // CHECK DISGUISE RESULTS: everything restored but still anon
-    // users exist
+    // CHECK DISGUISE RESULTS: everything not anon
     for u in 1..USER_ITERS + 1 {
         let mut results = vec![];
         let res = db
@@ -1043,10 +1048,10 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             let id = helpers::mysql_val_to_string(&vals[0]);
             results.push(id);
         }
-        assert_eq!(results.len(), 0);
+        assert!(results.len() > 0);
     }
 
-    // no correlated moderations
+    // moderations still decorrelated
     for u in 1..USER_ITERS + 1 {
         let mut results = vec![];
         let res = db
@@ -1061,12 +1066,8 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
             let id = helpers::mysql_val_to_string(&vals[0]);
             results.push(id);
         }
-        assert_eq!(results.len(), 0);
+        assert!(results.len() > 0);
     }
-
-    let mut pseudoprincipals = HashSet::new();
-
-    // stories have pseudoprincipals as owners
     let mut stories_results = vec![];
     let res = db
         .query_iter(format!(r"SELECT user_id FROM stories"))
@@ -1075,16 +1076,13 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         let vals = row.unwrap().unwrap();
         assert_eq!(vals.len(), 1);
         let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-        assert!(guises.insert(user_id));
-        assert!(user_id >= USER_ITERS + 1);
+        assert!(user_id < USER_ITERS + 1);
         stories_results.push(user_id);
     }
     assert_eq!(
         stories_results.len() as u64,
         (USER_ITERS + 1 - 1) * NSTORIES
     );
-
-    // moderations have pseudoprincipals as owners
     let res = db
         .query_iter(format!(
             r"SELECT moderator_user_id, user_id FROM moderations"
@@ -1095,24 +1093,10 @@ fn test_app_anon_gdpr_rev_anon_gdpr_disguises() {
         assert_eq!(vals.len(), 2);
         let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
         let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-        assert!(guises.insert(user_id));
-        assert!(guises.insert(moderator_user_id));
-        assert!(user_id >= USER_ITERS + 1);
-        assert!(moderator_user_id >= USER_ITERS + 1);
+        assert!(user_id < USER_ITERS + 1);
+        assert!(moderator_user_id < USER_ITERS + 1);
     }
 
-    // check that all pseudoprincipals exist
-    for u in pseudoprincipals {
-        let res = db
-            .query_iter(format!(r"SELECT * FROM users WHERE id={}", u))
-            .unwrap();
-        for row in res {
-            let vals = row.unwrap().unwrap();
-            assert_eq!(vals.len(), 3);
-            let username = helpers::mysql_val_to_string(&vals[1]);
-            assert_eq!(username.len(), 30);
-        }
-    }
     drop(db);
 }
 
@@ -1122,10 +1106,9 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
 
     let dbname = "testRevComposeThree".to_string();
     helpers::init_db(true, "tester", "pass", "127.0.0.1", &dbname, SCHEMA);
-    let mut edna = EdnaClient::new(
-        &format!("mysql://tester:pass@127.0.0.1/{}", dbname),
-        true,
-        true,
+    let mut edna = edna_cryptdb::EdnaClient::new(&format!(
+        "mysql://tester:pass@127.0.0.1/{}",
+        dbname), true, false
     );
     let url = format!("mysql://{}:{}@{}", "tester", "pass", "127.0.0.1");
     let mut db = mysql::Conn::new(Opts::from_url(&format!("{}/{}", url, dbname)).unwrap()).unwrap();
@@ -1153,7 +1136,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
         }
 
         // register user in Edna
-        let user_share = edna.register_principal(&u.to_string(), String::from("password"), true);
+        let user_share = edna.register_principal(&u.to_string(), String::from("password"));
         user_shares.push(user_share.clone());
     }
 
@@ -1190,7 +1173,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             anon_did1,
             TABLEINFO_JSON,
             PPGEN_JSON,
-            Some(edna::RevealPPType::Restore),
+            Some(edna_cryptdb::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,
@@ -1227,7 +1210,11 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
         for row in res {
             let vals = row.unwrap().unwrap();
             let user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
-            assert!(user_id >= USER_ITERS + 1);
+            assert!(
+                user_id >= USER_ITERS + 1,
+                "user id is still a np? {}",
+                user_id
+            );
             pseudoprincipals.insert(user_id);
             stories_results.push(1);
         }
@@ -1244,8 +1231,8 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             assert_eq!(vals.len(), 2);
             let moderator_user_id = helpers::mysql_val_to_u64(&vals[0]).unwrap();
             let user_id = helpers::mysql_val_to_u64(&vals[1]).unwrap();
-            assert!(guises.insert(user_id));
-            assert!(guises.insert(moderator_user_id));
+            assert!(pseudoprincipals.insert(user_id));
+            assert!(pseudoprincipals.insert(moderator_user_id));
             assert!(user_id >= USER_ITERS + 1);
             assert!(moderator_user_id >= USER_ITERS + 1);
         }
@@ -1270,7 +1257,7 @@ fn test_app_anon_anon_rev_anon_anon_disguises() {
             anon_did2,
             TABLEINFO_JSON,
             PPGEN_JSON,
-            Some(edna::RevealPPType::Restore),
+            Some(edna_cryptdb::RevealPPType::Restore),
             None,
             Some(user_shares[u as usize - 1].clone()),
             false,

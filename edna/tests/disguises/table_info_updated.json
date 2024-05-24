@@ -1,0 +1,67 @@
+{
+    "users": {
+        "table": "users",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "users",
+                "from_col": "id"
+            }
+        ]
+    },
+    "usernames": {
+        "table": "usernames",
+        "id_cols": ["username"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "usernames",
+                "from_col": "user_id"
+            }
+        ]
+    },
+    "moderations": {
+        "table": "moderations",
+        "id_cols": ["id"],
+        "other_fks": [
+            {
+                "to_table": "stories",
+                "to_col": "id",
+                "from_table": "moderations",
+                "from_col": "story_id"
+            }
+        ],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "moderations",
+                "from_col": "user_id"
+            },
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "moderations",
+                "from_col": "moderator_user_id"
+            }
+        ]
+    },
+    "stories": {
+        "table": "stories",
+        "id_cols": ["id"],
+        "other_fks": [],
+        "owner_fks": [
+            {
+                "to_table": "users",
+                "to_col": "id",
+                "from_table": "stories",
+                "from_col": "user_id"
+            }
+        ]
+    }
+}

@@ -1,5 +1,5 @@
 {
-    "name": "users",
+    "table": "users",
     "id_col": "id",
     "cols": [
         "id", 

@@ -82,7 +82,7 @@ fn rocket(
         .mount("/", routes![apiproxy::get_records_of_disguise])
         .mount("/", routes![apiproxy::cleanup_records_of_disguise])
         .mount("/", routes![apiproxy::save_diff_record])
-        .mount("/", routes![apiproxy::save_pseudoprincipal_record])
+        //.mount("/", routes![apiproxy::save_pseudoprincipal_record])
 }
 
 #[rocket::main]

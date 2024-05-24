@@ -6,7 +6,7 @@ use crate::email;
 use crate::ADMIN_EMAIL;
 use mysql::from_value;
 use rocket::form::{Form, FromForm};
-use rocket::http::{Cookie, CookieJar};
+use rocket::http::{CookieJar};
 use rocket::response::Redirect;
 use rocket::State;
 use rocket_dyn_templates::Template;
@@ -173,16 +173,9 @@ pub(crate) fn edit_as_pseudoprincipal(
     };
     // this just lets the user act as the latest pseudoprincipal
     // but it won't reset afterward.... so the user won't be able to do anything else
-    let cookie = Cookie::build("anonkey", ppapikey.clone()).path("/").finish();
-    cookies.add(cookie);
-    let cookie = Cookie::build("email", data.email.to_string())
-        .path("/")
-        .finish();
-    cookies.add(cookie);
-    let cookie = Cookie::build("apikey", data.apikey.clone())
-        .path("/")
-        .finish();
-    cookies.add(cookie);
+    cookies.add(("anonkey", ppapikey.clone()));
+    cookies.add(("email", data.email.to_string()));
+    cookies.add(("apikey", data.apikey.clone()));
     Template::render("questions", &ctx)
 }
 

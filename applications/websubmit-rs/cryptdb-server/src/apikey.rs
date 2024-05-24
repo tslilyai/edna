@@ -6,7 +6,7 @@ use crypto::sha2::Sha256;
 use mysql::from_value;
 use rocket::form::Form;
 use rocket::http::Status;
-use rocket::http::{Cookie, CookieJar};
+use rocket::http::{CookieJar};
 use rocket::outcome::IntoOutcome;
 use rocket::request::{self, FromRequest, Request};
 use rocket::response::Redirect;
@@ -66,7 +66,7 @@ impl<'r> FromRequest<'r> for ApiKey {
                     Err(_) => None,
                 }
             })
-            .into_outcome((Status::Unauthorized, ApiKeyError::Missing))
+            .or_error((Status::Unauthorized, ApiKeyError::Missing))
     }
 }
 
@@ -87,10 +87,9 @@ pub(crate) fn generate(
     // api key acts as the password
     let start = time::Instant::now();
     let mut bg = backend.lock().unwrap();
-    let crypto = bg.crypto;
     let share = bg
         .edna
-        .register_principal(&data.email, hash.as_str().into(), crypto);
+        .register_principal(&data.email, hash.as_str().into());
     error!(bg.log, "APIKEY generate register edna: {}mus", start.elapsed().as_micros());
     let share_str = serde_json::to_string(&share).unwrap();
     if bg.crypto {
@@ -199,12 +198,9 @@ pub(crate) fn login(
     if res.is_err() {
         Redirect::to("/")
     } else {
-        let cookie = Cookie::build("apikey", data.key.clone()).path("/").finish();
-        cookies.add(cookie);
-        let cookie = Cookie::build("email", data.email.clone())
-            .path("/")
-            .finish();
-        cookies.add(cookie);
+        cookies.add(("apikey", data.key.clone()));
+        cookies.add(("email", data.email.clone()));
+        cookies.add(("anonkey", "".to_string()));
         Redirect::to("/leclist")
     }
 }
